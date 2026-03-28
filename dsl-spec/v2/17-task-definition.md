@@ -270,9 +270,19 @@ backend:
     "instance_id": "string",
     "step_id": "string",
     "attempt": 1
+  },
+  "artifacts": {
+    "order_file": {
+      "path": "/tmp/slogan/abc123/step1/order.csv",
+      "content_type": "text/csv",
+      "size": 4096,
+      "access": "read"
+    }
   }
 }
 ```
+
+- `artifacts`：若 step 有 `resources` 綁定，引擎將 artifact 準備為本地檔案，並在此傳入路徑與存取權限。Tool 透過 `path` 直接以檔案系統讀寫。詳見 [13-artifacts](13-artifacts.md)。
 
 **Response**（tool → 引擎）：
 

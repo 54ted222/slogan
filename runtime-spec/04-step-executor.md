@@ -84,12 +84,29 @@ attempt < max_attempts？
 
 #### Artifact Resources 綁定
 
-若 step 有 `resources` 欄位：
+若 step 有 `resources` 欄位，引擎 MUST 在呼叫 Task Executor 之前完成以下準備：
+
+**執行前（prepare）：**
 
 1. 解析每個 resource 的 `ref` → 對應 workflow 的 `artifacts` 區塊中的 key
 2. 驗證 artifact record 存在
-3. 將 artifact 中繼資料（path、content_type 等）注入 task 的 execution context
-4. Task Executor 可透過 `artifacts` namespace 存取綁定的 artifact
+3. 為此次 step 執行建立暫存目錄（路徑格式建議：`<temp_base>/<instance_id>/<step_id>/`）
+4. 對每個 `read` 或 `read_write` 的 artifact：
+   - 從 storage backend 下載至暫存目錄的本地檔案
+   - `data` kind → 序列化為 JSON 檔案
+5. 對每個 `write` 的 artifact：
+   - 在暫存目錄建立空的目標路徑（tool 負責寫入內容）
+6. 將每個 artifact 的本地路徑、access、content_type 等組合為 `artifacts` map，傳入 Task Executor
+
+**執行後（upload）��**
+
+1. 對每個 `write` 或 `read_write` 的 artifact：
+   - 檢查本地檔案是否存在且已被修改
+   - 上傳至 storage backend
+   - 更新 artifact_record（`uri`、`size`、`content_type`、`updated_at`）
+2. 清理暫存目錄
+
+此機制確保 tool 僅透過本地檔案系統操作 artifact，不需知道 storage backend 的實作。
 
 ### assign
 
