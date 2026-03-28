@@ -93,7 +93,7 @@ Acquire instance lease（多 worker 時）
 
 | 情況 | 動作 |
 |------|------|
-| 頂層 `steps` 最後一個 step 完成 | 隱式完成：若有 `output.schema` 且含 `required` 欄位 → Instance → FAILED（`schema_validation_error`）；否則 Instance → SUCCEEDED，output = `null` |
+| 頂層 `steps` 最後一個 step 完成 | 隱式完成：output = `null`。若有 `output.schema` 且含 `required` 欄位 → Instance → FAILED（`schema_validation_error`）；否則 Instance → SUCCEEDED。注意：隱式完成僅檢查 `required` 欄位是否缺失，不驗證其他 schema 約束（如 minimum、enum 等） |
 | 遇到 `return` step | Instance → SUCCEEDED，記錄 output |
 | 遇到 `fail` step（非 handler 內） | Instance → FAILED，記錄 error |
 
@@ -160,6 +160,7 @@ Acquire instance lease（多 worker 時）
 - Worker SHOULD 定期 heartbeat 續租（建議間隔：lease 時長的 1/3）
 - Lease 過期未續租 → 其他 worker 可重新取得
 - Worker 處理完成後 MUST 主動釋放 lease
+- Lease 取得失敗（已被其他 worker 持有）→ worker MUST 跳過該 instance，不得 spin-wait。SHOULD 在下一個排程週期重試
 
 ### Work Distribution
 

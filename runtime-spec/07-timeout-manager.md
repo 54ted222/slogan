@@ -82,18 +82,29 @@ Timeout Manager MUST 持續監控 timeout_schedule，在 `fires_at` 到期時觸
 
 ## 到期處理
 
+### 並行安全
+
+Timeout 到期處理 MUST 以原子方式執行狀態檢查與轉換。實作 SHOULD 使用以下策略之一：
+
+- **Pessimistic locking**：載入 step/instance 狀態時使用 row-level lock（如 `SELECT FOR UPDATE`）
+- **Optimistic locking**：使用 step_instance 的 `version` 欄位，若 version 已變更則放棄處理（其他 worker 已處理）
+
+這防止 Timeout Manager 與 Step Executor 同時修改同一 step 的 race condition。
+
 ### Step Timeout 到期
 
 ```
 timeout_schedule fires
      ↓
-載入 step instance 狀態
+載入 step instance 狀態（需取得 lock 或檢查 version）
      ↓
 Step 是否仍在 RUNNING？
   ├── 否（已完成）→ 刪除 schedule，結束
   └── 是 →
        ↓
-  終止 task 執行（若正在進行）
+  終止執行（task 執行或 sub_workflow child instance）
+  若為 sub_workflow step → child instance → CANCELLED
+    （child 的 config.on_timeout 不觸發，因為是外部取消）
        ↓
   Step state → TIMED_OUT
        ↓

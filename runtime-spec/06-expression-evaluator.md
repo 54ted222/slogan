@@ -81,6 +81,10 @@ Sub-workflow（child）instance 擁有獨立的 execution context，不繼承 pa
 
 建議實作方式：vars 存為 workflow_instance 的一個 JSON 欄位。
 
+### 並行 assign 的行為
+
+在 `parallel` 的不同 branches 中同時 `assign` 同名變數，結果為**非確定性**（取決於 branch 完成順序，last write wins）。開發者 SHOULD 避免在 parallel branches 中 assign 同名變數。引擎不需要偵測或阻止此情況。
+
 ---
 
 ## 型別對應
@@ -118,7 +122,7 @@ CEL 型別與 YAML / JSON 型別的對應：
 首次執行：
   1. 正常求值 now() / uuid()
   2. 記錄：{ expression_position: result_value }
-  3. 與 step_instance 一同持久化
+  3. 與 step_instance 一同持久化（sub_workflow 的 child instance 有獨立的 step_instances，recorded_values 自然隔離）
 
 Replay（recovery）：
   1. 檢查是否有記錄

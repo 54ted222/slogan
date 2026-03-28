@@ -29,10 +29,11 @@ Step Executor:
 
 若 step 有 `condition` 欄位：
 
-1. 以 Expression Evaluator 求值（見 [06-expression-evaluator](06-expression-evaluator.md)）
-2. `false` → step 狀態 READY → SKIPPED，結束
-3. `true` → 繼續
-4. 求值失敗 → step 狀態 → FAILED（error code: `expression_error`）
+1. 建立 execution context（與該 step 的一般表達式求值相同的 namespace：`input`、`steps`、`vars`、`loop`、`env`、`secret`、`artifacts`）
+2. 以 Expression Evaluator 求值（見 [06-expression-evaluator](06-expression-evaluator.md)）
+3. `false` → step 狀態 READY → SKIPPED，結束
+4. `true` → 繼續
+5. 求值失敗 → step 狀態 → FAILED（error code: `expression_error`）
 
 ### 2. 狀態轉換
 
@@ -132,10 +133,9 @@ Assign 不產生 output（`steps.<id>.output` 不適用）。
    - `fail_fast`：任一迭代失敗 → 取消所有進行中迭代，foreach → FAILED
    - `continue`：等待所有迭代完成，若有任一失敗 → foreach → FAILED
    - `ignore`：忽略失敗，foreach → SUCCEEDED
-6. 收集 output array（索引對應 items 順序）：
-   - 成功的迭代：該迭代最後一個 step 的 output
-   - 失敗的迭代：`null`
-   - `fail_fast` 被取消的迭代：不包含在 array 中
+6. 收集 output array：
+   - `continue` / `ignore` 模式：array 長度 = items 長度，索引一一對應。成功迭代為其最後一個 step 的 output，失敗迭代為 `null`
+   - `fail_fast` 模式：array 為已完成迭代的 compact 結果（不含被取消的迭代），長度可能小於 items 長度。output[i] 對應 items[i]（按原始索引順序，跳過未完成的）
 
 ### parallel
 
@@ -212,7 +212,7 @@ Step Executor 在 step 失敗時，按照 [dsl-spec/v2/12-error-handling](../dsl
 找到匹配的 handler 後：
 
 1. 為 handler 的 step 陣列動態建立 step instances（標記為 handler steps，不影響主序列）
-2. 在 execution context 中注入 `error` 或 `timeout` namespace
+2. 在 execution context 中注入 `error` 或 `timeout` namespace（見下方 namespace 建構規則）
 3. 依序執行 handler steps（遵循相同的 Step Executor 流程）
 4. 根據 handler 結果決定後續行為：
 
@@ -229,6 +229,27 @@ Step Executor 在 step 失敗時，按照 [dsl-spec/v2/12-error-handling](../dsl
 | Step-level | 失敗 step 的同一序列中，下一個 step |
 | Block-level | 控制流程 step 的同一序列中，下一個 step |
 | Workflow-level | 失敗 step 在頂層 `steps` 中對應的下一個 step |
+
+### error namespace 建構
+
+on_error handler 中的 `error` namespace MUST 包含以下欄位：
+
+| 欄位 | 型別 | 說明 | 來源 |
+|------|------|------|------|
+| `error.message` | string | 錯誤訊息 | step_instance.error.message，MUST 非 null |
+| `error.code` | string | 錯誤碼 | step_instance.error.code，見 [dsl-spec/v2/12-error-handling](../dsl-spec/v2/12-error-handling.md) 標準錯誤碼 |
+| `error.step_id` | string | 失敗 step ID | step_instance.step_id |
+
+`error.code` MUST 為以下標準錯誤碼之一：`task_failed`、`timeout`、`schema_validation_error`、`expression_error`、`sub_workflow_failed`、`max_depth_exceeded`、`max_step_executions_exceeded`、`unknown`。若 task backend 回報自訂 error code，以 `task_failed` 為 `error.code`，自訂 code 記錄在 `error.message` 中。
+
+### timeout namespace 建構
+
+on_timeout handler 中的 `timeout` namespace MUST 包含：
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `timeout.step_id` | string \| null | 超時的 step ID（workflow timeout 時為 `null`） |
+| `timeout.duration` | duration | 設定的 timeout 值 |
 
 ### on_timeout handler 特殊規則
 

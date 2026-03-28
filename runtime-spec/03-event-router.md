@@ -101,9 +101,10 @@ SendEvent API
 收到事件後，對每個匹配 `event_type` 的 wait_subscription：
 
 1. 檢查是否已過期（`expires_at` < 當前時間）→ 是 → 跳過（由 Timeout Manager 處理）
-2. 載入對應的 workflow instance 狀態（用於 CEL 求值上下文）
+2. 載入對應的 workflow instance 當前狀態（用於 CEL 求值上下文）
 3. 若有 `match_expression` → 求值 CEL 表達式
-   - 求值上下文包含：`event`（候選事件）、`input`、`steps`、`vars`（instance 資料）
+   - 求值上下文包含：`event`（候選事件）、`input`、`steps`、`vars`（instance 當前資料）
+   - `steps` namespace 為事件到達時的最新 snapshot（包含所有已到達 terminal 狀態的 steps）
    - `true` → 匹配成功
    - `false` → 跳過
    - 求值失敗 → 跳過，記錄錯誤至 log
