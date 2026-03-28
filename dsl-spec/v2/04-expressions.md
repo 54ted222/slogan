@@ -89,7 +89,12 @@ steps.create_payment.output.payment_id
 
 可用時機：僅限該 step 之後的 steps。引擎 MUST 確保被參照的 step 在當前 step 之前已執行完成。
 
-**SKIPPED step 的 output**：若被參照的 step 狀態為 SKIPPED（`condition` 為 false 或所在分支未被選中），`steps.<id>.output` 回傳 `null`。使用 `default()` 做防禦性存取：
+**非 SUCCEEDED step 的 output**：
+
+- **SKIPPED**（`condition` 為 false 或所在分支未被選中）：`steps.<id>.output` 回傳 `null`
+- **FAILED**（錯誤已被 `on_error` handler 處理，workflow 繼續執行）：`steps.<id>.output` 回傳 `null`
+
+使用 `default()` 做防禦性存取：
 
 ```
 default(steps.process_payment.output.payment_id, "")

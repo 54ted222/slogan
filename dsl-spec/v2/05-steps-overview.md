@@ -149,6 +149,7 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
                 │        │   │
                 │        │   ├──→ FAILED
                 │        │   ├──→ WAITING ──⇄── RUNNING（收到事件）
+                │        │   │      ├──→ TIMED_OUT （等待逾時）
                 │        │   │      └──→ CANCELLED
                 │        │   ├──→ TIMED_OUT
                 │        │   └──→ CANCELLED  （外部取消）
@@ -181,6 +182,7 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 - RUNNING → TIMED_OUT：超過 `timeout`
 - RUNNING → CANCELLED：外部取消（workflow timeout 或取消請求）
 - WAITING → RUNNING：收到匹配事件，恢復執行
+- WAITING → TIMED_OUT：`wait_event` 等待逾時
 - WAITING → CANCELLED：外部取消（workflow timeout 或取消請求）
 
 所有 terminal 狀態（SUCCEEDED、FAILED、TIMED_OUT、CANCELLED、SKIPPED）MUST NOT 再轉換。

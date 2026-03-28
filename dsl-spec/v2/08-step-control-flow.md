@@ -203,7 +203,10 @@
 
 ### output
 
-`steps.<parallel_id>.output` 為一個 array，索引對應 `branches` 的順序，每個元素為該 branch 最後一個 step 的 output。
+`steps.<parallel_id>.output` 為一個 array，索引對應 `branches` 的順序：
+
+- 成功的 branch：該 branch 最後一個 step 的 output
+- 失敗的 branch（`failure_policy` 為 `wait_all` 且 `on_error` 已處理）：`null`
 
 ### 範例
 

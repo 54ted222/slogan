@@ -69,8 +69,8 @@ CREATED ──→ RUNNING ──⇄── WAITING
 | RUNNING | SUCCEEDED | 遇到 `return` 或所有 steps 完成 |
 | RUNNING | FAILED | 遇到 `fail`、未處理錯誤、或 workflow timeout |
 | RUNNING | CANCELLED | 外部取消請求 |
-| WAITING | RUNNING | 收到匹配事件 |
-| WAITING | FAILED | wait_event timeout（無 handler 或 handler 使用 fail） |
+| WAITING | RUNNING | 收到匹配事件，或 wait_event timeout 觸發且有 handler 需執行 |
+| WAITING | FAILED | wait_event timeout 且所有層級均無 handler（on_timeout 及 on_error） |
 | WAITING | CANCELLED | 外部取消請求 |
 
 SUCCEEDED、FAILED、CANCELLED 為 terminal 狀態，MUST NOT 再轉換。
@@ -86,10 +86,10 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
                 │        │   │
                 │        │   ├──→ FAILED
                 │        │   ├──→ WAITING    （僅 wait_event）
+                │        │   │      ├──→ TIMED_OUT （等待逾時）
+                │        │   │      └──→ CANCELLED
                 │        │   ├──→ TIMED_OUT
                 │        │   └──→ CANCELLED  （外部取消）
-                │        │
-                │        WAITING ──→ CANCELLED
                 │
                 └──→ SKIPPED
 ```
@@ -119,6 +119,7 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 | RUNNING | TIMED_OUT | 超過 timeout |
 | RUNNING | CANCELLED | 外部取消（workflow timeout 或取消請求） |
 | WAITING | RUNNING | 收到匹配事件 |
+| WAITING | TIMED_OUT | `wait_event` 等待逾時 |
 | WAITING | CANCELLED | 外部取消（workflow timeout 或取消請求） |
 
 SUCCEEDED、FAILED、TIMED_OUT、CANCELLED、SKIPPED 為 terminal 狀態。
