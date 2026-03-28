@@ -9,6 +9,7 @@
 - Storage 為抽象介面，不綁定特定資料庫
 - 所有操作定義為邏輯操作，由實作對應至具體 SQL / NoSQL / KV 語意
 - Step instance 更新 SHOULD 使用 optimistic locking（version column）
+- **預設實作**：引擎 MUST 內建 SQLite 作為預設 storage backend，零配置即可啟動。生產環境 MAY 替換為 PostgreSQL 等其他後端
 
 ---
 
@@ -246,3 +247,28 @@ Execution log 為 append-only，用於稽核與除錯。
 | event_dedup | TTL 5 分鐘 |
 
 具體保留策略由部署設定決定。
+
+---
+
+## SQLite 預設實作
+
+引擎以 SQLite 作為預設 storage backend，降低部署門檻。
+
+### 啟用方式
+
+零配置：引擎啟動時若未指定 storage 設定，自動建立 SQLite 資料庫檔案（預設路徑：`./slogan.db`）。
+
+### SQLite 特定設定
+
+| 設定 | 值 | 說明 |
+|------|---|------|
+| `journal_mode` | WAL | 支援讀寫並行 |
+| `busy_timeout` | 5000ms | 避免 SQLITE_BUSY 錯誤 |
+| `foreign_keys` | ON | 啟用外鍵約束 |
+| `synchronous` | NORMAL | 平衡效能與安全性 |
+
+### 限制
+
+- SQLite 為單檔案資料庫，不支援多 worker 跨主機部署。多 worker 架構 MUST 使用 PostgreSQL 等支援網路連線的後端
+- Instance lease 機制在 SQLite 模式下仍有效（同一 process 內的多 worker threads）
+- 高併發寫入場景下效能受限，適用於開發、測試與低流量生產環境
