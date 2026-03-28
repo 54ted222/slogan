@@ -132,6 +132,8 @@
 - `task` 的 `execution.policy` MUST 為 `replayable`、`idempotent`、`non_repeatable` 之一
 - `retry.max_attempts` MUST 為正整數
 - `retry.backoff` MUST 為 `fixed` 或 `exponential`
+- `config.secrets`（若存在）MUST 為 string 陣列，每個元素為 secret definition 的 `metadata.name`
+- `sub_workflow` 的 `execution.policy` MUST 為 `replayable`、`idempotent`、`non_repeatable` 之一
 
 ---
 

@@ -76,6 +76,20 @@ Child workflow **不可** 存取 parent 的任何 namespace：
 
 ---
 
+## Execution Policy 語意
+
+Sub_workflow step 的 `execution.policy` 決定 crash recovery 時 parent step 的行為：
+
+| Policy | Recovery 行為 |
+|--------|---------------|
+| `replayable`（預設） | 檢查 child instance 狀態：若已完成則直接取結果，若不存在或狀態不明則重新建立 child instance |
+| `idempotent` | 同 replayable，但以 idempotency key（`parent_instance_id + step_id + attempt`）確保不重複建立 child instance |
+| `non_repeatable` | 若 child instance 狀態不明確（非 terminal）→ parent step 標記 FAILED |
+
+在大多數情況下，child instance 的狀態可從資料庫查詢，因此 recovery 通常只需恢復等待而非重新執行。`non_repeatable` 適用於 child workflow 有不可逆副作用且狀態無法確認的情境。
+
+---
+
 ## 巢狀深度限制
 
 - 子 workflow MAY 再呼叫 sub_workflow（遞迴 / 間接遞迴）

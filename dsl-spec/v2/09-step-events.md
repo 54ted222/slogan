@@ -103,7 +103,7 @@ match: ${ event.data.order_id == input.order_id && event.data.status == "confirm
 - 若有 `on_timeout` → 執行 handler steps
   - Handler 正常完成 → workflow 繼續後續 steps
   - Handler 內使用 `fail` → workflow FAILED
-- 若無 `on_timeout` → step TIMED_OUT → workflow FAILED
+- 若無 `on_timeout` → 視為未處理錯誤，進入錯誤處理流程（block-level → workflow-level `on_error`），詳見 [12-error-handling](12-error-handling.md)
 
 ### 範例
 

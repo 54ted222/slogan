@@ -126,8 +126,8 @@ Step 執行 → 失敗
 - 定義在 `config.timeout`
 - 是 instance 從 CREATED 到完成的絕對時間上限
 - 觸發時：
-  1. 所有 RUNNING 的 steps 被取消（CANCELLED）
-  2. 不觸發任何 step-level handler
+  1. 所有 RUNNING 與 WAITING 的 steps 被取消（CANCELLED）
+  2. 不觸發任何 step-level handler（`on_error`、`on_timeout`）
   3. 觸發 `config.on_timeout`（若有）
   4. 無 `config.on_timeout` → instance FAILED
 

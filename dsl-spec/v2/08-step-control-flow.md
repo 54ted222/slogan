@@ -26,6 +26,10 @@
 - 分支內的 steps 按順序執行
 - 未被選中的分支中的 steps 狀態為 SKIPPED
 
+### output
+
+若 `if` step 有 `id`，`steps.<id>.output` 為被選中分支中最後一個 step 的 output。若被選中分支為空或所有 steps 皆 SKIPPED，output 為 `null`。
+
 ### 範例
 
 ```yaml
@@ -71,6 +75,10 @@
 - 無匹配且無 `default` → step SKIPPED
 - `expr` 求值失敗 → step FAILED
 - `value` 可以是 string、number、boolean
+
+### output
+
+若 `switch` step 有 `id`，`steps.<id>.output` 為被選中 case（或 default）中最後一個 step 的 output。若無匹配且無 default（step SKIPPED），output 為 `null`。
 
 ### 範例
 
@@ -143,7 +151,11 @@
 
 ### output
 
-`steps.<foreach_id>.output` 為一個 array，每個元素對應一次迭代中最後一個 step 的 output。
+`steps.<foreach_id>.output` 為一個 array，每個元素對應一次迭代中最後一個 step 的 output：
+
+- 成功的迭代：該迭代中最後一個 step 的 output
+- 失敗的迭代（`failure_policy` 為 `continue` 或 `ignore`）：`null`
+- `fail_fast` 模式下被取消的迭代：不包含在 output 中（array 長度可能小於 items 長度）
 
 ### 範例
 

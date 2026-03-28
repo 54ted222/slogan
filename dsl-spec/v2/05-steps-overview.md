@@ -148,8 +148,10 @@ steps:
 PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
                 │        │   │
                 │        │   ├──→ FAILED
-                │        │   ├──→ WAITING    （僅 wait_event）
-                │        │   └──→ TIMED_OUT
+                │        │   ├──→ WAITING ──⇄── RUNNING（收到事件）
+                │        │   │      └──→ CANCELLED
+                │        │   ├──→ TIMED_OUT
+                │        │   └──→ CANCELLED  （外部取消）
                 │
                 └──→ SKIPPED       （condition 為 false）
 ```
@@ -165,6 +167,7 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 | FAILED | 執行失敗（包含 retry 用盡後仍失敗） |
 | WAITING | 等待外部事件（僅 `wait_event`） |
 | TIMED_OUT | 執行超時 |
+| CANCELLED | 被外部取消（workflow timeout、parent 取消、API 取消） |
 | SKIPPED | `condition` 為 false，或所在分支未被選中 |
 
 ### 狀態轉換規則
@@ -176,6 +179,8 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 - RUNNING → FAILED：執行失敗（retry 用盡）
 - RUNNING → WAITING：`wait_event` 進入等待
 - RUNNING → TIMED_OUT：超過 `timeout`
+- RUNNING → CANCELLED：外部取消（workflow timeout 或取消請求）
 - WAITING → RUNNING：收到匹配事件，恢復執行
+- WAITING → CANCELLED：外部取消（workflow timeout 或取消請求）
 
-所有 terminal 狀態（SUCCEEDED、FAILED、TIMED_OUT、SKIPPED）MUST NOT 再轉換。
+所有 terminal 狀態（SUCCEEDED、FAILED、TIMED_OUT、CANCELLED、SKIPPED）MUST NOT 再轉換。

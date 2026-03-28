@@ -81,7 +81,7 @@ Event / API / Timer
 | `id` | 唯一識別 |
 | `workflow_instance_id` | 所屬 instance |
 | `step_id` | 對應 definition 中的 step id |
-| `state` | PENDING / READY / RUNNING / SUCCEEDED / FAILED / WAITING / TIMED_OUT / SKIPPED |
+| `state` | PENDING / READY / RUNNING / SUCCEEDED / FAILED / WAITING / TIMED_OUT / CANCELLED / SKIPPED |
 | `input` | step 輸入（求值後） |
 | `output` | step 輸出 |
 | `error` | 錯誤資訊 |
@@ -166,6 +166,14 @@ Resume scheduler loop
 | WAITING | — | 重建 wait_subscription，繼續等待 |
 | READY | — | 正常執行 |
 | PENDING | — | 不動作，等待前置 step |
+
+### 非確定性函式的記錄
+
+為實現 deterministic replay（見 [00-overview](00-overview.md)），引擎 MUST 記錄非確定性函式（`now()`、`uuid()`）的求值結果：
+
+- 首次執行時，`now()` 和 `uuid()` 的回傳值 MUST 與 step instance 一同持久化
+- Replay 時，引擎 MUST 使用已記錄的值，而非重新求值
+- 記錄格式為 step_instance 的一部分，以 expression 位置為 key、求值結果為 value
 
 ### 關鍵保證
 
