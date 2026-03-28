@@ -139,11 +139,14 @@ Assign 不產生 output（`steps.<id>.output` 不適用）。
 
 ### parallel
 
-1. 為每個 branch 建立 step instances
-2. 同時啟動所有 branches
-3. 等待所有 branches 完成（或依 `failure_policy` 提前終止）
-4. 按 `failure_policy` 判斷最終狀態
-5. 收集 output array（索引對應 branches 順序）
+1. 為每個 branch 建立 step instances（`parent_step_id` = parallel step，`branch_index` = 分支索引）
+2. 同時啟動所有 branches（各 branch 第一個 step → READY）
+3. 按 `failure_policy` 管理分支完成：
+   - `fail_fast`：任一 branch 失敗 → 取消所有其他 branches 的 RUNNING/WAITING/READY/PENDING steps，parallel → FAILED
+   - `wait_all`：等待所有 branches 完成，若有任一失敗 → parallel → FAILED
+4. 收集 output array（索引對應 branches 順序）：
+   - 成功的 branch：該 branch 最後一個 step 的 output
+   - 失敗的 branch（`wait_all` 且 on_error 已處理）：`null`
 
 ### emit
 
@@ -157,11 +160,13 @@ Emit 不等待事件被消費。
 
 ### wait_event
 
-1. 建立 wait_subscription record
+1. 建立 wait_subscription record（event_type、match_expression、expires_at）
 2. 若有 `timeout` → 建立 timeout_schedule
-3. Step 狀態 → WAITING
+3. Step 狀態 RUNNING → WAITING
 4. Instance 狀態 → WAITING
-5. 後續由 Event Router 或 Timeout Manager 觸發恢復
+5. 後續由 Event Router 或 Timeout Manager 觸發恢復：
+   - Event Router 匹配成功 → step WAITING → RUNNING → SUCCEEDED，output = 匹配事件的 `event.data`
+   - Timeout Manager 觸發 → step WAITING → TIMED_OUT，進入 on_timeout 處理
 
 ### fail
 
@@ -181,14 +186,15 @@ Emit 不等待事件被消費。
 ### sub_workflow
 
 1. 解析 `workflow` → 找到對應的 workflow definition（版本解析規則同 task step，預設 "latest" → 最新 PUBLISHED 版本）
-2. 求值 `input` 中的 CEL 表達式
-3. 建立 child workflow instance：
+2. 檢查巢狀深度：沿 `parent_instance_id` 鏈計算深度，超過上限（建議 10 層）→ step FAILED（`max_depth_exceeded`）
+3. 求值 `input` 中的 CEL 表達式
+4. 建立 child workflow instance：
    - `parent_instance_id` = 當前 instance
    - `parent_step_id` = 當前 step
-4. 通知 Scheduler 排程 child instance
-5. Parent step 保持 RUNNING，等待 child 完成
-6. Child SUCCEEDED → parent step SUCCEEDED，output = child return output
-7. Child FAILED → parent step FAILED（可被 on_error 捕捉）
+5. 通知 Scheduler 排程 child instance
+6. Parent step 保持 RUNNING，等待 child 完成
+7. Child SUCCEEDED → parent step SUCCEEDED，output = child return output
+8. Child FAILED → parent step FAILED（error code: `sub_workflow_failed`，可被 on_error 捕捉）
 
 ---
 
@@ -201,7 +207,34 @@ Step Executor 在 step 失敗時，按照 [dsl-spec/v2/12-error-handling](../dsl
 3. 檢查 workflow-level `config.on_error`
 4. 都沒有 → instance FAILED
 
-Handler 的 step instances 動態建立並執行，遵循相同的 Step Executor 流程。
+### Handler Step Instance 建立與執行
+
+找到匹配的 handler 後：
+
+1. 為 handler 的 step 陣列動態建立 step instances（標記為 handler steps，不影響主序列）
+2. 在 execution context 中注入 `error` 或 `timeout` namespace
+3. 依序執行 handler steps（遵循相同的 Step Executor 流程）
+4. 根據 handler 結果決定後續行為：
+
+| Handler 結果 | 後續行為 |
+|-------------|---------|
+| 正常完成（無 `fail`） | 錯誤視為已處理，按繼續點推進 |
+| 使用 `fail` step | 錯誤重新拋出，繼續向上層尋找 handler |
+| Handler 自身失敗 | 視為未處理錯誤，繼續向上層尋找 handler |
+
+### 繼續點（handler 正常完成後）
+
+| Handler 層級 | 繼續點 |
+|-------------|--------|
+| Step-level | 失敗 step 的同一序列中，下一個 step |
+| Block-level | 控制流程 step 的同一序列中，下一個 step |
+| Workflow-level | 失敗 step 在頂層 `steps` 中對應的下一個 step |
+
+### on_timeout handler 特殊規則
+
+- Step-level `on_timeout`：與 `on_error` 相同的繼續點規則
+- Workflow-level `config.on_timeout`：handler 完成後 instance 仍為 FAILED（handler 用途為清理與通知）
+- 若 `on_timeout` handler 自身失敗或超時 → 視為未處理錯誤，向上層尋找 handler
 
 ---
 
