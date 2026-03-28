@@ -276,3 +276,35 @@ Step Executor 為每個 step 建立 execution context，供 Expression Evaluator
 | `timeout` | timeout 資訊（僅 on_timeout handler 內） |
 
 Context 在 step 進入 RUNNING 時建立，包含該時間點的 snapshot。
+
+---
+
+## Schema 驗證語意
+
+引擎在多個時機點執行 JSON Schema 驗證。以下定義驗證的範圍與行為。
+
+### 支援的 JSON Schema 約束
+
+| 約束 | 說明 |
+|------|------|
+| `type` | 型別檢查（string、integer、number、boolean、object、array） |
+| `required` | 必填欄位 |
+| `enum` | 列舉合法值 |
+| `default` | 預設值（未提供時自動填入） |
+| `minimum` / `maximum` | 數值範圍 |
+| `minLength` / `maxLength` | 字串長度範圍 |
+| `minItems` / `maxItems` | 陣列長度範圍 |
+| `properties` | 物件屬性定義 |
+| `items` | 陣列元素定義 |
+
+### 各驗證點的行為
+
+| 驗證點 | 觸發時機 | 驗證範圍 | 失敗結果 |
+|--------|---------|---------|---------|
+| Workflow input | CreateInstance / event trigger | 所有約束 + default 填入 | Instance 不建立（`schema_validation_error`） |
+| Task input | task step 執行前 | 所有約束 | Step FAILED（`schema_validation_error`） |
+| Task output | task step 執行後 | 所有約束 | Step FAILED（`schema_validation_error`） |
+| Workflow output（explicit return） | return step 執行時 | 所有約束 | Instance FAILED（`schema_validation_error`） |
+| Workflow output（implicit completion） | 最後一個 step 完成 | 僅 `required` 欄位 | Instance FAILED（`schema_validation_error`） |
+
+隱式完成僅檢查 `required` 是因為 output 為 `null`，無法對其執行值約束。若有 required 欄位則代表 workflow 設計上需要 explicit return。

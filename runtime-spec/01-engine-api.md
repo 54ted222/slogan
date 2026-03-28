@@ -17,6 +17,15 @@
 
 ## Definition API
 
+所有 definition types（Workflow、Task、Secret）共享相同的 lifecycle 狀態機：
+
+```
+DRAFT → VALIDATED → PUBLISHED → DEPRECATED → ARCHIVED
+                ↘ DRAFT（RevertToDraft）
+```
+
+各 API 操作適用於所有 kind，但部分行為依 kind 而異（如 trigger 訂閱僅 Workflow 適用）。Task 與 Secret definitions 的 PUBLISHED 狀態表示可被 workflow steps 引用。
+
 ### CreateDefinition
 
 建立新的 definition（workflow / task / secret）。
@@ -60,7 +69,10 @@
 **行為：**
 
 1. 載入 definition（MUST 為 DRAFT 狀態）
-2. 執行所有驗證規則（見 [dsl-spec/v2/16-validation-rules](../dsl-spec/v2/16-validation-rules.md)）
+2. 依 `kind` 執行對應的驗證規則（見 [dsl-spec/v2/16-validation-rules](../dsl-spec/v2/16-validation-rules.md)）：
+   - **Workflow**：結構驗證、step 引用完整性、表達式語法、trigger 設定
+   - **Task**：backend 設定完整性、input/output schema 合法性
+   - **Secret**：data 欄位存在、值為 string
 3. 全部通過 → `lifecycle_state` = VALIDATED
 4. 任一失敗 → 回傳驗證錯誤列表，狀態不變
 
