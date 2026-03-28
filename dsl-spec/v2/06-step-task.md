@@ -48,7 +48,7 @@ Task definition 的完整規格見 [17-task-definition](17-task-definition.md)�
 #   version: 3
 # backend:
 #   type: sdk
-#   module: "@myorg/order-tasks"
+#   command: "node ./tools/order-tasks/load-order.js"
 ```
 
 ### 版本解析

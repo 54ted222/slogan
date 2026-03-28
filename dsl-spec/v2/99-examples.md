@@ -86,7 +86,7 @@ backend:
   retry_on_status: [429, 502, 503]
 ```
 
-### sdk — 訂單載入
+### sdk — 訂單載入（stdio）
 
 ```yaml
 apiVersion: task/v2
@@ -117,9 +117,9 @@ output:
 
 backend:
   type: sdk
-  module: "@myorg/order-tasks"
-  entry: "loadOrder"
-  runtime: "node"
+  command: "node ./tools/order-tasks/load-order.js"
+  config:
+    db_pool: "primary"
 ```
 
 ### builtin — Echo（測試用）

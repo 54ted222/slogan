@@ -297,25 +297,84 @@ backend:
 
 ### sdk
 
-呼叫以 Task SDK 開發的外部模組。
+呼叫以 Task SDK 開發的外部 tool。SDK tool 以獨立 process 運行，透過標準化的 JSON protocol 與引擎通訊，**不依賴引擎的實作語言**。
 
 ```yaml
 backend:
   type: sdk
-  module: string              # MUST — 模組識別字
-  entry: string               # MAY — entry function 名稱，預設 "execute"
-  config: map                 # MAY — 模組設定
-  runtime: string             # MAY — 執行環境（如 "node", "python"）
+  command: string             # MUST — 啟動 tool process 的命令
+  protocol: string            # MAY — 通訊協定：stdio（預設）| http
+  config: map                 # MAY — 傳入 tool 的靜態設定
+  timeout_kill_after: duration # MAY — SIGTERM 後等待多久發 SIGKILL，預設 5s（僅 stdio）
 ```
 
-#### 行為
+#### protocol: stdio（預設）
 
-- 引擎透過 Task SDK protocol 呼叫外部模組
-- 模組需實作 SDK 定義的介面（接收 input JSON，回傳 output JSON）
-- 模組可以是 npm package、Python module、或其他 runtime 支援的格式
-- SDK protocol 負責 serialization、error handling、lifecycle management
+引擎 spawn 子 process，透過 stdin/stdout 交換 JSON 訊息。
+
+- 引擎將 **request JSON** 寫入子 process 的 **stdin**，隨後關閉 stdin
+- Tool 將 **response JSON** 寫入 **stdout**
+- **stderr** 作為 log 記錄（行為同 bash backend）
+- Process exit code 0 且 stdout 為有效 JSON = 成功
+- Process exit code ≠ 0 = 失敗（stderr 前 4KB 作為 error message）
+- Process timeout → 先發 SIGTERM，等待 `timeout_kill_after`，再發 SIGKILL
+
+#### protocol: http
+
+Tool 作為獨立 HTTP server 運行，引擎以 HTTP POST 呼叫。
+
+- 引擎將 request JSON 作為 POST body 發送至 `command` 指定的 URL
+- 當 `protocol: http` 時，`command` 欄位的語意為 tool 的 HTTP endpoint URL
+- Response 處理規則同 http backend（2xx = 成功，其他 = 失敗）
+- Tool server 的 lifecycle 由部署環境管理，不由引擎管理
+
+#### Request / Response 格式
+
+**Request**（引擎 → tool）：
+
+```json
+{
+  "input": { },
+  "config": { },
+  "context": {
+    "idempotency_key": "string | null",
+    "instance_id": "string",
+    "step_id": "string",
+    "attempt": 1
+  }
+}
+```
+
+**Response**（tool → 引擎）：
+
+```json
+{
+  "success": true,
+  "output": { },
+  "error": null
+}
+```
+
+失敗時：
+
+```json
+{
+  "success": false,
+  "output": null,
+  "error": {
+    "message": "string",
+    "code": "string"
+  }
+}
+```
+
+#### 語言無關性
+
+SDK tool 可以用任何程式語言實作，只需遵循上述 JSON protocol。Slogan 專案 MAY 提供各語言的 helper library（如 Node.js、Python、Go）簡化 stdin/stdout 的序列化處理，但這並非必要 — 任何能讀 stdin 寫 stdout（或處理 HTTP POST）的程式皆可作為 SDK tool。
 
 #### 範例
+
+**stdio 模式（Node.js tool）：**
 
 ```yaml
 apiVersion: task/v2
@@ -351,11 +410,34 @@ output:
 
 backend:
   type: sdk
-  module: "@myorg/order-tasks"
-  entry: "loadOrder"
-  runtime: "node"
+  command: "node ./tools/order-tasks/load-order.js"
   config:
     db_pool: "primary"
+```
+
+**http 模式（獨立部署的 tool server）：**
+
+```yaml
+apiVersion: task/v2
+kind: Task
+
+metadata:
+  name: order.load
+  version: 4
+  description: "從資料庫載入訂單（HTTP 模式）"
+
+input:
+  schema:
+    type: object
+    properties:
+      order_id:
+        type: string
+    required: [order_id]
+
+backend:
+  type: sdk
+  command: "http://localhost:9100/tools/order.load"
+  protocol: http
 ```
 
 ---
