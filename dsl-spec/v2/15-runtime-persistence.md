@@ -147,7 +147,7 @@ Execution log 為 append-only，用於稽核與除錯。
 ```
 Engine Start
      ↓
-Load non-terminal instances (RUNNING / WAITING)
+Load non-terminal instances (CREATED / RUNNING / WAITING)
      ↓
 For each instance: rebuild state from DB
      ↓
@@ -156,11 +156,21 @@ For each RUNNING step: apply recovery policy
 Resume scheduler loop
 ```
 
-### Recovery 規則
+### Instance Recovery 規則
+
+| Instance 狀態 | Recovery 行為 |
+|--------------|---------------|
+| CREATED | 轉為 RUNNING，開始執行 |
+| RUNNING | 依據 step 狀態恢復（見下方 Step Recovery） |
+| WAITING | 重建 wait_subscription，繼續等待 |
+
+### Step Recovery 規則
+
+`execution.policy` 僅適用於 `task` 與 `sub_workflow`。其他 step 類型（assign、emit、if、switch、foreach、parallel）在 RUNNING 狀態下的 recovery 行為等同 `replayable`（安全重跑）。
 
 | Step 狀態 | Execution Policy | Recovery 行為 |
 |-----------|-----------------|---------------|
-| RUNNING | `replayable` | 重跑 step |
+| RUNNING | `replayable`（或無 policy） | 重跑 step |
 | RUNNING | `idempotent` | 帶 idempotency key 重跑 |
 | RUNNING | `non_repeatable` | 標記 FAILED |
 | WAITING | — | 重建 wait_subscription，繼續等待 |
