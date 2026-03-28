@@ -110,7 +110,7 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 
 | 從 | 到 | 觸發條件 |
 |----|-----|----------|
-| PENDING | READY | 前一個 step 完成 |
+| PENDING | READY | 前一個 step 完成（SUCCEEDED、SKIPPED、或 FAILED / TIMED_OUT 但錯誤已被 handler 處理） |
 | READY | RUNNING | 排程器開始執行 |
 | READY | SKIPPED | condition 為 false |
 | RUNNING | SUCCEEDED | 執行完成 |

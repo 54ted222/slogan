@@ -173,7 +173,7 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 
 ### 狀態轉換規則
 
-- PENDING → READY：前一個 step 完成（SUCCEEDED 或 SKIPPED）
+- PENDING → READY：前一個 step 完成（SUCCEEDED、SKIPPED、或 FAILED / TIMED_OUT 但錯誤已被 handler 處理）
 - READY → RUNNING：排程器開始執行
 - READY → SKIPPED：`condition` 求值為 `false`
 - RUNNING → SUCCEEDED：執行完成

@@ -55,9 +55,19 @@ on_error:
 
 | Handler 結果 | 後續行為 |
 |-------------|----------|
-| 正常完成（無 `fail`） | 錯誤視為已處理，workflow 從失敗 step 的下一個 step 繼續 |
+| 正常完成（無 `fail`） | 錯誤視為已處理，workflow 繼續執行（見下方「繼續點」） |
 | 使用 `fail` step | 錯誤重新拋出，繼續向上層尋找 handler |
 | Handler 自身失敗 | 視為未處理錯誤，繼續向上層尋找 handler |
+
+### 繼續點（handler 正常完成後）
+
+Handler 正常完成時，workflow 的繼續執行位置取決於 handler 所在的層級：
+
+| Handler 層級 | 繼續點 |
+|-------------|--------|
+| **Step-level** | 失敗 step 的同一序列中，下一個 step |
+| **Block-level** | 控制流程 step（if / switch / foreach / parallel）的同一序列中，下一個 step |
+| **Workflow-level** | 失敗 step 在頂層 `steps` 中對應的下一個 step |
 
 ### 與 foreach / parallel failure_policy 的交互
 
