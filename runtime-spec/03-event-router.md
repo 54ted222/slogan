@@ -71,7 +71,7 @@ SendEvent API
 3. 匹配成功 → 建立 workflow input：
    - 有 `input_mapping` → 求值每個映射表達式，組合為 input map
    - 無 `input_mapping` → `event.data` 整體作為 input（passthrough）
-4. 若有 `input.schema` → 驗證 input
+4. 若有 `input_schema` → 驗證 input
    - 驗證失敗 → 不建立 instance，記錄錯誤至 log
 5. 建立 workflow instance（等同 CreateInstance，但由事件觸發）
 6. 通知 Scheduler

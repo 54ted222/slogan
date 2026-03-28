@@ -213,7 +213,7 @@ DRAFT → VALIDATED → PUBLISHED → DEPRECATED → ARCHIVED
 1. 解析版本：`"latest"` → 查找最新 PUBLISHED 版本
 2. 驗證 definition 為 PUBLISHED（或 DEPRECATED，仍可執行）
 3. 驗證 definition 有 `manual` trigger
-4. 若有 `input.schema` → 驗證 input（失敗回傳 `schema_validation_error`）
+4. 若有 `input_schema` → 驗證 input（失敗回傳 `schema_validation_error`）
 5. 若有 `required: true` 的 input artifact → 驗證 artifacts 已提供
 6. 若有 `config.secrets` → 檢查所列的 secret definitions 皆已載入（失敗回傳 `secret_not_available`）
 7. 建立 workflow_instance record（state = CREATED）

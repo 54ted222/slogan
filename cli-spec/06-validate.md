@@ -29,7 +29,7 @@ slogan validate <file|directory> [options]
 | Step 結構 | `type` 合法性、各 type 必填欄位 |
 | Step ID 唯一性 | 全域唯一 |
 | CEL 語法 | `${ }` 內的表達式語法（不求值） |
-| Schema 格式 | `input.schema` / `output.schema` 為合法 JSON Schema 子集 |
+| Schema 格式 | `input_schema` / `output_schema` 為合法 JSON Schema 子集 |
 
 ### 不檢查項目
 

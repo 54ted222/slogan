@@ -36,7 +36,7 @@ triggers:
 
 ### 行為
 
-- 呼叫端提供 input 資料（需符合 `input.schema`）
+- 呼叫端提供 input 資料（需符合 `input_schema`）
 - 引擎建立 instance，狀態設為 CREATED，隨即轉為 RUNNING
 
 ---
@@ -102,7 +102,7 @@ Event trigger 透過 `input_mapping` 將事件資料轉換為 workflow input：
 
 - 每個 key 為 workflow input 的欄位名
 - 每個 value 為 CEL 表達式，在 `event` namespace 下求值
-- 映射結果 MUST 符合 `input.schema`（若有定義）
+- 映射結果 MUST 符合 `input_schema`（若有定義）
 - 映射表達式求值失敗 → instance 不建立，記錄錯誤
 
 ```yaml
@@ -118,7 +118,7 @@ Event trigger 透過 `input_mapping` 將事件資料轉換為 workflow input：
 #### 無 input_mapping（隱式 passthrough）
 
 - `event.data` 整體作為 workflow input
-- `event.data` MUST 直接符合 `input.schema`
+- `event.data` MUST 直接符合 `input_schema`
 - 適用於事件結構與 input schema 完全一致的情況
 
 ---

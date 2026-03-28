@@ -12,8 +12,8 @@
 | `kind` | string | MUST | 固定值 `Workflow` |
 | `metadata` | object | MUST | workflow 的識別與描述資訊 |
 | `triggers` | array | MUST | 啟動機制，至少一個 |
-| `input` | object | MAY | 輸入 schema 定義 |
-| `output` | object | MAY | 輸出 schema 定義 |
+| `input_schema` | object | MAY | 輸入 schema 定義 |
+| `output_schema` | object | MAY | 輸出 schema 定義 |
 | `artifacts` | map | MAY | artifact 宣告 |
 | `config` | object | MAY | workflow 級設定 |
 | `steps` | array | MUST | 主要步驟序列 |
@@ -111,20 +111,18 @@ triggers:
     event: order.created
     when: ${ event.data.source == "api" }
 
-input:
-  schema:
-    type: object
-    properties:
-      order_id:
-        type: string
-    required: [order_id]
+input_schema:
+  type: object
+  properties:
+    order_id:
+      type: string
+  required: [order_id]
 
-output:
-  schema:
-    type: object
-    properties:
-      status:
-        type: string
+output_schema:
+  type: object
+  properties:
+    status:
+      type: string
 
 artifacts:
   order_file:

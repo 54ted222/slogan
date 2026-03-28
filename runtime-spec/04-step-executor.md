@@ -51,9 +51,9 @@ Step 狀態 READY → RUNNING。
 
 1. 解析 `action` → 找到對應的 task definition（見下方版本解析規則）
 2. 求值 `input` 中的 CEL 表達式
-3. 若 task definition 有 `input.schema` → 驗證 input
+3. 若 task definition 有 `input_schema` → 驗證 input
 4. 交由 Task Executor 執行（見 [05-task-executor](05-task-executor.md)）
-5. 若 task definition 有 `output.schema` → 驗證 output
+5. 若 task definition 有 `output_schema` → 驗證 output
 6. SUCCEEDED：記錄 output
 7. FAILED：進入 retry 判斷
 
@@ -196,7 +196,7 @@ Emit 不等待事件被消費。
 ### return
 
 1. 求值 `output` 中的 CEL 表達式
-2. 若有 `output.schema` → 驗證 output
+2. 若有 `output_schema` → 驗證 output
    - 驗證失敗 → instance → FAILED（`schema_validation_error`）
 3. Instance → SUCCEEDED，記錄 output
 

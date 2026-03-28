@@ -51,7 +51,7 @@
 ### 行為
 
 - 立即終止 workflow instance，狀態變為 SUCCEEDED
-- `output` 會依照 `output.schema` 驗證（若有定義）
+- `output` 會依照 `output_schema` 驗證（若有定義）
 - 驗證失敗 → instance 狀態變為 FAILED（錯誤碼 `schema_validation_error`）
 - 後續 steps 不會執行
 - 若 `output` 未指定，回傳 `null`
@@ -83,4 +83,4 @@
 
 - Instance 狀態變為 SUCCEEDED
 - Output 為 `null`
-- 若有定義 `output.schema` 且 schema 有 `required` 欄位 → FAILED（`schema_validation_error`）
+- 若有定義 `output_schema` 且 schema 有 `required` 欄位 → FAILED（`schema_validation_error`）

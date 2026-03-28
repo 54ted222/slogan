@@ -93,7 +93,7 @@ Acquire instance lease（多 worker 時）
 
 | 情況 | 動作 |
 |------|------|
-| 頂層 `steps` 最後一個 step 完成 | 隱式完成：output = `null`。若有 `output.schema` 且含 `required` 欄位 → Instance → FAILED（`schema_validation_error`）；否則 Instance → SUCCEEDED。注意：隱式完成僅檢查 `required` 欄位是否缺失，不驗證其他 schema 約束（如 minimum、enum 等） |
+| 頂層 `steps` 最後一個 step 完成 | 隱式完成：output = `null`。若有 `output_schema` 且含 `required` 欄位 → Instance → FAILED（`schema_validation_error`）；否則 Instance → SUCCEEDED。注意：隱式完成僅檢查 `required` 欄位是否缺失，不驗證其他 schema 約束（如 minimum、enum 等） |
 | 遇到 `return` step | Instance → SUCCEEDED，記錄 output |
 | 遇到 `fail` step（非 handler 內） | Instance → FAILED，記錄 error |
 

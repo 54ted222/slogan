@@ -16,24 +16,22 @@ metadata:
   name: order.load
   version: 3
 
-input:
-  schema:
-    type: object
-    properties:
-      order_id:
-        type: string
-    required: [order_id]
+input_schema:
+  type: object
+  properties:
+    order_id:
+      type: string
+  required: [order_id]
 
-output:
-  schema:
-    type: object
-    properties:
-      id:
-        type: string
-      amount:
-        type: number
-      status:
-        type: string
+output_schema:
+  type: object
+  properties:
+    id:
+      type: string
+    amount:
+      type: number
+    status:
+      type: string
 
 backend:
   type: stdio
@@ -52,22 +50,20 @@ metadata:
   name: file.compress
   version: 1
 
-input:
-  schema:
-    type: object
-    properties:
-      source_path:
-        type: string
-      target_path:
-        type: string
-    required: [source_path, target_path]
+input_schema:
+  type: object
+  properties:
+    source_path:
+      type: string
+    target_path:
+      type: string
+  required: [source_path, target_path]
 
-output:
-  schema:
-    type: object
-    properties:
-      size_bytes:
-        type: integer
+output_schema:
+  type: object
+  properties:
+    size_bytes:
+      type: integer
 
 backend:
   type: stdio
@@ -84,27 +80,25 @@ metadata:
   name: payment.create
   version: 2
 
-input:
-  schema:
-    type: object
-    properties:
-      order_id:
-        type: string
-      amount:
-        type: number
-      currency:
-        type: string
-        default: "TWD"
-    required: [order_id, amount]
+input_schema:
+  type: object
+  properties:
+    order_id:
+      type: string
+    amount:
+      type: number
+    currency:
+      type: string
+      default: "TWD"
+  required: [order_id, amount]
 
-output:
-  schema:
-    type: object
-    properties:
-      payment_id:
-        type: string
-      status:
-        type: string
+output_schema:
+  type: object
+  properties:
+    payment_id:
+      type: string
+    status:
+      type: string
 
 backend:
   type: http
@@ -191,42 +185,40 @@ triggers:
       notify_customer: ${ has(event.data.notify) ? event.data.notify : true }
       items: ${ event.data.line_items }
 
-input:
-  schema:
-    type: object
-    properties:
-      order_id:
-        type: string
-      action:
-        type: string
-        enum: [pay, ship]
-      notify_customer:
-        type: boolean
-        default: true
+input_schema:
+  type: object
+  properties:
+    order_id:
+      type: string
+    action:
+      type: string
+      enum: [pay, ship]
+    notify_customer:
+      type: boolean
+      default: true
+    items:
+      type: array
       items:
-        type: array
-        items:
-          type: object
-          properties:
-            sku:
-              type: string
-            qty:
-              type: integer
-              minimum: 1
-          required: [sku, qty]
-    required: [order_id, action]
+        type: object
+        properties:
+          sku:
+            type: string
+          qty:
+            type: integer
+            minimum: 1
+        required: [sku, qty]
+  required: [order_id, action]
 
-output:
-  schema:
-    type: object
-    properties:
-      order_id:
-        type: string
-      status:
-        type: string
-      payment_id:
-        type: string
-    required: [order_id, status]
+output_schema:
+  type: object
+  properties:
+    order_id:
+      type: string
+    status:
+      type: string
+    payment_id:
+      type: string
+  required: [order_id, status]
 
 artifacts:
   order_file:
@@ -428,25 +420,23 @@ metadata:
 triggers:
   - type: manual
 
-input:
-  schema:
-    type: object
-    properties:
-      order_id:
-        type: string
-      amount:
-        type: number
-    required: [order_id, amount]
+input_schema:
+  type: object
+  properties:
+    order_id:
+      type: string
+    amount:
+      type: number
+  required: [order_id, amount]
 
-output:
-  schema:
-    type: object
-    properties:
-      payment_id:
-        type: string
-      status:
-        type: string
-    required: [payment_id, status]
+output_schema:
+  type: object
+  properties:
+    payment_id:
+      type: string
+    status:
+      type: string
+  required: [payment_id, status]
 
 config:
   timeout: 35m
@@ -512,17 +502,16 @@ triggers:
     event: inventory.low_stock
     when: ${ event.data.qty < 10 }
 
-input:
-  schema:
-    type: object
-    properties:
-      sku:
-        type: string
-      qty:
-        type: integer
-      warehouse:
-        type: string
-    required: [sku, qty]
+input_schema:
+  type: object
+  properties:
+    sku:
+      type: string
+    qty:
+      type: integer
+    warehouse:
+      type: string
+  required: [sku, qty]
 
 steps:
   - type: if
@@ -576,13 +565,12 @@ metadata:
 triggers:
   - type: manual
 
-input:
-  schema:
-    type: object
-    properties:
-      job_id:
-        type: string
-    required: [job_id]
+input_schema:
+  type: object
+  properties:
+    job_id:
+      type: string
+  required: [job_id]
 
 config:
   timeout: 1h
@@ -660,17 +648,16 @@ metadata:
 triggers:
   - type: manual
 
-input:
-  schema:
-    type: object
-    properties:
-      skip_validation:
-        type: boolean
-        default: false
-      environment:
-        type: string
-        enum: [dev, staging, prod]
-    required: [environment]
+input_schema:
+  type: object
+  properties:
+    skip_validation:
+      type: boolean
+      default: false
+    environment:
+      type: string
+      enum: [dev, staging, prod]
+  required: [environment]
 
 steps:
   - type: task

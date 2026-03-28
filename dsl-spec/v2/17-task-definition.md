@@ -25,11 +25,9 @@ metadata:
   description: string        # MAY
   labels: map                # MAY
 
-input:
-  schema: object             # MAY — 輸入 JSON Schema
+input_schema: object             # MAY — 輸入 JSON Schema
 
-output:
-  schema: object             # MAY — 輸出 JSON Schema
+output_schema: object             # MAY — 輸出 JSON Schema
 
 backend:
   type: string               # MUST — stdio | http | builtin
@@ -43,8 +41,8 @@ backend:
 | `apiVersion` | string | MUST | 固定值 `task/v2` |
 | `kind` | string | MUST | 固定值 `Task` |
 | `metadata` | object | MUST | 識別與描述 |
-| `input` | object | MAY | 輸入 schema |
-| `output` | object | MAY | 輸出 schema |
+| `input_schema` | object | MAY | 輸入 schema |
+| `output_schema` | object | MAY | 輸出 schema |
 | `backend` | object | MUST | 執行後端設定 |
 
 ---
@@ -67,28 +65,26 @@ backend:
 與 workflow 的 schema 語法相同（JSON Schema 子集），用於驗證 task 被呼叫時的輸入與輸出。
 
 ```yaml
-input:
-  schema:
-    type: object
-    properties:
-      order_id:
-        type: string
-      amount:
-        type: number
-    required: [order_id]
+input_schema:
+  type: object
+  properties:
+    order_id:
+      type: string
+    amount:
+      type: number
+  required: [order_id]
 
-output:
-  schema:
-    type: object
-    properties:
-      id:
-        type: string
-      status:
-        type: string
+output_schema:
+  type: object
+  properties:
+    id:
+      type: string
+    status:
+      type: string
 ```
 
-- 引擎在 step 執行前 SHOULD 驗證 input 是否符合 task 的 `input.schema`
-- 引擎在 step 執行後 SHOULD 驗證 output 是否符合 task 的 `output.schema`
+- 引擎在 step 執行前 SHOULD 驗證 input 是否符合 task 的 `input_schema`
+- 引擎在 step 執行後 SHOULD 驗證 output 是否符合 task 的 `output_schema`
 - 驗證失敗 → step FAILED（錯誤碼 `schema_validation_error`）
 
 ---
@@ -151,27 +147,25 @@ metadata:
   version: 2
   description: "建立付款請求"
 
-input:
-  schema:
-    type: object
-    properties:
-      order_id:
-        type: string
-      amount:
-        type: number
-      currency:
-        type: string
-        default: "TWD"
-    required: [order_id, amount]
+input_schema:
+  type: object
+  properties:
+    order_id:
+      type: string
+    amount:
+      type: number
+    currency:
+      type: string
+      default: "TWD"
+  required: [order_id, amount]
 
-output:
-  schema:
-    type: object
-    properties:
-      payment_id:
-        type: string
-      status:
-        type: string
+output_schema:
+  type: object
+  properties:
+    payment_id:
+      type: string
+    status:
+      type: string
 
 backend:
   type: http
@@ -216,13 +210,11 @@ metadata:
   version: 1
   description: "回傳輸入（用於測試）"
 
-input:
-  schema:
-    type: object
+input_schema:
+  type: object
 
-output:
-  schema:
-    type: object
+output_schema:
+  type: object
 
 backend:
   type: builtin
@@ -322,28 +314,26 @@ metadata:
   version: 3
   description: "從資料庫載入訂單"
 
-input:
-  schema:
-    type: object
-    properties:
-      order_id:
-        type: string
-    required: [order_id]
+input_schema:
+  type: object
+  properties:
+    order_id:
+      type: string
+  required: [order_id]
 
-output:
-  schema:
-    type: object
-    properties:
-      id:
-        type: string
-      amount:
-        type: number
-      status:
-        type: string
-      customer_email:
-        type: string
-      shipping_address:
-        type: object
+output_schema:
+  type: object
+  properties:
+    id:
+      type: string
+    amount:
+      type: number
+    status:
+      type: string
+    customer_email:
+      type: string
+    shipping_address:
+      type: object
 
 backend:
   type: stdio

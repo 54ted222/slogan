@@ -172,25 +172,23 @@ metadata:
 triggers:
   - type: manual
 
-input:
-  schema:
-    type: object
-    properties:
-      order_id:
-        type: string
-      amount:
-        type: number
-    required: [order_id, amount]
+input_schema:
+  type: object
+  properties:
+    order_id:
+      type: string
+    amount:
+      type: number
+  required: [order_id, amount]
 
-output:
-  schema:
-    type: object
-    properties:
-      payment_id:
-        type: string
-      status:
-        type: string
-    required: [payment_id, status]
+output_schema:
+  type: object
+  properties:
+    payment_id:
+      type: string
+    status:
+      type: string
+  required: [payment_id, status]
 
 steps:
   - id: create_payment

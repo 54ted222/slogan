@@ -73,7 +73,7 @@
 
 ## Schema 一致性
 
-- `input.schema` 和 `output.schema` MUST 為有效的 JSON Schema 子集
+- `input_schema` 和 `output_schema` MUST 為有效的 JSON Schema 子集
 - 支援的型別限於：string、number、integer、boolean、array、object
 - `required` 中列出的欄位 MUST 存在於 `properties` 中
 
@@ -95,7 +95,7 @@
 - `version` 若為 integer，MUST 為正整數
 - `version` 若為 string，MUST 為 `"latest"`
 - 引擎 SHOULD 檢查 `action` 對應的 task definition 是否存在且為 PUBLISHED
-- 若 task definition 有 `input.schema`，引擎 SHOULD 檢查 step 的 `input` 與 schema 的相容性（靜態分析）
+- 若 task definition 有 `input_schema`，引擎 SHOULD 檢查 step 的 `input` 與 schema 的相容性（靜態分析）
 - Task definition 自身的驗證規則：
   - `apiVersion` MUST 為 `task/v2`
   - `kind` MUST 為 `Task`
