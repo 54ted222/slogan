@@ -148,6 +148,7 @@ steps:
 PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
                 │        │   │
                 │        │   ├──→ FAILED
+                │        │   ├──→ SKIPPED    （if/switch 無匹配分支）
                 │        │   ├──→ WAITING ──⇄── RUNNING（收到事件）
                 │        │   │      ├──→ TIMED_OUT （等待逾時）
                 │        │   │      └──→ CANCELLED
@@ -169,13 +170,14 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 | WAITING | 等待外部事件（僅 `wait_event`） |
 | TIMED_OUT | 執行超時 |
 | CANCELLED | 被外部取消（workflow timeout、parent 取消、API 取消） |
-| SKIPPED | `condition` 為 false，或所在分支未被選中 |
+| SKIPPED | `condition` 為 false、所在分支未被選中、或控制流程 step 無匹配的執行分支（if 無 else 且 expr 為 false、switch 無匹配且無 default） |
 
 ### 狀態轉換規則
 
 - PENDING → READY：前一個 step 完成（SUCCEEDED、SKIPPED、或 FAILED / TIMED_OUT 但錯誤已被 handler 處理）
 - READY → RUNNING：排程器開始執行
 - READY → SKIPPED：`condition` 求值為 `false`
+- RUNNING → SKIPPED：控制流程 step 無匹配的執行分支（if 無 else 且 expr 為 false、switch 無匹配且無 default）
 - RUNNING → SUCCEEDED：執行完成
 - RUNNING → FAILED：執行失敗（retry 用盡）
 - RUNNING → WAITING：`wait_event` 進入等待
