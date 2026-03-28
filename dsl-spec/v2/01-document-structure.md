@@ -48,7 +48,7 @@ Workflow 級設定。所有欄位皆為可選。
 | 欄位 | 型別 | 說明 |
 |------|------|------|
 | `timeout` | duration | workflow instance 的最長執行時間 |
-| `max_step_executions` | integer | step 執行次數上限（防止無限迴圈） |
+| `max_step_executions` | integer | step 執行次數上限（防止無限迴圈），超過時 instance FAILED（錯誤碼 `max_step_executions_exceeded`） |
 | `on_error` | step 陣列 | workflow 級錯誤處理（見 [12-error-handling](12-error-handling.md)） |
 | `on_timeout` | step 陣列 | workflow 級 timeout 處理 |
 | `secrets` | string 陣列 | 依賴的 secret 名稱列表（見 [18-secrets-and-env](18-secrets-and-env.md)） |

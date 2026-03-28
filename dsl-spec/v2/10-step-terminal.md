@@ -18,8 +18,8 @@
 
 ### 行為
 
-- 立即終止 workflow instance，無論 `fail` 出現在哪個層級（巢狀 if、switch、on_error 等）
-- Instance 狀態變為 FAILED
+- 在一般 step 序列中（包含巢狀 if、switch、foreach、parallel 內）：立即終止 workflow instance，Instance 狀態變為 FAILED
+- 在 `on_error` / `on_timeout` handler 中：視為錯誤重新拋出，繼續向上層尋找 handler（見 [12-error-handling](12-error-handling.md)）
 - `message` 與 `code` 記錄在 instance 的錯誤資訊中
 - 後續 steps 不會執行
 
@@ -72,9 +72,10 @@
 
 `fail` 和 `return` 都是 **立即終止** 指令：
 
-- 無論出現在哪個巢狀層級（if branch、switch case、foreach iteration、parallel branch），都會終止整個 workflow instance
+- 在一般 step 序列中：無論出現在哪個巢狀層級（if branch、switch case、foreach iteration、parallel branch），都會終止整個 workflow instance
+- **例外**：在 `on_error` / `on_timeout` handler 中使用 `fail` 時，不會直接終止 workflow，而是將錯誤重新拋出至上層 handler（見 [12-error-handling](12-error-handling.md)）
 - 不會自動執行任何 cleanup 或 compensation 邏輯
-- 若需要在失敗時進行清理，SHOULD 使用 `on_error` handler（見 [12-error-handling](12-error-handling.md)）
+- 若需要在失敗時進行清理，SHOULD 使用 `on_error` handler
 
 ### 隱式完成
 

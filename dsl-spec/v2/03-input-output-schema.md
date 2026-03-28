@@ -117,5 +117,8 @@ output:
 
 `input` 和 `output` 區塊皆為可選：
 
-- 沒有 `input` → workflow 不接受任何輸入（`input` namespace 為空 map）
+- 沒有 `input` → 不做 input schema 驗證
+  - Manual trigger：呼叫端提供的資料直接成為 `input` namespace（若無提供則為空 map）
+  - Event trigger 有 `input_mapping`：映射結果成為 `input` namespace
+  - Event trigger 無 `input_mapping`：`event.data` 整體成為 `input` namespace（passthrough）
 - 沒有 `output` → workflow 完成時不驗證 return output

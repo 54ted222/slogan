@@ -61,7 +61,7 @@ triggers:
   input_mapping:
     order_id: ${ event.data.order_id }
     action: ${ event.data.type }
-    notify_customer: ${ event.data.notify ?? true }
+    notify_customer: ${ default(event.data.notify, true) }
 ```
 
 ### 行為

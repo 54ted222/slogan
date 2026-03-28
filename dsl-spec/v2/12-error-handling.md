@@ -59,6 +59,11 @@ on_error:
 | 使用 `fail` step | 錯誤重新拋出，繼續向上層尋找 handler |
 | Handler 自身失敗 | 視為未處理錯誤，繼續向上層尋找 handler |
 
+### 與 foreach / parallel failure_policy 的交互
+
+- 若 `foreach` / `parallel` 內某個 step 失敗，且該 step 的 `on_error` 正常完成（未使用 `fail`）→ 該 step 視為已處理，迭代/分支繼續執行，不觸發 `failure_policy`
+- 若 step 的 `on_error` 不存在或重新拋出錯誤 → 該迭代/分支視為失敗，`failure_policy` 生效
+
 ---
 
 ## on_timeout 結構
@@ -155,6 +160,7 @@ Step timeout < workflow timeout。若 workflow timeout 先到，覆蓋所有 ste
 | `expression_error` | CEL 表達式求值失敗 |
 | `sub_workflow_failed` | 子 workflow 失敗 |
 | `max_depth_exceeded` | sub_workflow 巢狀超過深度限制 |
+| `max_step_executions_exceeded` | 超過 `config.max_step_executions` 上限 |
 | `unknown` | 未分類的錯誤 |
 
 ---

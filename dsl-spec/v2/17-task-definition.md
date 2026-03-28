@@ -183,7 +183,7 @@ backend:
 - Task input 預設以 JSON body 傳送（`Content-Type: application/json`）
 - Response body MUST 為 JSON，解析後作為 task output
 - HTTP 2xx = 成功，其他 = 失敗
-- `retry_on_status` 中的 status code（如 `[429, 502, 503]`）會觸發 retry 機制
+- `retry_on_status` 中的 status code（如 `[429, 502, 503]`）視為可重試的暫時性失敗，會觸發 workflow step 的 `retry` 機制（見 [06-step-task](06-step-task.md)）。不在此列表中的非 2xx status code 視為永久性失敗，不觸發重試
 
 #### body_mapping
 
