@@ -1,0 +1,208 @@
+apiVersion: workflow/v2
+kind: Workflow
+
+metadata:
+  name: demo_order_flow
+  version: 1
+
+triggers:
+  # 手動啟動
+  - type: manual
+
+  # 事件啟動
+  - type: event
+    event: order.created
+    when: "event.data.source == 'api'"
+
+input:
+  schema:
+    type: object
+    properties:
+      order_id:
+        type: string
+      action:
+        type: string
+        enum: [pay, ship]
+      notify_customer:
+        type: boolean
+      items:
+        type: array
+    required: [order_id, action]
+
+output:
+  schema:
+    type: object
+    properties:
+      order_id:
+        type: string
+      status:
+        type: string
+    required: [order_id, status]
+
+artifacts:
+  order_file:
+    kind: file
+    lifecycle: input
+    required: true
+
+  result_file:
+    kind: file
+    lifecycle: output
+
+steps:
+  # 載入訂單
+  - id: load_order
+    type: task
+    action: order.load
+    input:
+      order_id: "input.order_id"
+    resources:
+      - name: order_file
+        type: artifact
+        ref: order_file
+        access: read
+    retry:
+      max_attempts: 2
+    timeout: 10s
+    execution:
+      policy: replayable
+
+  # 指派變數
+  - id: build_vars
+    type: assign
+    vars:
+      payment_input:
+        order_id: "steps.load_order.output.id"
+        amount: "steps.load_order.output.amount"
+      is_pay_action: "input.action == 'pay'"
+
+  # 條件判斷
+  - id: check_cancelled
+    type: if
+    expr: "steps.load_order.output.status == 'cancelled'"
+    then:
+      steps:
+        - id: emit_rejected
+          type: emit
+          event: order.rejected
+          data:
+            order_id: "steps.load_order.output.id"
+
+        - id: fail_cancelled
+          type: fail
+          message: "order cancelled"
+    else:
+      steps:
+        - id: emit_processing
+          type: emit
+          event: order.processing
+          data:
+            order_id: "steps.load_order.output.id"
+
+  # 分流
+  - id: route_action
+    type: switch
+    expr: "input.action"
+    cases:
+      - value: "pay"
+        steps:
+          - id: create_payment
+            type: task
+            action: payment.create
+            input: "vars.payment_input"
+            timeout: 30s
+            execution:
+              policy: non_repeatable
+            on_error:
+              steps:
+                - id: emit_payment_failed
+                  type: emit
+                  event: payment.failed
+                  data:
+                    order_id: "steps.load_order.output.id"
+
+          - id: wait_payment
+            type: wait_event
+            event: payment.confirmed
+            match: "event.data.order_id == steps.load_order.output.id"
+            timeout: 30m
+            on_timeout:
+              steps:
+                - id: fail_payment_timeout
+                  type: fail
+                  message: "payment timeout"
+
+      - value: "ship"
+        steps:
+          - id: create_shipment
+            type: task
+            action: shipment.create
+            input:
+              order_id: "steps.load_order.output.id"
+            execution:
+              policy: idempotent
+
+    default:
+      steps:
+        - id: fail_unknown_action
+          type: fail
+          message: "unknown action"
+
+  # 迴圈
+  - id: reserve_items
+    type: foreach
+    items: "input.items"
+    as: item
+    concurrency: 3
+    failure_policy: fail_fast
+    steps:
+      - id: reserve_one
+        type: task
+        action: inventory.reserve
+        input:
+          order_id: "steps.load_order.output.id"
+          sku: "loop.item.sku"
+          qty: "loop.item.qty"
+
+  # 平行處理
+  - id: finalize
+    type: parallel
+    failure_policy: wait_all
+    branches:
+      - steps:
+          - id: maybe_notify
+            type: if
+            expr: "input.notify_customer == true"
+            then:
+              steps:
+                - id: notify_customer
+                  type: task
+                  action: notify.customer
+                  input:
+                    order_id: "steps.load_order.output.id"
+
+      - steps:
+          - id: generate_report
+            type: task
+            action: report.generate
+            input:
+              order_id: "steps.load_order.output.id"
+            resources:
+              - name: result_file
+                type: artifact
+                ref: result_file
+                access: write
+
+  # 完成事件
+  - id: emit_completed
+    type: emit
+    event: order.completed
+    data:
+      order_id: "steps.load_order.output.id"
+
+  # 回傳結果
+  - id: done
+    type: return
+    output:
+      order_id: "steps.load_order.output.id"
+      status: "completed"

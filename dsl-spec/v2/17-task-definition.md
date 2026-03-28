@@ -1,0 +1,392 @@
+# 17 — Task Definition
+
+Task definition 是獨立的 YAML 文件，定義一個可被 workflow step 呼叫的工作單元。Task definition 與 workflow definition 分離，擁有獨立的 `kind`、版本與生命週期。
+
+---
+
+## 設計動機
+
+- **定義與使用分離**：workflow 描述「呼叫什麼」，task definition 描述「怎麼執行」
+- **多 backend 支援**：同一個 task 介面可切換不同的執行方式
+- **獨立版本管理**：task 可獨立演進，不影響 workflow definition
+- **可重用性**：多個 workflow 可共用同一個 task definition
+
+---
+
+## 頂層結構
+
+```yaml
+apiVersion: task/v2
+kind: Task
+
+metadata:
+  name: string              # MUST — 唯一識別名稱（dotted namespace）
+  version: integer           # MUST — 版本號，正整數
+  description: string        # MAY
+  labels: map                # MAY
+
+input:
+  schema: object             # MAY — 輸入 JSON Schema
+
+output:
+  schema: object             # MAY — 輸出 JSON Schema
+
+backend:
+  type: string               # MUST — bash | http | builtin | sdk
+  # ... backend 專屬設定
+```
+
+### 欄位說明
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `apiVersion` | string | MUST | 固定值 `task/v2` |
+| `kind` | string | MUST | 固定值 `Task` |
+| `metadata` | object | MUST | 識別與描述 |
+| `input` | object | MAY | 輸入 schema |
+| `output` | object | MAY | 輸出 schema |
+| `backend` | object | MUST | 執行後端設定 |
+
+---
+
+## metadata
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `name` | string | MUST | 使用 dotted namespace（如 `order.load`、`payment.create`） |
+| `version` | integer | MUST | 正整數，單調遞增 |
+| `description` | string | MAY | 人類可讀說明 |
+| `labels` | map | MAY | 分類鍵值對 |
+
+`name` 即為 workflow step 中 `action` 欄位所參照的識別字。
+
+---
+
+## Input / Output Schema
+
+與 workflow 的 schema 語法相同（JSON Schema 子集），用於驗證 task 被呼叫時的輸入與輸出。
+
+```yaml
+input:
+  schema:
+    type: object
+    properties:
+      order_id:
+        type: string
+      amount:
+        type: number
+    required: [order_id]
+
+output:
+  schema:
+    type: object
+    properties:
+      id:
+        type: string
+      status:
+        type: string
+```
+
+- 引擎在 step 執行前 SHOULD 驗證 input 是否符合 task 的 `input.schema`
+- 引擎在 step 執行後 SHOULD 驗證 output 是否符合 task 的 `output.schema`
+- 驗證失敗 → step FAILED（錯誤碼 `schema_validation_error`）
+
+---
+
+## Backend Types
+
+### bash
+
+執行 shell 命令。
+
+```yaml
+backend:
+  type: bash
+  command: string             # MUST — 要執行的命令
+  shell: string               # MAY — shell 路徑，預設 /bin/sh
+  env: map                    # MAY — 額外環境變數
+  working_dir: string         # MAY — 工作目錄
+  timeout_kill_after: duration # MAY — SIGTERM 後等待多久發 SIGKILL，預設 5s
+```
+
+#### 行為
+
+- 引擎啟動 shell process 執行 `command`
+- Task input 以 JSON 格式透過 **stdin** 傳入
+- Task output 從 **stdout** 讀取，MUST 為有效 JSON
+- **stderr** 作為 log 記錄
+- Exit code 0 = 成功，非 0 = 失敗
+- `env` 中的值支援 `${ }` CEL 表達式（在 task 執行時求值）
+
+#### 範例
+
+```yaml
+apiVersion: task/v2
+kind: Task
+
+metadata:
+  name: file.compress
+  version: 1
+  description: "壓縮檔案"
+
+input:
+  schema:
+    type: object
+    properties:
+      source_path:
+        type: string
+      target_path:
+        type: string
+    required: [source_path, target_path]
+
+output:
+  schema:
+    type: object
+    properties:
+      size_bytes:
+        type: integer
+
+backend:
+  type: bash
+  command: |
+    INPUT=$(cat -)
+    SOURCE=$(echo "$INPUT" | jq -r '.source_path')
+    TARGET=$(echo "$INPUT" | jq -r '.target_path')
+    gzip -c "$SOURCE" > "$TARGET"
+    SIZE=$(stat -f%z "$TARGET" 2>/dev/null || stat -c%s "$TARGET")
+    echo "{\"size_bytes\": $SIZE}"
+```
+
+---
+
+### http
+
+呼叫 HTTP/HTTPS endpoint。
+
+```yaml
+backend:
+  type: http
+  url: string                 # MUST — 完整 URL（支援 ${ } 表達式）
+  method: string              # MAY — HTTP method，預設 POST
+  headers: map                # MAY — HTTP headers
+  body_mapping: string        # MAY — input 到 body 的映射模式
+  timeout: duration           # MAY — HTTP 請求 timeout
+  retry_on_status: array      # MAY — 哪些 HTTP status code 觸發重試
+  response_mapping:           # MAY — response 到 output 的映射
+    body: string              #   從 response body 取值的 CEL 表達式
+    status_code: string       #   output 中接收 status code 的欄位名
+```
+
+#### 行為
+
+- 引擎發送 HTTP 請求至 `url`
+- Task input 預設以 JSON body 傳送（`Content-Type: application/json`）
+- Response body MUST 為 JSON，解析後作為 task output
+- HTTP 2xx = 成功，其他 = 失敗
+- `retry_on_status` 中的 status code（如 `[429, 502, 503]`）會觸發 retry 機制
+
+#### body_mapping
+
+| 值 | 說明 |
+|----|------|
+| `full`（預設） | 整個 input map 作為 request body |
+| `none` | 不傳送 body |
+
+#### response_mapping
+
+自訂如何將 HTTP response 轉換為 task output：
+
+```yaml
+response_mapping:
+  body: ${ response.body.data }      # 從 response body 中取子欄位
+  status_code: "http_status"          # 將 status code 存入 output.http_status
+```
+
+若未設定 `response_mapping`，response body 整體作為 output。
+
+#### 範例
+
+```yaml
+apiVersion: task/v2
+kind: Task
+
+metadata:
+  name: payment.create
+  version: 2
+  description: "建立付款請求"
+
+input:
+  schema:
+    type: object
+    properties:
+      order_id:
+        type: string
+      amount:
+        type: number
+      currency:
+        type: string
+        default: "TWD"
+    required: [order_id, amount]
+
+output:
+  schema:
+    type: object
+    properties:
+      payment_id:
+        type: string
+      status:
+        type: string
+
+backend:
+  type: http
+  url: "https://api.payment.example.com/v1/charges"
+  method: POST
+  headers:
+    Authorization: "Bearer ${ secret.PAYMENT_API_KEY }"
+    Idempotency-Key: "${ env.IDEMPOTENCY_KEY }"
+  timeout: 10s
+  retry_on_status: [429, 502, 503]
+  response_mapping:
+    body: ${ response.body }
+```
+
+---
+
+### builtin
+
+呼叫引擎內建的 action。
+
+```yaml
+backend:
+  type: builtin
+  handler: string             # MUST — 內建 handler 識別字
+  config: map                 # MAY — handler 專屬設定
+```
+
+#### 行為
+
+- 引擎內部直接呼叫已註冊的 handler function
+- 不經過任何外部 I/O
+- 適用於引擎自帶的系統功能（如 logging、metrics、internal state 操作）
+
+#### 範例
+
+```yaml
+apiVersion: task/v2
+kind: Task
+
+metadata:
+  name: system.echo
+  version: 1
+  description: "回傳輸入（用於測試）"
+
+input:
+  schema:
+    type: object
+
+output:
+  schema:
+    type: object
+
+backend:
+  type: builtin
+  handler: echo
+```
+
+---
+
+### sdk
+
+呼叫以 Task SDK 開發的外部模組。
+
+```yaml
+backend:
+  type: sdk
+  module: string              # MUST — 模組識別字
+  entry: string               # MAY — entry function 名稱，預設 "execute"
+  config: map                 # MAY — 模組設定
+  runtime: string             # MAY — 執行環境（如 "node", "python"）
+```
+
+#### 行為
+
+- 引擎透過 Task SDK protocol 呼叫外部模組
+- 模組需實作 SDK 定義的介面（接收 input JSON，回傳 output JSON）
+- 模組可以是 npm package、Python module、或其他 runtime 支援的格式
+- SDK protocol 負責 serialization、error handling、lifecycle management
+
+#### 範例
+
+```yaml
+apiVersion: task/v2
+kind: Task
+
+metadata:
+  name: order.load
+  version: 3
+  description: "從資料庫載入訂單"
+
+input:
+  schema:
+    type: object
+    properties:
+      order_id:
+        type: string
+    required: [order_id]
+
+output:
+  schema:
+    type: object
+    properties:
+      id:
+        type: string
+      amount:
+        type: number
+      status:
+        type: string
+      customer_email:
+        type: string
+      shipping_address:
+        type: object
+
+backend:
+  type: sdk
+  module: "@myorg/order-tasks"
+  entry: "loadOrder"
+  runtime: "node"
+  config:
+    db_pool: "primary"
+```
+
+---
+
+## Task Definition Lifecycle
+
+與 workflow definition 相同的生命週期：
+
+```
+DRAFT → VALIDATED → PUBLISHED → DEPRECATED → ARCHIVED
+```
+
+- 僅 PUBLISHED 狀態的 task 可被 workflow step 呼叫
+- Workflow 中參照的 `action` 在 validation 時 SHOULD 檢查對應的 task definition 是否存在
+
+---
+
+## Execution Policy 與 Task Definition 的關係
+
+Execution policy（`replayable` / `idempotent` / `non_repeatable`）定義在 **workflow step** 中，而非 task definition 中。
+
+原因：同一個 task definition 在不同 workflow context 下可能有不同的 execution policy 需求。例如 `payment.create` 在主流程中是 `non_repeatable`，但在測試用的 mock workflow 中可以是 `replayable`。
+
+不過，task definition MAY 在 metadata 中以 `labels` 標註建議的 policy：
+
+```yaml
+metadata:
+  name: payment.create
+  version: 2
+  labels:
+    suggested_policy: non_repeatable
+```
+
+此標註僅供參考，不具強制性。引擎 MAY 在 workflow validation 時產生警告。
