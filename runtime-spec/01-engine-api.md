@@ -117,6 +117,24 @@
 
 ---
 
+### RevertToDraft
+
+將 definition 從 VALIDATED 退回 DRAFT（需要修改時）。
+
+**Request:**
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `definition_id` | string | MUST | 目標 definition |
+
+**行為：**
+
+1. 載入 definition（MUST 為 VALIDATED 狀態）
+2. `lifecycle_state` = DRAFT
+3. 使用者可重新編輯 content 後再次驗證
+
+---
+
 ### ArchiveDefinition
 
 將 definition 從 DEPRECATED 轉為 ARCHIVED。
@@ -185,10 +203,11 @@
 3. 驗證 definition 有 `manual` trigger
 4. 若有 `input.schema` → 驗證 input（失敗回傳 `schema_validation_error`）
 5. 若有 `required: true` 的 input artifact → 驗證 artifacts 已提供
-6. 建立 workflow_instance record（state = CREATED）
-7. 建立 workflow timeout schedule（若 `config.timeout` 有定義）
-8. 通知 Scheduler 開始排程（見 [02-scheduler](02-scheduler.md)）
-9. 回傳 instance record
+6. 若有 `config.secrets` → 檢查所列的 secret definitions 皆已載入（失敗回傳 `secret_not_available`）
+7. 建立 workflow_instance record（state = CREATED）
+8. 建立 workflow timeout schedule（若 `config.timeout` 有定義）
+9. 通知 Scheduler 開始排程（見 [02-scheduler](02-scheduler.md)）
+10. 回傳 instance record
 
 **Response:**
 
@@ -352,3 +371,4 @@
 | `no_manual_trigger` | Definition 沒有 manual trigger |
 | `no_published_version` | 找不到 PUBLISHED 版本 |
 | `archive_precondition_failed` | 尚有非 terminal instance |
+| `secret_not_available` | config.secrets 所列的 secret 未載入 |

@@ -48,7 +48,7 @@ Step 狀態 READY → RUNNING。
 
 ### task
 
-1. 解析 `action` → 找到對應的 task definition（見版本解析規則）
+1. 解析 `action` → 找到對應的 task definition（見下方版本解析規則）
 2. 求值 `input` 中的 CEL 表達式
 3. 若 task definition 有 `input.schema` → 驗證 input
 4. 交由 Task Executor 執行（見 [05-task-executor](05-task-executor.md)）
@@ -69,6 +69,26 @@ attempt < max_attempts？
 - Retry 間隔：`fixed` = 固定 delay；`exponential` = delay × 2^(attempt - 1)
 - Retry 僅適用於 FAILED（非 TIMED_OUT）
 - 每次 retry 遞增 step_instance 的 `attempt` 欄位
+
+#### 版本解析
+
+`action` 格式為 `"<task_name>"` 或 `"<task_name>@<version>"`。版本解析規則：
+
+| 值 | 行為 |
+|----|------|
+| 未指定版本（預設） | 查找最新 PUBLISHED 版本的 task definition |
+| 指定整數版本 | 查找該版本的 task definition（MUST 為 PUBLISHED 或 DEPRECATED） |
+
+找不到匹配的 task definition → step FAILED（error code: `definition_not_found`）。
+
+#### Artifact Resources 綁定
+
+若 step 有 `resources` 欄位：
+
+1. 解析每個 resource 的 `ref` → 對應 workflow 的 `artifacts` 區塊中的 key
+2. 驗證 artifact record 存在
+3. 將 artifact 中繼資料（path、content_type 等）注入 task 的 execution context
+4. Task Executor 可透過 `artifacts` namespace 存取綁定的 artifact
 
 ### assign
 
@@ -152,7 +172,7 @@ Emit 不等待事件被消費。
 
 ### sub_workflow
 
-1. 解析 `workflow` → 找到對應的 workflow definition
+1. 解析 `workflow` → 找到對應的 workflow definition（版本解析規則同 task step，預設 "latest" → 最新 PUBLISHED 版本）
 2. 求值 `input` 中的 CEL 表達式
 3. 建立 child workflow instance：
    - `parent_instance_id` = 當前 instance
