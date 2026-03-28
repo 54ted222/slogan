@@ -141,10 +141,12 @@ Step 執行 → 失敗
 - 定義在 `config.timeout`
 - 是 instance 從 CREATED 到完成的絕對時間上限
 - 觸發時：
-  1. 所有 RUNNING 與 WAITING 的 steps 被取消（CANCELLED）
+  1. 所有 RUNNING、WAITING 與 READY 的 steps 被取消（CANCELLED）
   2. 不觸發任何 step-level handler（`on_error`、`on_timeout`）
-  3. 觸發 `config.on_timeout`（若有）
+  3. 觸發 `config.on_timeout`（若有）→ handler 完成後 instance 仍為 FAILED（handler 用途為清理與通知，不改變結果）
   4. 無 `config.on_timeout` → instance FAILED
+
+`config.on_timeout` handler 中的 `timeout` namespace：`timeout.step_id` 為 `null`（workflow 級 timeout 無對應 step），`timeout.duration` 為 `config.timeout` 的值。
 
 ### Sub-workflow timeout
 
