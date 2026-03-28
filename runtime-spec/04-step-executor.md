@@ -240,7 +240,7 @@ on_error handler 中的 `error` namespace MUST 包含以下欄位：
 | `error.code` | string | 錯誤碼 | step_instance.error.code，見 [dsl-spec/v2/12-error-handling](../dsl-spec/v2/12-error-handling.md) 標準錯誤碼 |
 | `error.step_id` | string | 失敗 step ID | step_instance.step_id |
 
-`error.code` MUST 為以下標準錯誤碼之一：`task_failed`、`timeout`、`schema_validation_error`、`expression_error`、`sub_workflow_failed`、`max_depth_exceeded`、`max_step_executions_exceeded`、`unknown`。若 task backend 回報自訂 error code，以 `task_failed` 為 `error.code`，自訂 code 記錄在 `error.message` 中。
+`error.code` MUST 為以下標準錯誤碼之一：`definition_not_found`、`task_failed`、`timeout`、`schema_validation_error`、`expression_error`、`sub_workflow_failed`、`max_depth_exceeded`、`max_step_executions_exceeded`、`unknown`。若 task backend 回報自訂 error code，以 `task_failed` 為 `error.code`，自訂 code 記錄在 `error.message` 中。
 
 ### timeout namespace 建構
 

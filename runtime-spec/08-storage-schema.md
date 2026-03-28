@@ -111,7 +111,8 @@
 | `id` | string | 唯一識別 |
 | `definition_id` | string | 所屬 workflow definition |
 | `event_type` | string | 訂閱的事件類型 |
-| `match_expression` | string \| null | CEL 過濾表達式 |
+| `when_expression` | string \| null | CEL 過濾表達式（對應 trigger 的 `when`） |
+| `input_mapping` | json \| null | 事件到 workflow input 的映射（對應 trigger 的 `input_mapping`） |
 | `created_at` | timestamp | 建立時間 |
 
 在 definition PUBLISHED 時建立，DEPRECATED 時刪除。
