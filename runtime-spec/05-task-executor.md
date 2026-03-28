@@ -16,7 +16,7 @@ Step Executor 呼叫 Task Executor
 依 backend.type 分派
      ├── bash → Shell Executor
      ├── http → HTTP Executor
-     ├── sdk → SDK Executor
+     ├── stdio → Stdio Executor
      └── builtin → Builtin Executor
      ↓
 回傳 output 或 error
@@ -125,20 +125,11 @@ Task definition 中的 `${ secret.XXX }` 表達式在 Task Executor 階段求值
 
 ---
 
-## sdk Backend
+## stdio Backend
 
-SDK backend 以**獨立 process**方式執行 tool，透過標準化的 JSON protocol 與引擎通訊。此設計確保 tool 不依賴引擎的實作語言——引擎從 Node.js 遷移至 Go 或其他語言時，所有 SDK tools 無需任何修改即可沿用。
+stdio backend 以**獨立 process**方式執行 tool，透過 stdin/stdout 交換結構化 JSON 訊息。此設計確保 tool 不依賴引擎的實作語言——引擎從 Node.js 遷移至 Go 或其他語言時，所有 stdio tools 無需任何修改即可沿用。
 
-### 通訊協定
-
-SDK backend 支援兩種 protocol，由 `backend.protocol` 欄位決定：
-
-| Protocol | 通訊方式 | Tool lifecycle |
-|----------|---------|---------------|
-| `stdio`（預設） | 引擎 spawn 子 process，JSON over stdin/stdout | 引擎管理（per-invocation spawn） |
-| `http` | 引擎 HTTP POST 至 tool server | 外部管理（tool 獨立部署） |
-
-### Request / Response 格式（兩種 protocol 共用）
+### Request / Response 格式
 
 **Request**（引擎 → tool）：
 
@@ -174,7 +165,7 @@ SDK backend 支援兩種 protocol，由 `backend.protocol` 欄位決定：
 | `error.message` | string | 錯誤訊息 |
 | `error.code` | string | 錯誤碼（引擎以 `task_failed` 包裝） |
 
-### stdio 執行流程
+### 執行流程
 
 1. 組合環境變數：
    - 系統 env
@@ -185,7 +176,7 @@ SDK backend 支援兩種 protocol，由 `backend.protocol` 欄位決定：
 3. 將 request JSON 寫入子 process 的 **stdin**，隨後關閉 stdin
 4. 等待 process 完成（受 step timeout 限制）
 
-#### stdio 結果處理
+### 結果處理
 
 | 條件 | 結果 |
 |------|------|
@@ -194,30 +185,15 @@ SDK backend 支援兩種 protocol，由 `backend.protocol` 欄位決定：
 | Exit code ≠ 0 | 失敗：error message = stderr 內容（截取前 4KB） |
 | Process timeout | 先發 SIGTERM，等待 `timeout_kill_after`（預設 5s），再發 SIGKILL |
 
-#### stderr 處理
+### stderr 處理
 
 - stderr 內容寫入 execution_log（行為同 bash backend）
 - 不影響成功 / 失敗判定
 - 記錄上限：建議 64KB，超過部分截斷
 
-### http 執行流程
-
-1. 將 request JSON 作為 HTTP POST body 發送至 `backend.command` 指定的 URL
-2. Headers：`Content-Type: application/json`
-3. 若有 idempotency key → 加入 `Idempotency-Key` header
-4. 等待 response（受 step timeout 限制）
-
-#### http 結果處理
-
-| 條件 | 結果 |
-|------|------|
-| HTTP 2xx 且 body 為有效 response JSON | 依 `success` 欄位判定成功或失敗 |
-| HTTP 2xx 但 body 非有效 JSON | 失敗：error code = `task_failed` |
-| HTTP 非 2xx | 失敗：可重試（連線失敗、timeout、5xx）或永久性失敗（其他） |
-
 ### Process 隔離
 
-- SDK tool 以獨立 process 運行，tool crash **不會**影響引擎主 process
+- stdio tool 以獨立 process 運行，tool crash **不會**影響引擎主 process
 - 引擎 MUST NOT 以 in-process 方式載入 tool 程式碼（如 `require()`、`import()`）
 - 此約束確保 tool 與引擎的語言、runtime、版本完全解耦
 

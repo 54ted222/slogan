@@ -53,7 +53,7 @@ Event / API / Timer
 | `name` | task name（dotted namespace，如 `order.load`） |
 | `version` | 版本號 |
 | `content` | YAML 定義內容 |
-| `backend_type` | bash / http / builtin / sdk |
+| `backend_type` | bash / http / builtin / stdio |
 | `lifecycle_state` | DRAFT / VALIDATED / PUBLISHED / DEPRECATED / ARCHIVED |
 | `created_at` | 建立時間 |
 | `updated_at` | 最後更新時間 |

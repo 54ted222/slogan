@@ -86,7 +86,7 @@ backend:
   retry_on_status: [429, 502, 503]
 ```
 
-### sdk — 訂單載入（stdio）
+### stdio — 訂單載入
 
 ```yaml
 apiVersion: task/v2
@@ -116,7 +116,7 @@ output:
         type: string
 
 backend:
-  type: sdk
+  type: stdio
   command: "node ./tools/order-tasks/load-order.js"
   config:
     db_pool: "primary"

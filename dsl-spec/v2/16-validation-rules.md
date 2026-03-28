@@ -100,9 +100,8 @@
   - `apiVersion` MUST 為 `task/v2`
   - `kind` MUST 為 `Task`
   - `metadata.name` MUST 為有效的 dotted namespace
-  - `backend.type` MUST 為 `bash`、`http`、`builtin`、`sdk` 之一
-  - 各 backend type 的必填欄位 MUST 存在（如 bash 的 `command`、http 的 `url`、sdk 的 `command`、builtin 的 `handler`）
-  - sdk 的 `protocol`（若指定）MUST 為 `stdio` 或 `http`
+  - `backend.type` MUST 為 `bash`、`http`、`builtin`、`stdio` 之一
+  - 各 backend type 的必填欄位 MUST 存在（如 bash 的 `command`、http 的 `url`、stdio 的 `command`、builtin 的 `handler`）
 
 ---
 

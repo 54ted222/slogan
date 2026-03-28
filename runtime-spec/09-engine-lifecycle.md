@@ -89,7 +89,7 @@
 
 - 引擎 SHOULD 提供可設定的 shutdown timeout（建議預設 30s）
 - 超過 timeout 後，仍在執行的 step 不做特殊處理（下次啟動時 crash recovery 會處理）
-- 進行中的 bash/sdk tasks 收到 SIGTERM
+- 進行中的 bash/stdio tasks 收到 SIGTERM
 
 ### 強制關閉
 
