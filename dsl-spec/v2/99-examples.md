@@ -363,26 +363,28 @@ steps:
           order_id: ${ steps.load_order.output.id }
           error: ${ error.message }
     branches:
-      - - type: if
-          expr: ${ input.notify_customer == true }
-          then:
-            - type: task
-              action: notify.customer
-              input:
-                order_id: ${ steps.load_order.output.id }
-                email: ${ steps.load_order.output.customer_email }
+      - steps:
+          - type: if
+            expr: ${ input.notify_customer == true }
+            then:
+              - type: task
+                action: notify.customer
+                input:
+                  order_id: ${ steps.load_order.output.id }
+                  email: ${ steps.load_order.output.customer_email }
 
-      - - id: generate_report
-          type: task
-          action: report.generate
-          input:
-            order_id: ${ steps.load_order.output.id }
-            items_count: ${ input.items.size() }
-          resources:
-            - name: result_report
-              type: artifact
-              ref: result_report
-              access: write
+      - steps:
+          - id: generate_report
+            type: task
+            action: report.generate
+            input:
+              order_id: ${ steps.load_order.output.id }
+              items_count: ${ input.items.size() }
+            resources:
+              - name: result_report
+                type: artifact
+                ref: result_report
+                access: write
 
   # ── 7. 等待確認事件（wait_event）──
   - type: wait_event
@@ -622,16 +624,18 @@ steps:
           job_id: ${ input.job_id }
           error: ${ error.message }
     branches:
-      - - type: task
-          action: transform.type_a
-          input:
-            job_id: ${ input.job_id }
-          timeout: 5m
-      - - type: task
-          action: transform.type_b
-          input:
-            job_id: ${ input.job_id }
-          timeout: 5m
+      - steps:
+          - type: task
+            action: transform.type_a
+            input:
+              job_id: ${ input.job_id }
+            timeout: 5m
+      - steps:
+          - type: task
+            action: transform.type_b
+            input:
+              job_id: ${ input.job_id }
+            timeout: 5m
 
   - type: return
     output:

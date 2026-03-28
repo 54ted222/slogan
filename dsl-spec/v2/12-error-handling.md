@@ -223,12 +223,14 @@ steps:
         data:
           error: ${ error.message }
     branches:
-      - - type: task
-          action: notify.customer
-          input:
-            order_id: ${ input.order_id }
-      - - type: task
-          action: report.generate
-          input:
-            order_id: ${ input.order_id }
+      - steps:
+          - type: task
+            action: notify.customer
+            input:
+              order_id: ${ input.order_id }
+      - steps:
+          - type: task
+            action: report.generate
+            input:
+              order_id: ${ input.order_id }
 ```

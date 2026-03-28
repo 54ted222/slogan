@@ -185,14 +185,14 @@
 
 ```yaml
 - type: parallel
-  branches:                      # MUST, 至少兩個 step 陣列
-    - [...]
-    - [...]
+  branches:                      # MUST, 至少兩個 branch
+    - steps: [...]
+    - steps: [...]
   failure_policy: string         # MAY, 預設 "fail_fast"
   on_error: [...]                # MAY
 ```
 
-`branches` 為陣列的陣列：外層每個元素是一個 branch，內層是該 branch 的 step 陣列。
+`branches` 為 branch 物件的陣列，每個 branch 包含 `steps` 欄位（step 陣列）。
 
 ### failure_policy
 
@@ -215,17 +215,19 @@
   type: parallel
   failure_policy: wait_all
   branches:
-    - - type: task
-        action: notify.customer
-        condition: ${ input.notify_customer == true }
-        input:
-          order_id: ${ steps.load_order.output.id }
+    - steps:
+        - type: task
+          action: notify.customer
+          condition: ${ input.notify_customer == true }
+          input:
+            order_id: ${ steps.load_order.output.id }
 
-    - - id: generate_report
-        type: task
-        action: report.generate
-        input:
-          order_id: ${ steps.load_order.output.id }
+    - steps:
+        - id: generate_report
+          type: task
+          action: report.generate
+          input:
+            order_id: ${ steps.load_order.output.id }
 ```
 
 ---
