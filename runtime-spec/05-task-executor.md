@@ -33,8 +33,10 @@ Step Executor 呼叫 Task Executor
 若 step 的 `execution.policy` 為 `idempotent`，Task Executor MUST 產生 idempotency key 並傳遞給 backend：
 
 ```
-key = hash(workflow_instance_id + step_id + attempt)
+key = workflow_instance_id + ":" + step_id + ":" + attempt
 ```
+
+Key 格式為上述三欄位以 `:` 串接的字串。引擎 MAY 對串接結果進行 hash（如 SHA-256）以控制長度。
 
 傳遞方式依 backend type 而異（見各 backend 節）。
 

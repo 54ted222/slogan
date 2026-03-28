@@ -121,13 +121,21 @@ Assign 不產生 output（`steps.<id>.output` 不適用）。
 
 1. 求值 `items` → list
 2. 空 list → step SUCCEEDED，output = `[]`
-3. 根據 `concurrency` 分批啟動迭代
+3. 根據 `concurrency` 排程迭代：
+   - `concurrency = 1`（預設）：依序執行，前一迭代完成後才啟動下一個
+   - `concurrency > 1`：以 sliding window 方式，同時執行最多 N 個迭代；當一個迭代完成後，啟動下一個待處理迭代
 4. 每個迭代：
    a. 設定 `loop.item` = items[i]，`loop.index` = i
-   b. 為 `do` 中的 steps 建立 step instances
+   b. 為 `do` 中的 steps 建立 step instances（`parent_step_id` = foreach step，`iteration_index` = i）
    c. 執行 do 中的 steps
-5. 迭代完成 → 按 `failure_policy` 判斷最終狀態
-6. 收集 output array
+5. 迭代完成 → 按 `failure_policy` 判斷最終狀態：
+   - `fail_fast`：任一迭代失敗 → 取消所有進行中迭代，foreach → FAILED
+   - `continue`：等待所有迭代完成，若有任一失敗 → foreach → FAILED
+   - `ignore`：忽略失敗，foreach → SUCCEEDED
+6. 收集 output array（索引對應 items 順序）：
+   - 成功的迭代：該迭代最後一個 step 的 output
+   - 失敗的迭代：`null`
+   - `fail_fast` 被取消的迭代：不包含在 array 中
 
 ### parallel
 
