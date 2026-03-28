@@ -32,7 +32,7 @@ output:
   schema: object             # MAY — 輸出 JSON Schema
 
 backend:
-  type: string               # MUST — bash | http | builtin | stdio
+  type: string               # MUST — stdio | http | builtin
   # ... backend 專屬設定
 ```
 
@@ -94,70 +94,6 @@ output:
 ---
 
 ## Backend Types
-
-### bash
-
-執行 shell 命令。
-
-```yaml
-backend:
-  type: bash
-  command: string             # MUST — 要執行的命令
-  shell: string               # MAY — shell 路徑，預設 /bin/sh
-  env: map                    # MAY — 額外環境變數
-  working_dir: string         # MAY — 工作目錄
-  timeout_kill_after: duration # MAY — SIGTERM 後等待多久發 SIGKILL，預設 5s
-```
-
-#### 行為
-
-- 引擎啟動 shell process 執行 `command`
-- Task input 以 JSON 格式透過 **stdin** 傳入
-- Task output 從 **stdout** 讀取，MUST 為有效 JSON
-- **stderr** 作為 log 記錄
-- Exit code 0 = 成功，非 0 = 失敗
-- `env` 中的值支援 `${ }` CEL 表達式（在 task 執行時求值）
-
-#### 範例
-
-```yaml
-apiVersion: task/v2
-kind: Task
-
-metadata:
-  name: file.compress
-  version: 1
-  description: "壓縮檔案"
-
-input:
-  schema:
-    type: object
-    properties:
-      source_path:
-        type: string
-      target_path:
-        type: string
-    required: [source_path, target_path]
-
-output:
-  schema:
-    type: object
-    properties:
-      size_bytes:
-        type: integer
-
-backend:
-  type: bash
-  command: |
-    INPUT=$(cat -)
-    SOURCE=$(echo "$INPUT" | jq -r '.source_path')
-    TARGET=$(echo "$INPUT" | jq -r '.target_path')
-    gzip -c "$SOURCE" > "$TARGET"
-    SIZE=$(stat -f%z "$TARGET" 2>/dev/null || stat -c%s "$TARGET")
-    echo "{\"size_bytes\": $SIZE}"
-```
-
----
 
 ### http
 
@@ -297,35 +233,29 @@ backend:
 
 ### stdio
 
-呼叫外部 tool process，透過 stdin/stdout 交換結構化 JSON 訊息。Tool 可以用任何程式語言實作，**不依賴引擎的實作語言**。
+Spawn 子 process，透過 stdin/stdout 交換結構化 JSON 訊息。Tool 可以用任何程式語言實作，**不依賴引擎的實作語言**。
 
 ```yaml
 backend:
   type: stdio
   command: string             # MUST — 啟動 tool process 的命令
-  config: map                 # MAY — 傳入 tool 的靜態設定
+  shell: string               # MAY — shell 路徑，預設 /bin/sh
+  env: map                    # MAY — 額外環境變數（值支援 ${ } CEL 表達式）
+  working_dir: string         # MAY — 工作目錄
+  config: map                 # MAY — 傳入 tool 的靜態設定（透過 request JSON）
   timeout_kill_after: duration # MAY — SIGTERM 後等待多久發 SIGKILL，預設 5s
 ```
 
 #### 行為
 
-- 引擎 spawn 子 process 執行 `command`
+- 引擎啟動 shell process（使用 `backend.shell`，預設 `/bin/sh`）執行 `command`
 - 引擎將 **request JSON** 寫入子 process 的 **stdin**，隨後關閉 stdin
 - Tool 將 **response JSON** 寫入 **stdout**
-- **stderr** 作為 log 記錄（行為同 bash backend）
-- Process exit code 0 且 stdout 為有效 JSON = 成功
-- Process exit code ≠ 0 = 失敗（stderr 前 4KB 作為 error message）
+- **stderr** 作為 log 記錄（寫入 execution_log，不影響成敗判定）
+- Process exit code 0 且 stdout 為有效 response JSON → 依 `success` 欄位判定
+- Process exit code ≠ 0 → 失敗（stderr 前 4KB 作為 error message）
 - Process timeout → 先發 SIGTERM，等待 `timeout_kill_after`，再發 SIGKILL
-
-#### 與 bash backend 的差異
-
-| | bash | stdio |
-|---|---|---|
-| stdin | raw input JSON | 結構化 request JSON（含 `context`） |
-| stdout | raw output JSON | 結構化 response JSON（含 `success`/`error`） |
-| 成敗判定 | exit code | response 的 `success` 欄位 |
-| 錯誤資訊 | stderr | response 的 `error` 物件 |
-| 適用場景 | shell 腳本、CLI 工具 | 自定義 tool（任何語言） |
+- `env` 中的值支援 `${ }` CEL 表達式（在 task 執行時求值）
 
 #### Request / Response 格式
 

@@ -4,9 +4,45 @@
 
 ---
 
-## 範例 1：Task Definition（四種 backend）
+## 範例 1：Task Definition（三種 backend）
 
-### bash — 檔案壓縮
+### stdio — 訂單載入
+
+```yaml
+apiVersion: task/v2
+kind: Task
+
+metadata:
+  name: order.load
+  version: 3
+
+input:
+  schema:
+    type: object
+    properties:
+      order_id:
+        type: string
+    required: [order_id]
+
+output:
+  schema:
+    type: object
+    properties:
+      id:
+        type: string
+      amount:
+        type: number
+      status:
+        type: string
+
+backend:
+  type: stdio
+  command: "node ./tools/order-tasks/load-order.js"
+  config:
+    db_pool: "primary"
+```
+
+### stdio — 檔案壓縮（shell script）
 
 ```yaml
 apiVersion: task/v2
@@ -34,14 +70,8 @@ output:
         type: integer
 
 backend:
-  type: bash
-  command: |
-    INPUT=$(cat -)
-    SOURCE=$(echo "$INPUT" | jq -r '.source_path')
-    TARGET=$(echo "$INPUT" | jq -r '.target_path')
-    gzip -c "$SOURCE" > "$TARGET"
-    SIZE=$(stat -f%z "$TARGET" 2>/dev/null || stat -c%s "$TARGET")
-    echo "{\"size_bytes\": $SIZE}"
+  type: stdio
+  command: "./tools/file-compress.sh"
 ```
 
 ### http — 付款建立
@@ -84,42 +114,6 @@ backend:
     Authorization: "Bearer ${ secret.PAYMENT_API_KEY }"
   timeout: 10s
   retry_on_status: [429, 502, 503]
-```
-
-### stdio — 訂單載入
-
-```yaml
-apiVersion: task/v2
-kind: Task
-
-metadata:
-  name: order.load
-  version: 3
-
-input:
-  schema:
-    type: object
-    properties:
-      order_id:
-        type: string
-    required: [order_id]
-
-output:
-  schema:
-    type: object
-    properties:
-      id:
-        type: string
-      amount:
-        type: number
-      status:
-        type: string
-
-backend:
-  type: stdio
-  command: "node ./tools/order-tasks/load-order.js"
-  config:
-    db_pool: "primary"
 ```
 
 ### builtin — Echo（測試用）

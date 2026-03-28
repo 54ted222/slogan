@@ -57,7 +57,7 @@
 | [14-lifecycle](14-lifecycle.md) | 生命週期狀態機 |
 | [15-runtime-persistence](15-runtime-persistence.md) | Runtime 架構與持久化 |
 | [16-validation-rules](16-validation-rules.md) | 靜態驗證規則 |
-| [17-task-definition](17-task-definition.md) | Task Definition（定義端：bash / http / builtin / stdio） |
+| [17-task-definition](17-task-definition.md) | Task Definition（定義端：stdio / http / builtin） |
 | [18-secrets-and-env](18-secrets-and-env.md) | Secrets 與環境變數（`env` / `secret` namespace、CLI） |
 | [99-examples](99-examples.md) | 完整範例集 |
 

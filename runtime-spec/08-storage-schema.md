@@ -28,7 +28,7 @@
 | `content` | text | YAML 定義原文 |
 | `parsed_content` | json | 解析後的結構化內容（供引擎直接使用） |
 | `lifecycle_state` | string | DRAFT / VALIDATED / PUBLISHED / DEPRECATED / ARCHIVED |
-| `backend_type` | string \| null | 僅 Task：bash / http / builtin / stdio |
+| `backend_type` | string \| null | 僅 Task：stdio / http / builtin |
 | `created_at` | timestamp | 建立時間 |
 | `updated_at` | timestamp | 最後更新時間 |
 
