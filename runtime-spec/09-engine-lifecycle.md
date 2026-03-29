@@ -15,7 +15,7 @@
      ↓
 3. 載入環境變數（OS env + .env）
      ↓
-4. 載入 Trigger subscriptions（PUBLISHED workflow definitions）
+4. 載入 Trigger subscriptions（PUBLISHED workflow definitions），包含 event trigger subscriptions 與 HTTP trigger endpoint 註冊
      ↓
 5. 重建 Timeout schedules（非 terminal instances）
      ↓

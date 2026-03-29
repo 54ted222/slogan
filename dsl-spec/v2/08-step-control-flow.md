@@ -151,11 +151,11 @@
 
 ### output
 
-`steps.<foreach_id>.output` 為一個 array，每個元素對應一次迭代中最後一個 step 的 output：
+`steps.<foreach_id>.output` 為一個 array，長度 = `items` 長度，索引與 items 一一對應（所有 `failure_policy` 模式皆同）：
 
 - 成功的迭代：該迭代中最後一個 step 的 output
-- 失敗的迭代（`failure_policy` 為 `continue` 或 `ignore`）：`null`
-- `fail_fast` 模式：array 長度仍 = items 長度，索引一一對應。被取消或失敗的迭代為 `null`
+- 失敗的迭代：`null`
+- 被取消的迭代（`fail_fast` 模式）：`null`
 
 ### 範例
 

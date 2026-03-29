@@ -682,3 +682,61 @@ steps:
       deployed: true
       validated: ${ input.skip_validation != true }
 ```
+
+---
+
+## 範例 7：HTTP Trigger（同步與非同步）
+
+```yaml
+apiVersion: workflow/v2
+kind: Workflow
+
+metadata:
+  name: order_api
+  version: 1
+
+triggers:
+  # 非同步 — 立即回傳 202 Accepted
+  - type: http
+    method: POST
+    path: /orders
+    input_mapping:
+      customer_id: ${ request.body.customer_id }
+      items: ${ request.body.items }
+
+  # 同步 — 等待完成後回傳結果
+  - type: http
+    method: GET
+    path: /orders/{order_id}/status
+    input_mapping:
+      order_id: ${ request.path_params.order_id }
+    response:
+      mode: sync
+      timeout: 10s
+      success_status: 200
+
+input_schema:
+  type: object
+  properties:
+    customer_id:
+      type: string
+    order_id:
+      type: string
+    items:
+      type: array
+      items:
+        type: object
+
+steps:
+  - id: load_order
+    type: task
+    action: order.load
+    input:
+      order_id: ${ default(input.order_id, "") }
+      customer_id: ${ default(input.customer_id, "") }
+
+  - type: return
+    output:
+      status: ${ steps.load_order.output.status }
+      total: ${ steps.load_order.output.total }
+```

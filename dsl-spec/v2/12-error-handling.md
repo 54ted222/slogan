@@ -225,6 +225,16 @@ Task handler 回傳的 `error.code` 由引擎原樣傳遞至 `on_error` handler 
 | `trigger_input_invalid` | Trigger 產生的 input 不符合 input_schema | Scheduled / HTTP / event trigger |
 | `trigger_mapping_error` | input_mapping CEL 表達式求值失敗 | Trigger 的映射表達式錯誤 |
 
+#### Artifact 相關
+
+| 錯誤碼 | 觸發條件 | 說明 |
+|--------|---------|------|
+| `artifact_required` | 必填 input artifact 未提供 | `required: true` 的 artifact 缺失 |
+| `artifact_not_found` | Artifact URI 指向不存在的資源 | 下載時找不到 |
+| `artifact_download_failed` | Artifact 下載失敗（storage 不可用、磁碟空間不足） | 可重試 |
+| `artifact_upload_failed` | Artifact 上傳失敗（storage 不可用、磁碟空間不足） | 整個 task 重新執行 |
+| `artifact_write_conflict` | 同一 artifact 同時被多個 step 寫入 | 互斥鎖衝突 |
+
 #### 系統相關
 
 | 錯誤碼 | 觸發條件 | 說明 |

@@ -206,7 +206,25 @@ DRAFT → VALIDATED → PUBLISHED → DEPRECATED → ARCHIVED
 | `workflow_name` | string | MUST | workflow definition 名稱 |
 | `workflow_version` | integer \| "latest" | MAY | 版本，預設 "latest" |
 | `input` | map | MAY | 輸入資料 |
-| `artifacts` | map | MAY | Input artifact 資訊 |
+| `artifacts` | map | MAY | Input artifact 資訊（見下方格式） |
+
+**artifacts 格式：**
+
+```json
+{
+  "artifact_name": {
+    "uri": "s3://bucket/path/file.csv",
+    "content_type": "text/csv",
+    "size": 4096
+  }
+}
+```
+
+- Key = workflow `artifacts` block 中宣告的 artifact 名稱
+- `uri`（MUST）：artifact 的儲存位置
+- `content_type`（MAY）：MIME type
+- `size`（MAY）：大小（bytes）
+- 引擎建立對應的 `artifact_record`（lifecycle = `input`）
 
 **行為：**
 
@@ -214,7 +232,7 @@ DRAFT → VALIDATED → PUBLISHED → DEPRECATED → ARCHIVED
 2. 驗證 definition 為 PUBLISHED（或 DEPRECATED，仍可執行）
 3. 驗證 definition 有 `manual` trigger
 4. 若有 `input_schema` → 驗證 input（失敗回傳 `schema_validation_error`）
-5. 若有 `required: true` 的 input artifact → 驗證 artifacts 已提供
+5. 若有 `required: true` 的 input artifact → 驗證 artifacts 已提供（失敗回傳 `artifact_required`）
 6. 若有 `config.secrets` → 檢查所列的 secret definitions 皆已載入（失敗回傳 `secret_not_available`）
 7. 建立 workflow_instance record（state = CREATED）
 8. 建立 workflow timeout schedule（若 `config.timeout` 有定義）
