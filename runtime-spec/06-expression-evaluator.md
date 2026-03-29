@@ -140,7 +140,13 @@ Expression Evaluator MUST 支援以下 DSL 擴充函式（完整語意定義見 
 首次執行：
   1. 正常求值 now() / uuid()
   2. 記錄：{ expression_position: result_value }
-  3. 與 step_instance 一同持久化（sub_workflow 的 child instance 有獨立的 step_instances，recorded_values 自然隔離）
+  3. 與 step_instance 一同持久化
+
+Sub-workflow 隔離：child instance 擁有獨立的 step_instances，
+recorded_values 儲存於各自的 step_instance 中。Parent step
+的 recorded_values 僅記錄 parent 層級的表達式（如 sub_workflow
+step 的 input CEL），不包含 child 內部的記錄。Crash recovery
+時 parent 與 child 各自從自己的 step_instances 恢復。
 
 Replay（recovery）：
   1. 檢查是否有記錄

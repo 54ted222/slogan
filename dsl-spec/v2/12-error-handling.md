@@ -215,6 +215,7 @@ Task handler 回傳的 `error.code` 由引擎原樣傳遞至 `on_error` handler 
 | 錯誤碼 | 觸發條件 | 說明 |
 |--------|---------|------|
 | `sub_workflow_failed` | Child workflow instance FAILED | 子 workflow 失敗 |
+| `sub_workflow_not_found` | `workflow` 對應的 workflow definition 不存在或非 PUBLISHED | Workflow definition 找不到 |
 | `max_depth_exceeded` | sub_workflow 巢狀超過深度限制 | 巢狀深度超過上限 |
 | `max_step_executions_exceeded` | 超過 `config.max_step_executions` | 防止無限迴圈 |
 

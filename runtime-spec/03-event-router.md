@@ -265,10 +265,14 @@ HTTP trigger endpoint 的認證與授權機制由引擎實作決定，詳見 [ru
 
 | HTTP Status | 條件 | Response Body |
 |-------------|------|---------------|
-| `400 Bad Request` | input_mapping CEL 求值失敗、input_schema 驗證失敗 | `{ "error": "validation_error", "detail": "..." }` |
+| `400 Bad Request` | input_mapping CEL 求值失敗（`trigger_mapping_error`）、input_schema 驗證失敗（`trigger_input_invalid`） | `{ "error": "<error_code>", "detail": "..." }` |
+| `401 Unauthorized` | 未提供 API key 或 API key 無效 | `{ "error": "authentication_required" }` |
+| `403 Forbidden` | API key 權限不足或 workflow 不在 allowed_workflows 內 | `{ "error": "insufficient_permissions" }` |
 | `404 Not Found` | 無匹配的 method + path endpoint | `{ "error": "not_found" }` |
 | `405 Method Not Allowed` | path 存在但 method 不匹配 | `{ "error": "method_not_allowed" }` |
 | `415 Unsupported Media Type` | Content-Type 非 `application/json` | `{ "error": "unsupported_media_type" }` |
+
+Authentication 行為詳見 [runtime-spec/12-authentication](12-authentication.md)。400 Bad Request 的 `error` 欄位使用 [dsl-spec/v2/12-error-handling](../dsl-spec/v2/12-error-handling.md) 定義的標準錯誤碼。
 
 ---
 

@@ -80,7 +80,10 @@ attempt < max_attempts？
 | 未指定版本（預設） | 查找最新 PUBLISHED 版本的 task definition |
 | 指定整數版本 | 查找該版本的 task definition（MUST 為 PUBLISHED 或 DEPRECATED） |
 
-找不到匹配的 task definition → step FAILED（error code: `definition_not_found`）。
+找不到匹配的 task definition → step FAILED：
+- Definition 完全不存在 → error code: `task_not_found`
+- 指定版本已被 ARCHIVED → error code: `task_version_archived`
+- 無 PUBLISHED 版本（`"latest"` 解析失敗）→ error code: `task_not_found`
 
 #### Artifact Resources 綁定
 
@@ -203,7 +206,7 @@ Emit 不等待事件被消費（有 delay 時也不等待事件投遞）。
 
 ### sub_workflow
 
-1. 解析 `workflow` → 找到對應的 workflow definition（版本解析規則同 task step，預設 "latest" → 最新 PUBLISHED 版本）
+1. 解析 `workflow` → 找到對應的 workflow definition（版本解析規則同 task step，預設 "latest" → 最新 PUBLISHED 版本）。找不到 → step FAILED（error code: `sub_workflow_not_found`）
 2. 檢查巢狀深度：沿 `parent_instance_id` 鏈計算深度，超過上限（建議 10 層）→ step FAILED（`max_depth_exceeded`）
 3. 求值 `input` 中的 CEL 表達式
 4. 建立 child workflow instance：
