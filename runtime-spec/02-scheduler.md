@@ -106,6 +106,25 @@ Acquire instance lease（多 worker 時）
 | 錯誤未被處理 | 向上層尋找 handler（block → workflow） |
 | 所有層級無 handler | Instance → FAILED |
 
+### Instance 狀態與 wait_event
+
+當 `wait_event` step 進入 WAITING 狀態時，Scheduler MUST 同步更新 instance 狀態：
+
+| 條件 | Instance 狀態轉換 |
+|------|------------------|
+| 所有 non-terminal steps 中僅有 WAITING steps（無 RUNNING/READY） | Instance → WAITING |
+| 仍有其他 RUNNING 或 READY 的 steps（如 parallel 中其他 branch） | Instance 維持 RUNNING |
+
+收到事件匹配後（由 Event Router 觸發 `event_matched` 信號）：
+
+1. Event Router 更新 step instance：WAITING → RUNNING → SUCCEEDED，output = `event.data`
+2. Event Router 更新 instance state：WAITING → RUNNING（若 instance 為 WAITING）
+3. Event Router 刪除 wait_subscription 與對應 timeout_schedule
+4. Event Router 通知 Scheduler
+5. Scheduler 收到信號 → 載入 instance → 推進後續 steps（按正常推進規則）
+
+此流程確保 instance 狀態機正確反映內部 step 狀態。
+
 ---
 
 ## 容器 Step 排程

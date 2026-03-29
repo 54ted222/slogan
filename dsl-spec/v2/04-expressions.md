@@ -222,6 +222,22 @@ CEL 原生型別：
 | `timestamp` | `timestamp("2024-01-01T00:00:00Z")` |
 | `duration` | `duration("30m")` |
 
+### CEL ↔ JSON/YAML 型別映射
+
+CEL 求值結果轉換至 JSON（儲存 / 傳輸）時的映射規則（詳細求值行為見 [runtime-spec/06-expression-evaluator](../../runtime-spec/06-expression-evaluator.md)）：
+
+| CEL 型別 | JSON 型別 | YAML 型別 |
+|----------|----------|----------|
+| `int` / `uint` | number | integer |
+| `double` | number | float |
+| `bool` | boolean | boolean |
+| `string` | string | string |
+| `list` | array | array |
+| `map` | object | map |
+| `null_type` | null | null |
+| `timestamp` | string (ISO 8601) | string |
+| `duration` | string (e.g. "30m") | string |
+
 ---
 
 ## 標準函式與巨集
@@ -284,3 +300,59 @@ CEL 原生型別：
 2. **求值失敗**：表達式求值失敗（型別錯誤、null reference 等）→ 所在 step 狀態變為 FAILED
 3. **Null 傳播**：存取不存在的欄位回傳 `null`；對 null 呼叫方法將導致求值失敗。使用 `has()` 或 `default()` 做防禦性存取
 4. **求值時機**：表達式在 step 進入 RUNNING 狀態時求值，不提前求值
+
+---
+
+## 邊界行為
+
+### Null 上呼叫函式
+
+| 表達式 | 結果 |
+|--------|------|
+| `null.size()` | 求值失敗 → step FAILED |
+| `size(null)` | 求值失敗 → step FAILED |
+| `null + "text"` | 求值失敗 → step FAILED |
+| `null == null` | `true` |
+| `null != "hello"` | `true` |
+| `has(obj.missing_field)` | `false`（安全） |
+| `default(null, "fallback")` | `"fallback"`（安全） |
+| `coalesce(null, null, "x")` | `"x"`（安全） |
+
+建議：對可能為 null 的值使用 `has()`、`default()` 或 `coalesce()` 防禦。
+
+### 數值精度
+
+| 型別 | 精度 | 說明 |
+|------|------|------|
+| `int` | 64-bit signed integer | 範圍：-2^63 ~ 2^63-1 |
+| `uint` | 64-bit unsigned integer | 範圍：0 ~ 2^64-1 |
+| `double` | IEEE 754 64-bit | 與 JSON number 相容 |
+
+- 整數溢位 → 求值失敗
+- 浮點運算遵循 IEEE 754 語意（含 `NaN`、`Infinity`）
+- JSON 反序列化的數字：無小數點 → `int`，有小數點 → `double`
+
+### 字串編碼
+
+- 所有字串 MUST 為 UTF-8 編碼
+- `s.size()` 回傳 Unicode code point 數量，非 byte 數量
+- 字串比較為 Unicode code point 逐一比較
+
+### List / Map 迭代順序
+
+| 容器 | 順序保證 |
+|------|---------|
+| `list` | 保持插入順序（索引順序） |
+| `map`（來自 YAML） | 保持 YAML 定義順序 |
+| `map`（CEL 字面值 `{"a": 1, "b": 2}`） | 保持定義順序 |
+
+List 的 `filter()`、`map()` 等巨集 MUST 保持原始順序。
+
+### 求值順序
+
+當 step 有多個欄位含 CEL 表達式時（如 `input` map 的多個 key）：
+
+- 引擎 MUST 在同一時間點求值所有表達式（語意上為原子）
+- 同一 map 內各表達式的求值順序為**未定義**（implementation-defined）
+- 表達式之間 MUST NOT 互相依賴（同一 step 內的表達式不可參照彼此的結果）
+- `condition` 表達式 MUST 在其他欄位的表達式之前求值（condition 為 false 時不求值其他欄位）

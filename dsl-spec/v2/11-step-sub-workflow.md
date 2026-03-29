@@ -57,9 +57,35 @@ Child workflow **不可** 存取 parent 的任何 namespace：
 | `steps` | ❌ | 透過 return output ✅ |
 | `vars` | ❌ | ❌ |
 | `loop` | ❌ | ❌ |
-| `artifacts` | 透過 input 映射 ✅ | — |
+| `artifacts` | 透過 input 傳遞 URI ✅ | — |
 
 這是硬性邊界，確保子 workflow 的可組合性與獨立性。
+
+### Artifact 傳遞方式
+
+Parent 無法直接將 artifact resource 繫結至 child。若 child workflow 需要存取 parent 的 artifact：
+
+1. Parent 透過 `input` 傳遞 artifact URI：`file_uri: ${ artifacts.order_file.uri }`
+2. Child workflow 在自身 `artifacts` block 中宣告同一外部資源（以 URI 指向相同儲存位置）
+3. Child 的 task steps 透過自身 `resources` 繫結 child 宣告的 artifact
+
+```yaml
+# Parent workflow
+- id: process
+  type: sub_workflow
+  workflow: file_processor
+  input:
+    file_uri: ${ artifacts.order_file.uri }
+
+# Child workflow (file_processor)
+artifacts:
+  source_file:
+    kind: file
+    lifecycle: input
+    uri: ${ input.file_uri }
+```
+
+Child workflow 完成後若需將 artifact 結果傳回 parent，MUST 透過 `return` step 的 output 傳遞 URI，由 parent 自行處理。
 
 ---
 
@@ -116,6 +142,68 @@ Child workflow 的失敗資訊可在 parent 的 `on_error` handler 中存取：
 - 若 parent step timeout 觸發 → child instance 被 CANCELLED
 - Child 的 workflow 級 `on_timeout` 不會被觸發（因為是被外部取消，非自身 timeout）
 - Parent 的 `on_timeout` handler 觸發
+
+### Parent Step Timeout 與 Child Workflow Timeout 的優先權
+
+當兩者同時設定時：
+
+| 情境 | 行為 |
+|------|------|
+| Parent step timeout < child `config.timeout` | Parent step timeout 先觸發 → child 被 CANCELLED |
+| Parent step timeout > child `config.timeout` | Child `config.timeout` 先觸發 → child 自身 FAILED → parent step FAILED |
+| 兩者相等 | 哪個先觸發視為 race condition，引擎 MUST 保證只有一個贏家 |
+
+Parent step timeout 是**外部取消**，child `config.timeout` 是**自身 timeout**。差異在於 child 的 `config.on_timeout` handler：
+
+- 外部取消（parent timeout）→ child `config.on_timeout` **不觸發**
+- 自身 timeout（child config.timeout）→ child `config.on_timeout` **觸發**（若有）
+
+---
+
+## Child Instance 生命週期管理
+
+### 取消級聯
+
+Parent instance 被取消時，引擎 MUST 級聯取消所有 child instances：
+
+```
+Parent CANCELLED
+  ↓
+查詢 parent_instance_id = parent.id 的所有非 terminal child instances
+  ↓
+逐一取消（與 API cancel 相同行為）
+  ↓
+Child instances → CANCELLED
+  ↓
+Child 的 child（孫 instance）→ 遞迴取消
+```
+
+### 級聯規則
+
+| 規則 | 說明 |
+|------|------|
+| 深度 | 遞迴取消所有後代 instances，不限深度 |
+| 順序 | 先取消最深層（leaf），再向上取消 |
+| 原子性 | 單一 child 取消失敗不影響其他 child 的取消 |
+| 已完成的 child | 已為 terminal 狀態的 child 不受影響 |
+
+### Child Instance 清理與保留
+
+Child instance 的保留策略與一般 instance 相同（見 [runtime-spec/08-storage-schema](../../runtime-spec/08-storage-schema.md) 資料保留策略）。
+
+| 情境 | 保留行為 |
+|------|---------|
+| Parent SUCCEEDED | Child instances 保留至保留期限到期 |
+| Parent FAILED | 同上 |
+| Parent CANCELLED | 同上（child 也已被級聯取消） |
+
+引擎 MAY 將 child instance 的保留期限與 parent 綁定：parent 被清理時，一併清理所有 child instances。
+
+### 孤兒 Instance
+
+若 parent instance 被清理（超過保留期限刪除）但 child instance 尚存在，child instance 成為「孤兒」。引擎 SHOULD 定期掃描並清理孤兒 instances。
+
+判斷孤兒的條件：`parent_instance_id` 不為 null，且對應的 parent instance 已不存在。
 
 ---
 

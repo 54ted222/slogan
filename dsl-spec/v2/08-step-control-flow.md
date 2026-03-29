@@ -155,7 +155,7 @@
 
 - 成功的迭代：該迭代中最後一個 step 的 output
 - 失敗的迭代（`failure_policy` 為 `continue` 或 `ignore`）：`null`
-- `fail_fast` 模式下被取消的迭代：不包含在 output 中（array 長度可能小於 items 長度）
+- `fail_fast` 模式：array 長度仍 = items 長度，索引一一對應。被取消或失敗的迭代為 `null`
 
 ### 範例
 

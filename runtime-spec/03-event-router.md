@@ -78,11 +78,41 @@ SendEvent API
 
 ### Deduplication
 
-同一事件 MAY 匹配同一 workflow definition 的多個 event triggers。引擎 SHOULD 提供 deduplication 機制：
+同一事件 MAY 匹配同一 workflow definition 的多個 event triggers。引擎 MUST 提供 trigger-level deduplication 機制。
 
-- 建議以 `event_id + definition_id` 作為 deduplication key
-- 在 deduplication window（建議 5 分鐘）內不重複建立 instance
-- Deduplication 為 SHOULD（非 MUST），實作可根據需求調整
+#### Deduplication 規則
+
+| 規則 | 說明 |
+|------|------|
+| Key | `event_id + definition_id`（同一事件對同一 definition 只觸發一次） |
+| Window | 5 分鐘（從事件進入引擎時起算） |
+| 持久化 | 使用 `event_dedup` 表（見 [08-storage-schema](08-storage-schema.md)）|
+| TTL | 記錄保留 5 分鐘後自動清理 |
+
+#### Deduplication Key 衝突處理
+
+| 情境 | 行為 |
+|------|------|
+| 相同 event_id + definition_id 在 window 內重複到達 | 第二次及之後的事件被忽略（不建立 instance） |
+| 不同 event_id、相同 event_type | 各自獨立處理（不衝突） |
+| 相同 event_id、不同 definition_id | 各自獨立處理（不衝突） |
+
+#### 同一事件觸發多個 Workflow
+
+一個事件 MAY 匹配**不同** workflow definition 的 event triggers。每個匹配的 definition 獨立建立 instance：
+
+```
+Event: order.created
+  ├─ 匹配 order_fulfillment definition → 建立 instance A
+  ├─ 匹配 order_analytics definition → 建立 instance B
+  └─ 匹配 order_notification definition → 建立 instance C
+```
+
+同一事件對同一 definition 只觸發一次（deduplication），但對不同 definitions 各觸發一次。
+
+#### 停用 Deduplication
+
+引擎 MAY 提供設定以停用 deduplication（用於測試或特殊場景），但預設 MUST 啟用。
 
 ---
 
@@ -121,6 +151,124 @@ SendEvent API
 - 一個事件 MAY 匹配多個不同 instance 的 wait subscriptions
 - 每個匹配的 subscription 獨立處理
 - 同一 instance 的同一 step 最多只有一個 wait subscription
+
+---
+
+## HTTP Trigger 處理
+
+Event Router 除了處理事件路由外，亦負責管理 HTTP trigger 的 endpoint 生命週期與請求處理。HTTP trigger 的 DSL 定義見 [dsl-spec/v2/02-triggers](../dsl-spec/v2/02-triggers.md)。
+
+### Endpoint 註冊
+
+當 workflow definition 轉為 PUBLISHED 時，引擎為其每個 `type: http` trigger 註冊對應的 HTTP endpoint：
+
+| 項目 | 說明 |
+|------|------|
+| URL | 引擎 base URL + trigger 的 `path`（如 `/api/orders/{order_id}/process`） |
+| Method | trigger 的 `method`（預設 `POST`） |
+| 綁定對象 | `definition_id` + trigger index |
+
+若多個 PUBLISHED definitions 註冊相同的 `method` + `path` 組合，引擎 MUST 拒絕後者並記錄錯誤至 log（endpoint 衝突）。
+
+### 請求處理流程
+
+```
+HTTP Request
+     ↓
+路由匹配（method + path）
+     ↓ 找不到 → 404 Not Found
+Content-Type 檢查
+     ↓ 非 JSON → 415 Unsupported Media Type
+Authentication 檢查
+     ↓ 失敗 → 401 / 403
+建構 request context
+     ↓
+求值 input_mapping CEL 表達式
+     ↓ 求值失敗 → 400 Bad Request
+驗證 input_schema
+     ↓ 驗證失敗 → 400 Bad Request
+建立 workflow instance
+     ↓
+┌─────────────────────────────────────┐
+│  async 模式 → 立即回傳 202 Accepted  │
+│  sync 模式  → 等待 instance 完成     │
+└─────────────────────────────────────┘
+```
+
+### Request Context 建構
+
+引擎從 HTTP request 中提取以下 namespace，供 `input_mapping` CEL 表達式求值：
+
+| Namespace | 型別 | 說明 |
+|-----------|------|------|
+| `request.body` | map | HTTP request body（JSON 解析後） |
+| `request.headers` | map\<string, string\> | HTTP headers |
+| `request.query` | map\<string, string\> | URL query parameters |
+| `request.path_params` | map\<string, string\> | URL path parameters（`{param}` 對應值） |
+| `request.method` | string | HTTP method（如 `POST`） |
+
+求值流程：
+
+1. 解析 request body 為 JSON map
+2. 提取 headers、query parameters、path parameters
+3. 組合為 `request` context 物件
+4. 對 `input_mapping` 中的每個欄位求值 CEL 表達式
+5. 若無 `input_mapping` → `request.body` 整體作為 workflow input（passthrough）
+6. 若有 `input_schema` → 驗證求值結果，失敗回傳 HTTP 400
+
+### Response 模式
+
+#### async 模式（預設）
+
+建立 instance 後立即回傳，不等待執行完成：
+
+- HTTP Status: `202 Accepted`
+- Response body:
+
+```json
+{
+  "instance_id": "inst_abc123",
+  "status": "created"
+}
+```
+
+#### sync 模式
+
+建立 instance 後等待其執行完成，受 `response.timeout` 限制（預設 30s）：
+
+| 情境 | HTTP Status | Response |
+|------|-------------|----------|
+| Instance 成功完成 | `response.success_status`（預設 200） | `{ "instance_id": "...", "status": "succeeded", "output": { ... } }` |
+| Instance 失敗 | `response.error_status`（預設 500） | `{ "instance_id": "...", "status": "failed", "error": { ... } }` |
+| 等待逾時 | `202 Accepted` | `{ "instance_id": "...", "status": "running" }` |
+
+sync 模式逾時時回傳 202 而非錯誤碼，因為 instance 仍在執行中，呼叫端可透過 API 後續查詢結果。
+
+### Authentication
+
+HTTP trigger endpoint 的認證與授權機制由引擎實作決定，詳見 [runtime-spec/12-authentication](12-authentication.md)。
+
+引擎 SHOULD 支援在 HTTP trigger endpoint 層級設定認證策略（如 API key、Bearer token、webhook signature verification）。
+
+### Endpoint 生命週期
+
+| 事件 | 動作 |
+|------|------|
+| Definition → PUBLISHED | 為每個 http trigger 註冊 endpoint |
+| Definition → DEPRECATED | 移除對應的 endpoints |
+| Definition → ARCHIVED | 移除對應的 endpoints |
+| Definition 更新（新版本 PUBLISHED） | 以新版本的 triggers 替換舊 endpoints |
+
+引擎 MUST 確保 endpoint 的新增與移除為原子操作，避免在切換期間出現不一致狀態。
+
+### 錯誤處理
+
+| HTTP Status | 條件 | Response Body |
+|-------------|------|---------------|
+| `400 Bad Request` | input_mapping CEL 求值失敗、input_schema 驗證失敗 | `{ "error": "validation_error", "detail": "..." }` |
+| `404 Not Found` | 無匹配的 method + path endpoint | `{ "error": "not_found" }` |
+| `405 Method Not Allowed` | path 存在但 method 不匹配 | `{ "error": "method_not_allowed" }` |
+| `415 Unsupported Media Type` | Content-Type 非 `application/json` | `{ "error": "unsupported_media_type" }` |
 
 ---
 

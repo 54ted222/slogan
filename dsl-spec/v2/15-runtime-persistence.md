@@ -33,30 +33,24 @@ Event / API / Timer
 
 引擎 MUST 持久化以下實體：
 
-### workflow_definition
+### definition
+
+統一實體，以 `kind` 區分 Workflow / Task / Secret 三種定義（與 `runtime-spec/08-storage-schema.md` 一致）。
 
 | 欄位 | 說明 |
 |------|------|
-| `id` | 唯一識別 |
-| `name` | workflow name |
-| `version` | 版本號 |
-| `content` | YAML 定義內容 |
+| `id` | 唯一識別（自動產生） |
+| `kind` | `Workflow` / `Task` / `Secret` |
+| `name` | 定義名稱 |
+| `version` | 版本號（正整數） |
+| `content` | YAML 定義內容（原始文字） |
+| `parsed_content` | 解析後的 JSON 結構 |
 | `lifecycle_state` | DRAFT / VALIDATED / PUBLISHED / DEPRECATED / ARCHIVED |
+| `backend_type` | stdio / http / builtin / null（僅 Task） |
 | `created_at` | 建立時間 |
 | `updated_at` | 最後更新時間 |
 
-### task_definition
-
-| 欄位 | 說明 |
-|------|------|
-| `id` | 唯一識別 |
-| `name` | task name（dotted namespace，如 `order.load`） |
-| `version` | 版本號 |
-| `content` | YAML 定義內容 |
-| `backend_type` | stdio / http / builtin |
-| `lifecycle_state` | DRAFT / VALIDATED / PUBLISHED / DEPRECATED / ARCHIVED |
-| `created_at` | 建立時間 |
-| `updated_at` | 最後更新時間 |
+唯一約束：`(kind, name, version)`
 
 ### workflow_instance
 
@@ -65,14 +59,18 @@ Event / API / Timer
 | `id` | 唯一識別 |
 | `definition_id` | 所屬 workflow definition |
 | `state` | CREATED / RUNNING / WAITING / SUCCEEDED / FAILED / CANCELLED |
-| `input` | instance 輸入資料 |
-| `output` | instance 輸出資料（完成後） |
-| `error` | 錯誤資訊（失敗時） |
+| `input` | instance 輸入資料（JSON） |
+| `output` | instance 輸出資料（JSON，完成後） |
+| `error` | 錯誤資訊 `{message, code}`（失敗時） |
+| `vars` | 當前 vars namespace snapshot（JSON，assign step 更新） |
+| `correlation_id` | 跨 instance 追蹤用 ID |
 | `parent_instance_id` | 父 instance ID（sub_workflow 時） |
 | `parent_step_id` | 父 step ID（sub_workflow 時） |
+| `step_execution_count` | 累計 step 執行次數（max_step_executions 檢查用） |
 | `created_at` | 建立時間 |
 | `started_at` | 開始執行時間 |
 | `completed_at` | 完成時間 |
+| `version` | 樂觀鎖版本號（optimistic locking） |
 
 ### step_instance
 
@@ -81,13 +79,19 @@ Event / API / Timer
 | `id` | 唯一識別 |
 | `workflow_instance_id` | 所屬 instance |
 | `step_id` | 對應 definition 中的 step id |
+| `step_type` | step 類型（task / assign / if / switch / foreach / parallel / emit / wait_event / fail / return / sub_workflow） |
+| `parent_step_id` | 父 step（容器 step 內的子 step） |
+| `iteration_index` | foreach 迭代索引（僅 foreach 內的 step） |
+| `branch_index` | parallel 分支索引（僅 parallel 內的 step） |
 | `state` | PENDING / READY / RUNNING / SUCCEEDED / FAILED / WAITING / TIMED_OUT / CANCELLED / SKIPPED |
-| `input` | step 輸入（求值後） |
-| `output` | step 輸出 |
-| `error` | 錯誤資訊 |
+| `input` | step 輸入（JSON，求值後） |
+| `output` | step 輸出（JSON） |
+| `error` | 錯誤資訊 `{message, code}` |
 | `attempt` | 當前嘗試次數 |
+| `recorded_values` | 非確定性函式記錄（JSON `{position → value}`） |
 | `started_at` | 開始時間 |
 | `completed_at` | 完成時間 |
+| `version` | 樂觀鎖版本號（optimistic locking） |
 
 ### wait_subscription
 
@@ -137,6 +141,14 @@ Execution log 為 append-only，用於稽核與除錯。
 | `size` | 大小（bytes） |
 | `content_type` | MIME type |
 | `created_at` | 建立時間 |
+
+### Secret 管理
+
+Secret definition（`kind: Secret`）透過統一的 `definition` 實體持久化。引擎啟動時掃描所有 PUBLISHED 的 Secret definitions，解密 `data` 欄位，載入至記憶體快取。
+
+- 解密失敗 → 引擎啟動失敗
+- Secret 值 MUST NOT 寫入 execution_log 或 step_instance.output
+- 引擎 SHOULD 在 stderr / log 輸出中遮蔽 secret 值
 
 ---
 

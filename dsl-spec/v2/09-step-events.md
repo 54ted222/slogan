@@ -121,3 +121,79 @@ match: ${ event.data.order_id == input.order_id && event.data.status == "confirm
     - type: fail
       message: "payment confirmation timeout"
 ```
+
+---
+
+## emit 的延遲發送
+
+`emit` step 支援 `delay` 欄位，指定事件在延遲一段時間後才投遞至 Event Router。
+
+### Schema
+
+```yaml
+- type: emit
+  event: string                  # MUST — 事件類型
+  data: map | CEL expression     # MAY — 事件酬載
+  delay: duration                # MAY — 延遲時間
+```
+
+### 行為
+
+| 情境 | 行為 |
+|------|------|
+| 無 `delay` | 事件立即投遞（現有行為，不變） |
+| 有 `delay` | 事件被排程，在 `delay` 時間後才投遞至 Event Router |
+
+### 延遲事件的持久化
+
+1. emit step 執行時，引擎建立 `delayed_event` 記錄並持久化
+2. Step 標記為 SUCCEEDED（不等待事件實際投遞）
+3. 引擎的 Timeout Manager（或獨立的 delayed event scheduler）在到期時投遞事件
+4. 投遞後刪除 `delayed_event` 記錄
+
+### delayed_event 實體
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `id` | string | 唯一識別 |
+| `event_type` | string | 事件類型 |
+| `event_data` | json | 事件酬載 |
+| `source_instance_id` | string | 產生此事件的 instance |
+| `source_step_id` | string | 產生此事件的 step |
+| `deliver_at` | timestamp | 預定投遞時間 |
+| `created_at` | timestamp | 建立時間 |
+
+### Crash Recovery
+
+- 引擎重啟時 MUST 重建所有未投遞的 delayed events
+- 已過期的 delayed events（`deliver_at` <= 當前時間）→ 立即投遞
+
+### 投遞失敗重試
+
+若延遲事件投遞至 Event Router 時失敗（如 storage 暫時不可用），引擎 SHOULD 重試投遞，建議最多 10 次。超過重試上限 → 記錄錯誤至 execution_log 並刪除該 delayed_event 記錄。
+
+### Instance 取消的影響
+
+若產生 delayed event 的 instance 在事件投遞前被取消：
+
+- 延遲事件**仍然投遞**（fire-and-forget 語意）
+- 引擎 MAY 提供設定以在 instance 取消時撤銷未投遞的 delayed events
+
+### 範例
+
+```yaml
+# 30 分鐘後發送提醒
+- type: emit
+  event: order.reminder
+  delay: 30m
+  data:
+    order_id: ${ steps.load_order.output.id }
+    message: "your order is waiting for payment"
+
+# 24 小時後自動取消
+- type: emit
+  event: order.auto_cancel
+  delay: 24h
+  data:
+    order_id: ${ input.order_id }
+```

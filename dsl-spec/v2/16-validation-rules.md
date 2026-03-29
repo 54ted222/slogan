@@ -82,10 +82,54 @@
 ## Trigger 驗證
 
 - 每個 trigger MUST 有 `type`
-- `type` MUST 為 `manual` 或 `event`
+- `type` MUST 為 `manual`、`event`、`scheduled`、`http` 之一
 - event trigger MUST 有 `event` 欄位
 - `when` 欄位（若存在）MUST 為有效的 CEL 表達式
 - `input_mapping` 中的每個值（若存在）MUST 為有效的 CEL 表達式或字面值
+
+### scheduled trigger 驗證
+
+- `cron` 與 `interval` MUST 擇一存在，不可同時存在，不可都不存在
+- `cron` MUST 為有效的 5 欄位 cron 表達式
+- `interval` MUST 為有效的 duration 格式（如 `5m`、`1h`），且 MUST ≥ 1s
+- `timezone`（若存在）MUST 為有效的 IANA timezone 名稱
+- `allow_concurrent`（若存在）MUST 為 boolean
+- `input` 與 `input_mapping` 不可同時存在
+- `input_mapping` 中的值 MUST 為有效的 CEL 表達式（可用 `schedule` namespace）
+
+### http trigger 驗證
+
+- `path` MUST 存在且為非空字串
+- `path` MUST 以 `/` 開頭
+- `path` 中的 path parameter MUST 使用 `{param_name}` 格式，`param_name` 為 `snake_case`
+- 同一 definition 內不可有兩個 http trigger 的 `method` + `path` 完全相同
+- 跨 definitions 的 `method` + `path` 衝突在 PUBLISH 時檢查（而非 VALIDATE 時）
+- `method`（若存在）MUST 為 `GET`、`POST`、`PUT`、`PATCH`、`DELETE` 之一
+- `response.mode`（若存在）MUST 為 `async` 或 `sync`
+- `response.timeout`（若存在）MUST 為有效的 duration 格式
+- `response.success_status` 和 `response.error_status`（若存在）MUST 為有效的 HTTP status code（100-599）
+- `input_mapping` 中的值 MUST 為有效的 CEL 表達式（可用 `request` namespace）
+
+---
+
+## Artifact 宣告驗證
+
+- `artifacts` 中每個 artifact MUST 有 `kind`（`file` 或 `data`）
+- `artifacts` 中每個 artifact MUST 有 `lifecycle`（`input`、`output`、`intermediate`）
+- `lifecycle: input` 的 artifact 若 `required: true`，CreateInstance 時 MUST 提供
+- artifact 名稱 MUST 為有效的 `snake_case` 識別字
+- 同一 definition 內 artifact 名稱 MUST 唯一
+
+---
+
+## Task Step Resources 驗證
+
+- `resources` 中每個 resource MUST 有 `name`、`type`、`ref`、`access`
+- `resources[].type` MUST 為 `artifact`
+- `resources[].ref` MUST 引用 workflow `artifacts` 中已宣告的 artifact 名稱
+- `resources[].access` MUST 為 `read`、`write`、`read_write` 之一
+- 同一 task step 內 resource `name` MUST 唯一
+- 若 task definition 使用 `backend.type: http`，step MUST NOT 定義 `resources`（HTTP backend 不支援 artifact binding）
 
 ---
 
@@ -123,6 +167,50 @@
 
 ---
 
+## Secret Definition 驗證
+
+- `apiVersion` MUST 為 `secret/v2`
+- `kind` MUST 為 `Secret`
+- `metadata.name` MUST 存在且為有效識別字
+- `is_encrypted` MUST 為 boolean
+- `data` MUST 為 map（key-value pairs）
+- 若 `is_encrypted: true`：
+  - `encryption` MUST 存在
+  - `encryption.type` MUST 為 `aes`
+  - `encryption.config.algorithm` MUST 為 `aes-256-gcm` 或 `aes-256-cbc`
+  - `encryption.config.iv` MUST 存在且為有效 base64 字串
+  - `encryption.config.salt` MUST 存在且為有效 base64 字串
+  - 若 `algorithm` 為 `aes-256-gcm`：`encryption.config.tag` MUST 存在且為有效 base64 字串
+- 若 `is_encrypted: false`：`encryption` SHOULD NOT 存在
+
+---
+
+## 控制流程 Step 驗證
+
+### if
+
+- `expr` MUST 存在且為有效的 CEL 表達式
+- `expr` SHOULD 回傳 boolean（型別檢查為 warning）
+- `then` MUST 存在且為非空 step 陣列
+- `else`（若存在）MUST 為非空 step 陣列
+
+### switch
+
+- `expr` MUST 存在且為有效的 CEL 表達式
+- `cases` MUST 存在且為非空陣列（至少一個 case）
+- 每個 `cases[]` MUST 有 `value` 和 `then`
+- `cases[].then` MUST 為非空 step 陣列
+- `cases[].value` 的型別 SHOULD 與 `expr` 的推斷回傳型別相容（warning）
+- `default`（若存在）MUST 為非空 step 陣列
+
+### foreach
+
+- `items` MUST 存在且為有效的 CEL 表達式（SHOULD 回傳 list）
+- `do` MUST 存在且為非空 step 陣列
+- `as`（若存在）MUST 為有效的識別字（documentation only，不影響 `loop.item` 行為）
+
+---
+
 ## 其他驗證
 
 - `foreach` 的 `concurrency` MUST 為正整數
@@ -132,6 +220,7 @@
 - `task` 的 `execution.policy` MUST 為 `replayable`、`idempotent`、`non_repeatable` 之一
 - `retry.max_attempts` MUST 為正整數
 - `retry.backoff` MUST 為 `fixed` 或 `exponential`
+- `emit` 的 `delay`（若存在）MUST 為有效的 duration 格式，且 MUST > 0s
 - `config.secrets`（若存在）MUST 為 string 陣列，每個元素為 secret definition 的 `metadata.name`
 - `sub_workflow` 的 `execution.policy` MUST 為 `replayable`、`idempotent`、`non_repeatable` 之一
 

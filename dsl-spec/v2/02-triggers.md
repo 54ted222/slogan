@@ -146,4 +146,233 @@ triggers:
     when: ${ event.data.amount > 1000 }
 ```
 
-以上設定表示：同一事件可能同時觸發多個 trigger（若都符合條件），各自建立獨立的 instance。引擎 SHOULD 提供機制避免非預期的重複建立（如 deduplication key）。
+以上設定表示：同一事件可能同時觸發多個 trigger（若都符合條件），各自建立獨立的 instance。引擎 MUST 提供 trigger-level deduplication 機制：同一 `event_id` 對同一 definition 在 5 分鐘窗口內僅觸發一次。同一事件對不同 definitions 各自獨立觸發。詳細規則見 [runtime-spec/03-event-router](../../runtime-spec/03-event-router.md) 的 Deduplication 章節。
+
+---
+
+## scheduled Trigger
+
+依據 cron 表達式或固定間隔，定時建立 workflow instance。
+
+### Schema
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `type` | string | MUST | 固定值 `scheduled` |
+| `cron` | string | MUST（二擇一） | Cron 表達式（5 欄位標準格式） |
+| `interval` | duration | MUST（二擇一） | 固定間隔（如 `5m`、`1h`） |
+| `timezone` | string | MAY | IANA timezone（如 `Asia/Taipei`），預設 UTC |
+| `input` | map | MAY | 每次觸發時提供的固定 input |
+| `input_mapping` | map | MAY | 動態 input（可使用 `schedule` namespace） |
+
+`cron` 與 `interval` MUST 擇一，不可同時存在。
+
+### Cron 格式
+
+5 欄位標準 cron 表達式：
+
+```
+┌───────────── minute (0-59)
+│ ┌───────────── hour (0-23)
+│ │ ┌───────────── day of month (1-31)
+│ │ │ ┌───────────── month (1-12)
+│ │ │ │ ┌───────────── day of week (0-6, 0=Sunday)
+│ │ │ │ │
+* * * * *
+```
+
+支援的特殊字元：`*`（任意）、`,`（列舉）、`-`（範圍）、`/`（間隔）。
+
+### input_mapping 的求值上下文
+
+`input_mapping` 表達式中可用的 namespace：
+
+| Namespace | 說明 |
+|-----------|------|
+| `schedule.fired_at` | 排程觸發時間（timestamp） |
+| `schedule.iteration` | 從 definition PUBLISHED 起累計的觸發次數（int） |
+
+```yaml
+- type: scheduled
+  cron: "0 9 * * MON-FRI"
+  timezone: "Asia/Taipei"
+  input_mapping:
+    report_date: ${ schedule.fired_at }
+    batch_id: ${ "batch_" + string(schedule.iteration) }
+```
+
+### 行為
+
+1. Definition PUBLISHED 時，引擎根據 `cron` 或 `interval` 建立排程
+2. 每次排程觸發時建立新的 workflow instance
+3. Instance input = `input`（靜態）或 `input_mapping` 求值結果
+4. 若有 `input_schema` → 驗證 input
+5. Definition DEPRECATED 時，停止排程（不再觸發新 instance）
+
+### 錯漏觸發處理
+
+| 情境 | 行為 |
+|------|------|
+| 引擎停機期間錯過排程 | 引擎重啟後 MUST NOT 補觸發（fire-and-forget）。引擎 MAY 提供設定以啟用補觸發（catch-up） |
+| 前一次觸發的 instance 仍在執行 | 仍然建立新 instance（不等待前一個完成） |
+
+### 併發控制
+
+引擎 MAY 支援 scheduled trigger 的併發控制：
+
+| 設定 | 說明 |
+|------|------|
+| `allow_concurrent: true`（預設） | 即使前一個 instance 仍在執行，仍建立新 instance |
+| `allow_concurrent: false` | 若前一個由此 trigger 建立的 instance 仍在執行，跳過本次觸發 |
+
+```yaml
+- type: scheduled
+  interval: 5m
+  allow_concurrent: false
+  input:
+    task: "cleanup"
+```
+
+### 範例
+
+```yaml
+triggers:
+  - type: manual
+
+  # 每天早上 9 點（台北時間）
+  - type: scheduled
+    cron: "0 9 * * *"
+    timezone: "Asia/Taipei"
+    input:
+      report_type: "daily"
+
+  # 每 30 分鐘
+  - type: scheduled
+    interval: 30m
+    allow_concurrent: false
+    input:
+      task: "sync"
+```
+
+---
+
+## http Trigger
+
+透過 HTTP endpoint 直接觸發 workflow instance。引擎為每個 http trigger 自動產生 REST API endpoint。
+
+### Schema
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `type` | string | MUST | 固定值 `http` |
+| `method` | string | MAY | HTTP method，預設 `POST` |
+| `path` | string | MUST | URL path（相對於引擎 base URL） |
+| `input_mapping` | map | MAY | HTTP request 到 workflow input 的映射 |
+| `response` | object | MAY | 自訂 HTTP response 行為 |
+
+```yaml
+- type: http
+  method: POST
+  path: /api/orders
+  input_mapping:
+    order_id: ${ request.body.order_id }
+    items: ${ request.body.items }
+    source: ${ request.headers["X-Source"] }
+```
+
+### input_mapping 的求值上下文
+
+| Namespace | 說明 |
+|-----------|------|
+| `request.body` | HTTP request body（JSON 解析後的 map） |
+| `request.headers` | HTTP headers（map\<string, string\>） |
+| `request.query` | URL query parameters（map\<string, string\>） |
+| `request.path_params` | URL path parameters（若 path 含 `{param}`） |
+| `request.method` | HTTP method（string） |
+
+### Path Parameters
+
+Path 中 MAY 使用 `{param}` 定義路徑參數：
+
+```yaml
+- type: http
+  path: /api/orders/{order_id}/process
+  input_mapping:
+    order_id: ${ request.path_params.order_id }
+```
+
+### Response 行為
+
+| 設定 | 說明 |
+|------|------|
+| `response.mode` | `async`（預設）或 `sync` |
+
+#### async 模式（預設）
+
+1. 收到 HTTP request
+2. 驗證 input
+3. 建立 instance
+4. 立即回傳 HTTP 202 Accepted：
+
+```json
+{
+  "instance_id": "inst_abc123",
+  "status": "created"
+}
+```
+
+#### sync 模式
+
+1. 收到 HTTP request
+2. 建立並執行 instance
+3. 等待 instance 完成（受 `response.timeout` 限制）
+4. 回傳 instance output：
+
+```json
+{
+  "instance_id": "inst_abc123",
+  "status": "succeeded",
+  "output": { ... }
+}
+```
+
+sync 模式設定：
+
+| 欄位 | 說明 |
+|------|------|
+| `response.timeout` | 等待 instance 完成的最大時間（預設 30s） |
+| `response.success_status` | 成功時的 HTTP status code（預設 200） |
+| `response.error_status` | 失敗時的 HTTP status code（預設 500） |
+
+```yaml
+- type: http
+  path: /api/validate
+  response:
+    mode: sync
+    timeout: 10s
+    success_status: 200
+    error_status: 422
+```
+
+### Content-Type
+
+- Request body MUST 為 JSON（`Content-Type: application/json`）
+- 非 JSON request → HTTP 415 Unsupported Media Type
+- Response 一律為 JSON
+
+### 範例
+
+```yaml
+triggers:
+  - type: manual
+
+  - type: http
+    method: POST
+    path: /api/orders
+    input_mapping:
+      order_id: ${ request.body.order_id }
+      action: ${ default(request.body.action, "pay") }
+      source: ${ default(request.headers["X-Source"], "http") }
+    response:
+      mode: async
+```

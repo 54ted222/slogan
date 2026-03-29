@@ -152,7 +152,7 @@ Assign 不產生 output（`steps.<id>.output` 不適用）。
    - `ignore`：忽略失敗，foreach → SUCCEEDED
 6. 收集 output array：
    - `continue` / `ignore` 模式：array 長度 = items 長度，索引一一對應。成功迭代為其最後一個 step 的 output，失敗迭代為 `null`
-   - `fail_fast` 模式：array 為已完成迭代的 compact 結果（不含被取消的迭代），長度可能小於 items 長度。output[i] 對應 items[i]（按原始索引順序，跳過未完成的）
+   - `fail_fast` 模式：array 長度 = items 長度，索引一一對應。成功迭代為其最後一個 step 的 output，被取消的迭代為 `null`，觸發失敗的迭代為 `null`
 
 ### parallel
 
@@ -169,11 +169,12 @@ Assign 不產生 output（`steps.<id>.output` 不適用）。
 
 1. 求值 `data` 中的 CEL 表達式
 2. 組合事件信封（type、data、自動產生 id、timestamp）
-3. 持久化事件（at-least-once 保證）
-4. 將事件交由 Event Router
-5. Step → SUCCEEDED
+3. 檢查 `delay` 欄位：
+   - **無 delay**：持久化事件（at-least-once 保證），將事件交由 Event Router
+   - **有 delay**：建立 `delayed_event` 記錄（`deliver_at` = `now()` + delay），由 Timeout Manager 在到期時投遞
+4. Step → SUCCEEDED
 
-Emit 不等待事件被消費。
+Emit 不等待事件被消費（有 delay 時也不等待事件投遞）。
 
 ### wait_event
 
@@ -212,6 +213,63 @@ Emit 不等待事件被消費。
 6. Parent step 保持 RUNNING，等待 child 完成
 7. Child SUCCEEDED → parent step SUCCEEDED，output = child return output
 8. Child FAILED → parent step FAILED（error code: `sub_workflow_failed`，可被 on_error 捕捉）
+
+#### Timeout 處理
+
+Parent step 的 `timeout` 限制 child instance 的總執行時間。兩者交互規則如下：
+
+| 情境 | 行為 |
+|------|------|
+| 僅 parent step timeout | Parent timeout 觸發 → child instance CANCELLED，parent step TIMED_OUT |
+| 僅 child `config.timeout` | Child timeout 觸發 → child FAILED，parent step FAILED（`sub_workflow_failed`） |
+| 兩者皆有，parent 先觸發 | Child instance CANCELLED，parent step TIMED_OUT |
+| 兩者皆有，child 先觸發 | Child FAILED（自身 timeout），parent step FAILED（`sub_workflow_failed`） |
+
+關鍵區別：
+
+- Parent timeout 是**外部取消** → child 的 `config.on_timeout` **不觸發**（因為是被外部取消，非自身 timeout）；parent 的 `on_timeout` handler 觸發
+- Child timeout 是**自身 timeout** → child 的 `config.on_timeout` **觸發**（若有）；對 parent 而言是子流程失敗
+- 引擎 MUST 以 optimistic locking 保證只有一個 timeout 贏家（race condition 時不可兩者皆觸發）
+
+#### Retry 機制
+
+`retry` 設定（`max_attempts`、`delay`、`backoff`）適用於 parent step 層級：
+
+1. Child instance 完成 → FAILED → 進入 retry 判斷
+2. `attempt < max_attempts` → 等待 delay → 建立**新的** child instance（新的 `instance_id`）
+3. 先前的 child instance 保留於其 terminal 狀態，不做清理
+4. 每次 retry 遞增 step_instance 的 `attempt` 欄位
+
+Retry 僅適用於 FAILED，不適用於 TIMED_OUT（與 task step 行為一致）。
+
+#### Execution Policy（崩潰恢復）
+
+`execution.policy` 決定 parent step 在引擎崩潰後恢復時的行為：
+
+| Policy | Recovery 行為 |
+|--------|---------------|
+| `replayable`（預設） | 查詢 child instance 狀態：RUNNING → 恢復等待；已完成 → 直接取結果；狀態不明或不存在 → 建立新的 child instance |
+| `idempotent` | 以 idempotency key（`parent_instance_id` + `step_id` + `attempt`）查詢：若已存在且已完成 → 直接取結果；否則建立新的 child instance（key 確保不重複建立） |
+| `non_repeatable` | 若 child instance 狀態不明確（非 terminal）→ parent step 標記 FAILED |
+
+大多數情況下 child instance 的狀態可從資料庫查詢，recovery 通常只需恢復等待。`non_repeatable` 適用於 child workflow 有不可逆副作用且狀態無法確認的情境。
+
+#### Cascade Cancellation
+
+Parent instance 被 CANCELLED 時，引擎 MUST 遞迴取消所有 child instances：
+
+1. 查詢 `parent_instance_id` = parent.id 的所有非 terminal child instances
+2. 以 leaf-first 順序取消（最深層的子孫 instance 優先）
+3. 每個 child instance 依循正常取消流程（RUNNING 的 steps 收到 SIGTERM / 標記 CANCELLED）
+4. Child 的 `config.on_timeout` **不觸發**（這是外部取消，非 timeout）
+5. 已為 terminal 狀態的 child instances 不受影響
+
+| 規則 | 說明 |
+|------|------|
+| 深度 | 遞迴取消所有後代 instances，不限深度 |
+| 順序 | Leaf-first（最深層優先） |
+| 原子性 | 單一 child 取消失敗不影響其他 child 的取消 |
+| 已完成的 child | Terminal 狀態的 child 不受影響 |
 
 ---
 
@@ -257,7 +315,7 @@ on_error handler 中的 `error` namespace MUST 包含以下欄位：
 | `error.code` | string | 錯誤碼 | step_instance.error.code，見 [dsl-spec/v2/12-error-handling](../dsl-spec/v2/12-error-handling.md) 標準錯誤碼 |
 | `error.step_id` | string | 失敗 step ID | step_instance.step_id |
 
-`error.code` MUST 為以下標準錯誤碼之一：`definition_not_found`、`task_failed`、`timeout`、`schema_validation_error`、`expression_error`、`sub_workflow_failed`、`max_depth_exceeded`、`max_step_executions_exceeded`、`unknown`。若 task backend 回報自訂 error code，以 `task_failed` 為 `error.code`，自訂 code 記錄在 `error.message` 中。
+`error.code` 為標準錯誤碼或 task handler 回報的自訂錯誤碼。完整錯誤碼清單見 [dsl-spec/v2/12-error-handling](../dsl-spec/v2/12-error-handling.md)。Task handler 回報的自訂 `error.code`（如 `payment.insufficient_funds`）由引擎原樣傳遞，不改寫為 `task_failed`。
 
 ### timeout namespace 建構
 

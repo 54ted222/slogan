@@ -59,6 +59,8 @@
 | [16-validation-rules](16-validation-rules.md) | 靜態驗證規則 |
 | [17-task-definition](17-task-definition.md) | Task Definition（定義端：stdio / http / builtin） |
 | [18-secrets-and-env](18-secrets-and-env.md) | Secrets 與環境變數（`env` / `secret` namespace、CLI） |
+| [19-versioning](19-versioning.md) | 版本管理與遷移策略 |
+| [20-execution-guarantees](20-execution-guarantees.md) | 執行語意保證（delivery guarantee、race condition） |
 | [99-examples](99-examples.md) | 完整範例集 |
 
 ---

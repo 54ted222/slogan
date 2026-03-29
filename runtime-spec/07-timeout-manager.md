@@ -11,6 +11,8 @@ Timeout Manager 負責：
 1. 建立 timeout schedules（step timeout、workflow timeout）
 2. 監控 timeout 到期
 3. 到期時通知 Scheduler 執行 timeout 處理
+4. 管理 delayed event 投遞排程
+5. 管理 scheduled trigger 觸發排程
 
 ---
 
@@ -195,3 +197,81 @@ Timeout schedules 在以下情況 MUST 被刪除：
 ### 時間漂移
 
 Crash recovery 期間可能產生時間漂移（實際過期時間晚於 `fires_at`）。引擎 MUST 仍按規則處理，不因延遲而改變行為（如已過期的 wait_event 仍執行 timeout flow）。
+
+---
+
+## Delayed Event 投遞
+
+Timeout Manager 同時負責 delayed event 的到期投遞（見 [dsl-spec/v2/09-step-events](../dsl-spec/v2/09-step-events.md) emit delay 規格）。
+
+### 投遞流程
+
+```
+delayed_event.deliver_at 到期
+     ↓
+載入 delayed_event 記錄
+     ↓
+組合事件信封（type, data, 自動產生 id, timestamp = deliver_at）
+     ↓
+投遞至 Event Router（與 emit step 產生的即時事件相同流程）
+     ↓
+刪除 delayed_event 記錄
+```
+
+### 投遞失敗
+
+若投遞至 Event Router 失敗（如 storage 不可用）：
+
+- 不刪除 delayed_event 記錄
+- 引擎 SHOULD 在下一個監控週期重試
+- 重試次數由引擎設定決定（建議上限 10 次）
+- 超過重試上限 → 記錄錯誤至 log，刪除記錄
+
+### Crash Recovery
+
+引擎重啟時，MUST 載入所有未投遞的 delayed_events，已過期者立即投遞。
+
+---
+
+## Scheduled Trigger 排程
+
+Timeout Manager 負責 scheduled trigger 的定時觸發。
+
+### 觸發流程
+
+```
+scheduled_trigger.next_fire_at 到期
+     ↓
+檢查 allow_concurrent（若 false → 查詢是否有非 terminal instance）
+     ├── 有非 terminal instance → 跳過本次觸發
+     └── 無（或 allow_concurrent = true）→
+          ↓
+     求值 input / input_mapping（見下方 Namespace）
+          ↓
+     建立 workflow instance（等同 CreateInstance）
+          ↓
+     遞增 iteration_count
+          ↓
+     計算 next_fire_at（依 cron 或 interval）
+          ↓
+     更新 scheduled_trigger 記錄
+```
+
+### input_mapping Namespace
+
+`input_mapping` 求值時，Expression Evaluator 提供 `schedule` namespace（與 [dsl-spec/v2/02-triggers](../dsl-spec/v2/02-triggers.md) 定義一致）：
+
+| 變數 | 型別 | 說明 |
+|------|------|------|
+| `schedule.fired_at` | timestamp | 本次觸發的時間（`next_fire_at` 到期時間） |
+| `schedule.iteration` | integer | 自 definition PUBLISHED 以來的累計觸發次數（= `iteration_count + 1`，因 `iteration_count` 在建立 instance 後才遞增） |
+
+靜態 `input`（非 `input_mapping`）不需要 namespace，直接作為 instance input。
+
+### Crash Recovery
+
+引擎重啟時：
+
+- 載入所有 scheduled_trigger 記錄
+- 已過期的 `next_fire_at` → 依據引擎設定決定是否補觸發（預設不補觸發）
+- 更新 `next_fire_at` 為下一次應觸發的時間

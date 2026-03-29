@@ -193,3 +193,95 @@ Artifact 的實際儲存機制（S3、local filesystem、database 等）由 runt
 - lifecycle 語意
 - CEL 可讀取的中繼資料欄位
 - tool 透過本地檔案路徑存取 artifact 內容（引擎負責 storage ↔ 本地檔案的轉換）
+
+---
+
+## Artifact 清理
+
+### 清理時機
+
+| Lifecycle | 清理時機 | 說明 |
+|-----------|---------|------|
+| `input` | 不主動清理 | Instance 到達 terminal 狀態後保留，供稽核查詢 |
+| `output` | 不主動清理 | 同上 |
+| `intermediate` | Instance 到達 terminal 狀態後 | 引擎 MAY 立即清理或以背景排程清理 |
+
+### 清理流程
+
+引擎清理 artifact 時 MUST 依以下順序：
+
+1. 確認 workflow instance 為 terminal 狀態（SUCCEEDED / FAILED / CANCELLED）
+2. 從 storage backend 刪除實際檔案 / 資料
+3. 更新 artifact_record（標記為已清理或刪除記錄）
+
+若步驟 2 失敗（如 storage 不可用），引擎 SHOULD 在背景排程重試，不影響 instance 狀態。
+
+### 保留策略
+
+引擎 SHOULD 支援可設定的 artifact 保留期限：
+
+| 設定 | 預設 | 說明 |
+|------|------|------|
+| `artifacts.retention.input` | 永久 | Input artifact 保留期限 |
+| `artifacts.retention.output` | 永久 | Output artifact 保留期限 |
+| `artifacts.retention.intermediate` | 0（立即清理） | Intermediate artifact 保留期限 |
+
+超過保留期限的 artifact，引擎以背景排程清理。
+
+---
+
+## 互斥存取機制
+
+### Write Lock
+
+同一時間僅一個 step 可以 `write` 或 `read_write` 存取 artifact。引擎 MUST 使用以下機制確保互斥：
+
+1. Step 進入 RUNNING 前，引擎檢查該 artifact 是否有其他 step 正在以 `write` / `read_write` 存取
+2. 若有衝突 → step 排隊等待，直到持有 write lock 的 step 完成
+3. Write lock 的生命週期與 step 的 RUNNING 狀態綁定：step 離開 RUNNING 後自動釋放
+
+### Lock 持久化
+
+Write lock SHOULD 持久化至資料庫（不僅存於記憶體），確保 crash recovery 後能正確恢復鎖定狀態。
+
+### Deadlock 防範
+
+- 單一 step 最多綁定有限個 artifact，且鎖定順序由引擎決定（按 artifact name 字母序）
+- 引擎 SHOULD 以固定順序取得 locks 以避免 deadlock
+
+---
+
+## Storage Backend 錯誤處理
+
+### 下載失敗（執行前）
+
+引擎在 task 執行前將 artifact 從 storage 下載至暫存目錄。若下載失敗：
+
+| 錯誤類型 | 行為 |
+|---------|------|
+| Storage 不可用（連線失敗） | Step FAILED，error code = `task_failed`，message 包含下載失敗原因 |
+| Artifact 不存在（URI 無效） | Step FAILED，error code = `task_failed` |
+| 磁碟空間不足 | Step FAILED，error code = `task_failed` |
+
+此失敗發生在 task handler 執行之前，視為 step 級錯誤，可被 `retry` 和 `on_error` 處理。
+
+### 上傳失敗（執行後）
+
+Task handler 完成後，引擎將修改的 artifact 上傳至 storage。若上傳失敗：
+
+| 錯誤類型 | 行為 |
+|---------|------|
+| Storage 不可用 | Step FAILED，error code = `task_failed`。Task handler 的 output 仍被記錄 |
+| 磁碟空間不足（storage 端） | 同上 |
+
+上傳失敗意味著 artifact 的修改未被持久化。Step 被標記為 FAILED 後可被 retry（若有設定），retry 時整個 task 重新執行。
+
+### Partial Write 處理
+
+若 task handler 寫入 artifact 的過程中 crash 或被 timeout 終止：
+
+1. 暫存目錄中的檔案可能不完整
+2. 引擎 MUST NOT 將不完整的檔案上傳至 storage
+3. 引擎清理暫存目錄中的不完整檔案
+4. Artifact record 維持 crash 前的狀態（未更新）
+5. Step 被標記為 FAILED 或 TIMED_OUT，retry 時從上次成功的 artifact 狀態重新開始

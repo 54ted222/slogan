@@ -164,16 +164,117 @@ Step timeout < workflow timeout。若 workflow timeout 先到，覆蓋所有 ste
 
 ## 標準錯誤碼
 
-| 錯誤碼 | 說明 |
-|--------|------|
-| `task_failed` | task handler 回報失敗 |
-| `timeout` | 執行超時 |
-| `schema_validation_error` | input / output schema 驗證失敗 |
-| `expression_error` | CEL 表達式求值失敗 |
-| `sub_workflow_failed` | 子 workflow 失敗 |
-| `max_depth_exceeded` | sub_workflow 巢狀超過深度限制 |
-| `max_step_executions_exceeded` | 超過 `config.max_step_executions` 上限 |
-| `unknown` | 未分類的錯誤 |
+### 錯誤碼結構
+
+錯誤碼為 `snake_case` 字串。標準錯誤碼由引擎定義，自訂錯誤碼由 task handler 定義。
+
+### Namespace 規則
+
+| Namespace | 格式 | 來源 |
+|-----------|------|------|
+| 標準 | 無前綴（如 `task_failed`） | 引擎產生 |
+| 自訂 | 建議使用 dotted namespace（如 `payment.insufficient_funds`） | Task handler 回報 |
+
+Task handler 回傳的 `error.code` 由引擎原樣傳遞至 `on_error` handler 的 `error.code` namespace。引擎不會改寫 handler 回傳的 code。
+
+### 標準錯誤碼清單
+
+#### Task 相關
+
+| 錯誤碼 | 觸發條件 | 說明 |
+|--------|---------|------|
+| `task_failed` | Task handler 回報失敗（未指定 code 時） | Task 執行失敗的預設錯誤碼 |
+| `task_not_found` | `action` 對應的 task definition 不存在或非 PUBLISHED | Task definition 找不到 |
+| `task_version_archived` | 固定版本號的 task 已被 ARCHIVED | Task 版本已封存 |
+
+#### Timeout 相關
+
+| 錯誤碼 | 觸發條件 | 說明 |
+|--------|---------|------|
+| `step_timeout` | Step 執行超過 `timeout` 設定 | Step 級 timeout |
+| `workflow_timeout` | Instance 超過 `config.timeout` 設定 | Workflow 級 timeout |
+| `wait_timeout` | `wait_event` 等待超過 `timeout` 設定 | Wait event 專用 timeout |
+
+注意：`on_timeout` handler 透過 `timeout` namespace（而非 `error` namespace）取得 timeout 資訊。上述錯誤碼用於 timeout 未被 `on_timeout` 處理而降級為 `on_error` 時。
+
+#### Schema 相關
+
+| 錯誤碼 | 觸發條件 | 說明 |
+|--------|---------|------|
+| `schema_validation_error` | Input / output schema 驗證失敗 | 資料不符合 JSON Schema |
+| `input_required` | 必填 input 欄位缺失 | Instance 建立或 task 呼叫時 |
+
+#### 表達式相關
+
+| 錯誤碼 | 觸發條件 | 說明 |
+|--------|---------|------|
+| `expression_error` | CEL 表達式求值失敗 | 型別錯誤、null reference 等 |
+
+#### 控制流程相關
+
+| 錯誤碼 | 觸發條件 | 說明 |
+|--------|---------|------|
+| `sub_workflow_failed` | Child workflow instance FAILED | 子 workflow 失敗 |
+| `max_depth_exceeded` | sub_workflow 巢狀超過深度限制 | 巢狀深度超過上限 |
+| `max_step_executions_exceeded` | 超過 `config.max_step_executions` | 防止無限迴圈 |
+
+#### Trigger 相關
+
+| 錯誤碼 | 觸發條件 | 說明 |
+|--------|---------|------|
+| `trigger_input_invalid` | Trigger 產生的 input 不符合 input_schema | Scheduled / HTTP / event trigger |
+| `trigger_mapping_error` | input_mapping CEL 表達式求值失敗 | Trigger 的映射表達式錯誤 |
+
+#### 系統相關
+
+| 錯誤碼 | 觸發條件 | 說明 |
+|--------|---------|------|
+| `cancelled` | Instance 被外部取消 | API 取消或 parent timeout |
+| `unknown` | 未分類的錯誤 | 兜底錯誤碼 |
+
+### 自訂錯誤碼
+
+Task handler 的 response JSON 中 `error.code` 欄位可使用自訂錯誤碼：
+
+```json
+{
+  "success": false,
+  "output": null,
+  "error": {
+    "message": "餘額不足",
+    "code": "payment.insufficient_funds"
+  }
+}
+```
+
+自訂錯誤碼在 `on_error` handler 中可透過 `error.code` 存取：
+
+```yaml
+on_error:
+  - type: if
+    expr: ${ error.code == "payment.insufficient_funds" }
+    then:
+      - type: emit
+        event: payment.balance_low
+        data:
+          order_id: ${ input.order_id }
+    else:
+      - type: fail
+        message: ${ error.message }
+        code: ${ error.code }
+```
+
+### `fail` step 的 code 欄位
+
+`fail` step MAY 指定 `code`，用於向上層傳遞錯誤碼：
+
+```yaml
+- type: fail
+  message: "payment timeout"
+  code: "payment.timeout"
+```
+
+若未指定 `code`，預設為 `unknown`。
 
 ---
 

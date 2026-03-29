@@ -45,6 +45,7 @@
 | `output` | json \| null | instance 輸出（完成後） |
 | `error` | json \| null | 錯誤資訊（失敗時，含 `message`、`code`） |
 | `vars` | json | 當前 vars namespace snapshot（assign step 更新） |
+| `correlation_id` | string | 跨 instance 追蹤用 ID（見 [11-observability](11-observability.md)） |
 | `parent_instance_id` | string \| null | 父 instance（sub_workflow） |
 | `parent_step_id` | string \| null | 父 step（sub_workflow） |
 | `step_execution_count` | integer | 累計 step 執行次數（`config.max_step_executions` 檢查用） |
@@ -142,6 +143,21 @@
 
 Execution log 為 append-only，用於稽核與除錯。
 
+#### 不可變性保證
+
+- Execution log 為 **append-only**：一旦寫入，MUST NOT 修改或刪除（在保留期限內）
+- 引擎 MUST NOT 提供修改 execution_log 內容的 API
+- Storage 實作 SHOULD 確保 log 的不可變性（如使用 insert-only table、禁用 UPDATE/DELETE）
+
+#### 完整性
+
+引擎 SHOULD 支援 log 完整性驗證：
+
+- 每條 log 記錄 MAY 包含前一條記錄的 hash（chain hash），用於偵測篡改
+- 引擎 MAY 提供 CLI 指令驗證 execution_log 的完整性（`slogan log verify <instance_id>`）
+
+此功能為 MAY（非 MUST），適用於有合規需求的部署環境。
+
 #### event_type 與 data 格式
 
 | event_type | data 欄位 | 說明 |
@@ -173,6 +189,40 @@ Execution log 為 append-only，用於稽核與除錯。
 
 | 欄位 | 型別 | 說明 |
 |------|------|------|
+### delayed_event
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `id` | string | 唯一識別 |
+| `event_type` | string | 事件類型 |
+| `event_data` | json | 事件酬載 |
+| `source_instance_id` | string | 產生此事件的 workflow instance |
+| `source_step_id` | string | 產生此事件的 emit step |
+| `deliver_at` | timestamp | 預定投遞時間 |
+| `created_at` | timestamp | 建立時間 |
+
+用於 emit step 的 `delay` 功能。Timeout Manager 在 `deliver_at` 到期時投遞事件至 Event Router。投遞後刪除記錄。
+
+### scheduled_trigger
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `id` | string | 唯一識別 |
+| `definition_id` | string | 所屬 workflow definition |
+| `cron_expression` | string \| null | Cron 表達式（cron 模式） |
+| `interval_ms` | integer \| null | 間隔毫秒數（interval 模式） |
+| `timezone` | string | IANA timezone |
+| `next_fire_at` | timestamp | 下次觸發時間 |
+| `iteration_count` | integer | 累計觸發次數 |
+| `allow_concurrent` | boolean | 是否允許併發 instance |
+| `input` | json \| null | 固定 input |
+| `input_mapping` | json \| null | 動態 input mapping |
+| `created_at` | timestamp | 建立時間 |
+
+在 definition PUBLISHED 時建立（若有 scheduled trigger），DEPRECATED 時刪除。
+
+### instance_lease
+
 | `instance_id` | string | 被租借的 instance |
 | `worker_id` | string | 持有 lease 的 worker |
 | `acquired_at` | timestamp | 取得時間 |

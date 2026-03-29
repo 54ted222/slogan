@@ -117,6 +117,35 @@ backend:
 - HTTP 2xx = 成功，其他 = 失敗
 - `retry_on_status` 中的 status code（如 `[429, 502, 503]`）視為可重試的暫時性失敗，會觸發 workflow step 的 `retry` 機制（見 [06-step-task](06-step-task.md)）。不在此列表中的非 2xx status code 視為永久性失敗，不觸發重試
 
+#### Redirect 處理
+
+- 引擎 MUST NOT 自動跟隨 3xx redirect
+- 3xx status code 視為失敗（同非 2xx 處理）
+- 若需 redirect，task definition 的 `url` SHOULD 直接指向最終目標
+
+#### Response 限制
+
+| 限制 | 預設值 | 說明 |
+|------|--------|------|
+| Response body 大小上限 | 10 MB | 超過 → task 失敗 |
+| Response timeout | 使用 step `timeout` 或 `backend.timeout` | 取較小值 |
+
+引擎 MAY 允許透過引擎設定調整 response body 大小上限。
+
+#### Artifact 限制
+
+HTTP backend **不支援** artifact resource binding（`resources` 欄位）。原因：HTTP backend 以 JSON body 傳輸資料，無法將 artifact 綁定至本地檔案系統路徑。若需傳遞檔案，task handler 應自行透過 `input` 取得 artifact URI 並處理下載 / 上傳。驗證階段（DRAFT → VALIDATED）MUST 檢查此限制。
+
+#### Content-Type 處理
+
+| Response Content-Type | 行為 |
+|----------------------|------|
+| `application/json` | 正常解析 JSON 作為 output |
+| 其他（如 `text/html`、`text/plain`） | 嘗試解析為 JSON。成功 → 正常處理；失敗 → task 失敗（error code = `task_failed`） |
+| 無 Content-Type header | 同上，嘗試解析為 JSON |
+
+本規格僅支援 JSON response。非 JSON 格式的 response（如 XML、CSV）MUST 透過中間服務轉換為 JSON，或使用 stdio backend 處理。
+
 #### body_mapping
 
 | 值 | 說明 |
@@ -298,6 +327,53 @@ backend:
   }
 }
 ```
+
+#### Request / Response 大小限制
+
+| 限制 | 預設值 | 說明 |
+|------|--------|------|
+| Request JSON（stdin）大小上限 | 10 MB | 超過 → 不啟動 process，step 失敗 |
+| Response JSON（stdout）大小上限 | 10 MB | 超過 → 視為無效 response，step 失敗 |
+| stderr 記錄上限 | 64 KB | 超過部分截斷 |
+
+引擎 MAY 允許透過引擎設定調整大小上限。
+
+#### Process 信號處理
+
+Process timeout 的信號序列：
+
+```
+Timeout 到達
+  ↓
+發送 SIGTERM（讓 tool 有機會 graceful shutdown）
+  ↓
+等待 timeout_kill_after（預設 5s）
+  ↓
+若 process 仍存在 → 發送 SIGKILL（強制終止）
+```
+
+- SIGTERM 後 tool SHOULD 盡快完成清理並結束
+- tool 可攔截 SIGTERM 進行 cleanup，但 MUST 在 `timeout_kill_after` 內結束
+- SIGKILL 無法被攔截，process 立即終止
+- 引擎 MUST 同時終止 tool 啟動的所有子 process（使用 process group / session）
+
+#### Process Resource Limit
+
+引擎 MAY 對 stdio tool process 設定 resource limit：
+
+| 資源 | 建議限制 | 超過時行為 |
+|------|---------|----------|
+| 記憶體（RSS） | 512 MB | OS 終止 process（SIGKILL / OOM），step 失敗 |
+| CPU 時間 | 由 step timeout 控制 | Timeout 處理 |
+| Open file descriptors | 1024 | Process 無法開啟新檔案 |
+
+具體的 resource limit 值由引擎設定決定。引擎 SHOULD 使用 OS 機制（如 `ulimit`、cgroups）限制 process 資源。
+
+#### 特殊字元處理
+
+- Request / Response JSON MUST 為 UTF-8 編碼
+- JSON 中的字串 MAY 包含任意 Unicode 字元（含 null byte `\u0000`，以 JSON escape 表示）
+- stdin 寫入 request JSON 後 MUST 關閉 stdin（EOF），避免 tool 無限等待
 
 #### 語言無關性
 

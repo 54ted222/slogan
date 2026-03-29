@@ -34,6 +34,49 @@ DRAFT ──→ VALIDATED ──→ PUBLISHED ──→ DEPRECATED ──→ ARC
 - PUBLISHED → DRAFT（已發布的版本不可修改，需建新版本）
 - ARCHIVED → 任何狀態
 
+### DRAFT 狀態的可編輯性
+
+DRAFT 狀態的 definition **可修改內容**。VALIDATED 以後的狀態不可修改。
+
+| 狀態 | 可修改內容 | 說明 |
+|------|-----------|------|
+| DRAFT | 是 | 可自由修改 YAML 內容、metadata（name 除外） |
+| VALIDATED | 否 | 需退回 DRAFT 才能修改 |
+| PUBLISHED | 否 | 不可修改，需建新版本 |
+| DEPRECATED | 否 | — |
+| ARCHIVED | 否 | — |
+
+DRAFT 狀態修改時：
+- `metadata.name` MUST NOT 變更（name 是 definition 的身份識別）
+- `metadata.version` MUST NOT 變更
+- 其他所有欄位 MAY 修改
+- 修改後 `updated_at` 更新
+
+### 從 PUBLISHED 建立新版本（Fork）
+
+本規格不提供自動 fork 機制。建立新版本的流程為：
+
+1. 建立新的 definition：同一 `name`，`version` 為下一個可用的正整數
+2. 新 definition 初始狀態為 DRAFT
+3. 使用者自行複製舊版本的 YAML 內容並修改
+
+引擎 CLI MAY 提供便捷指令簡化此流程（見 cli-spec）。
+
+### Running Instance 與新版 Definition 的關係
+
+Running instance **不可升級到新版 definition**。
+
+| 情境 | 行為 |
+|------|------|
+| Instance 綁定 v3，使用者發布 v4 | Instance 繼續使用 v3 完成執行 |
+| Instance 中的 `version: "latest"` 的 task step | 執行時解析到當下最新的 PUBLISHED task version（可能是新版），但 workflow definition 本身不變 |
+| Instance 綁定的 definition 被 DEPRECATED | Instance 繼續執行，不受影響 |
+
+「不可升級」的原因：
+- 新版 definition 的 step 結構可能完全不同
+- Running instance 已有 step instances 的狀態記錄，與新 definition 不相容
+- 違反 deterministic replay 原則
+
 ---
 
 ## Instance Lifecycle
