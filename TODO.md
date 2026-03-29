@@ -22,6 +22,20 @@
 - [x] Authentication & Authorization → `runtime-spec/12-authentication.md`
 - [x] 全規格一致性審查（矛盾修復、缺失補齊、不對稱修正）
 
+## 評估
+transactional outbox/inbox pattern
+	2.	event publish state machine
+	3.	dead-letter / poison event 策略
+	4.	dedup key 保存期限與 replay policy
+JWT 配合 設定檔案 公鑰
+
+circuit breaker
+	•	connection pool / keepalive policy
+	•	per-backend rate limit / quotas
+	•	sandbox / container isolation / seccomp 類型規格
+
+
+
 ## FUTURE.md 延後項目
 
 - Pause / Resume 機制
