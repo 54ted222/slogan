@@ -491,7 +491,7 @@ loop:
     # 2. 將 assistant message 加入對話紀錄
     - type: assign
       vars:
-        updated_messages: ${ session.messages + [steps.response.output.message] }
+        updated_messages: ${ session.messages.append(steps.response.output.message) }
     - type: task
       action: agent.set_messages
       input:
@@ -515,7 +515,7 @@ loop:
     - type: task
       action: agent.set_messages
       input:
-        messages: ${ session.messages + steps.tool_results.output.results }
+        messages: ${ session.messages.concat(steps.tool_results.output.results) }
 
     # 回到 loop 頂部（下一次迭代）
 ```
@@ -534,7 +534,7 @@ loop:
     - type: task
       action: agent.set_messages
       input:
-        messages: ${ session.messages + [steps.response.output.message] }
+        messages: ${ session.messages.append(steps.response.output.message) }
 
     - type: if
       expr: ${ !steps.response.output.has_tool_calls }
@@ -551,7 +551,7 @@ loop:
     - type: task
       action: agent.set_messages
       input:
-        messages: ${ session.messages + steps.tool_results.output.results }
+        messages: ${ session.messages.concat(steps.tool_results.output.results) }
 
     # 每 5 輪壓縮對話紀錄
     - type: if
@@ -587,7 +587,7 @@ loop:
     - type: task
       action: agent.set_messages
       input:
-        messages: ${ session.messages + [steps.response.output.message] }
+        messages: ${ session.messages.append(steps.response.output.message) }
 
     # 每次迭代都發 progress 事件
     - type: emit
@@ -611,7 +611,7 @@ loop:
     - type: task
       action: agent.set_messages
       input:
-        messages: ${ session.messages + steps.tool_results.output.results }
+        messages: ${ session.messages.concat(steps.tool_results.output.results) }
 ```
 
 ### Output 模型
