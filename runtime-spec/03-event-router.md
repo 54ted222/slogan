@@ -50,7 +50,7 @@ SendEvent API
 
 | 欄位 | 說明 |
 |------|------|
-| `definition_id` | 所屬 workflow definition |
+| `definition_id` | 所屬 workflow definition（用於查詢 definition 的 name、version 等建立 instance 時所需資訊） |
 | `event_type` | 訂閱的事件類型 |
 | `when_expression` | 過濾條件 CEL 表達式（可為 null） |
 | `input_mapping` | 事件到 workflow input 的映射（可為 null） |

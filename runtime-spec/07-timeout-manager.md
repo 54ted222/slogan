@@ -165,7 +165,8 @@ Instance 是否仍為非 terminal？
   取消所有 child instances（sub_workflow）
        ↓
   檢查 config.on_timeout handler
-       ├── 有 → 執行 handler（handler 完成後 instance → FAILED）
+       ├── 有 → 建構 timeout namespace（timeout.step_id = null、timeout.duration = config.timeout）
+       │        → 執行 handler（handler 完成後 instance → FAILED）
        └── 無 → instance → FAILED
        ↓
   刪除 workflow timeout_schedule

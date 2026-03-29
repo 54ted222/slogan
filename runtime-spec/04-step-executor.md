@@ -181,7 +181,7 @@ Emit 不等待事件被消費（有 delay 時也不等待事件投遞）。
 
 ### wait_event
 
-1. 建立 wait_subscription record（event_type、match_expression、expires_at）
+1. 建立 wait_subscription record（workflow_instance_id、step_id、event_type、match_expression、expires_at）
 2. 若有 `timeout` → 建立 timeout_schedule
 3. Step 狀態 RUNNING → WAITING
 4. Instance 狀態 → WAITING
