@@ -45,6 +45,58 @@ $ slogan definition apply tasks/
 
 ---
 
+## slogan definition update
+
+更新 DRAFT 狀態 definition 的 YAML 內容。
+
+```bash
+slogan definition update <identifier> <file>
+```
+
+### 引數
+
+| 引數 | 說明 |
+|------|------|
+| `<identifier>` | `<name>@<version>` 或 `<definition_id>` |
+| `<file>` | 新的 YAML 檔案 |
+
+### 行為
+
+1. 呼叫 Engine API `UpdateDefinition`
+2. Definition MUST 為 DRAFT 狀態
+3. 新 YAML 的 kind/name/version MUST 與原 definition 一致
+
+```bash
+$ slogan definition update order_fulfillment@1 workflows/order_fulfillment_v2.yaml
+✓ Updated: Workflow/order_fulfillment@1 (DRAFT)
+```
+
+---
+
+## slogan definition delete
+
+刪除 DRAFT 狀態的 definition。
+
+```bash
+slogan definition delete <identifier>
+```
+
+### 行為
+
+1. 呼叫 Engine API `DeleteDefinition`
+2. Definition MUST 為 DRAFT 狀態
+3. 非 DRAFT 狀態 → 顯示錯誤
+
+```bash
+$ slogan definition delete order_fulfillment@1
+✓ Deleted: Workflow/order_fulfillment@1
+
+$ slogan definition delete payment_processing@2
+✗ Cannot delete: definition is PUBLISHED (use deprecate → archive instead)
+```
+
+---
+
 ## slogan definition validate
 
 驗證 definition（DRAFT → VALIDATED）。

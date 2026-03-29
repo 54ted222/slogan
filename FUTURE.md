@@ -6,6 +6,43 @@
 
 ---
 
+## Event Replay API（事件重播）
+
+提供從特定時間點重播事件的能力，用於除錯與災難復原。
+
+設計考量：
+
+- Replay-from-timestamp、replay-range 等 API
+- 重播期間的 dedup 處理策略
+- 重播進度追蹤與中止機制
+
+---
+
+## Transactional Outbox / Inbox Pattern
+
+將 event publish 與 workflow 狀態變更包在同一筆交易中，確保一致性。
+
+設計考量：
+
+- Outbox table 設計與 polling / CDC 機制
+- Inbox table 用於冪等接收外部事件
+- 與現有 at-least-once 保證的整合方式
+
+---
+
+## JWT Authentication（JWT 驗證與公鑰配置）
+
+支援 JWT Bearer Token 驗證，允許對接外部 Identity Provider。
+
+設計考量：
+
+- 公鑰載入方式（設定檔、JWKS endpoint）
+- 支援 RSA / ECDSA 演算法
+- Token 過期與 refresh 處理
+- 可選的 OIDC / OAuth2 整合
+
+---
+
 ## Pause / Resume（手動暫停與恢復）
 
 有別於 `wait_event` 的系統暫停，提供人工手動暫停與恢復 workflow instance 的能力。
@@ -44,3 +81,15 @@ GET  /instances?filter=state:running,workflow:order_*&sort=created_at:desc
 - Bulk cancel 接受 instance ID 陣列，回傳取消結果
 - 進階查詢支援 filter 語法（按 state、workflow name、labels、時間範圍）
 - 分頁支援（cursor-based pagination）
+
+---
+
+## Scheduled Trigger DST 處理
+
+定義 scheduled trigger 在日光節約時間（DST）轉換時的行為。
+
+設計考量：
+
+- 時鐘前撥（spring forward）：被跳過的觸發時間是否補觸發
+- 時鐘後撥（fall back）：重複的觸發時間是否觸發兩次
+- 與 cron 表達式的交互（如 `0 2 * * *` 在 DST 轉換日的行為）

@@ -169,6 +169,7 @@ Execution log 為 append-only，用於稽核與除錯。
 | `handler_invoked` | `{ handler_level: "step"\|"block"\|"workflow", handler_type: "on_error"\|"on_timeout" }` | Error/timeout handler 啟動 |
 | `task_log` | `{ content }` | Task stderr 輸出（截取前 64KB） |
 | `cancellation` | `{ reason, cancelled_steps: [...] }` | Instance 取消 |
+| `dead_letter` | `{ event_id, event_type, reason, error_detail, attempt_count }` | 事件進入 DLQ |
 
 ### artifact_record
 
@@ -228,6 +229,21 @@ Execution log 為 append-only，用於稽核與除錯。
 | `acquired_at` | timestamp | 取得時間 |
 | `expires_at` | timestamp | 過期時間 |
 
+### dead_letter_event
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `id` | string | 唯一識別 |
+| `event_id` | string | 原始事件 ID |
+| `event_type` | string | 事件類型 |
+| `event_data` | json | 事件酬載 |
+| `reason` | string | `no_match` / `routing_failed` / `poison` |
+| `error_detail` | string \| null | 最後一次失敗的錯誤訊息 |
+| `attempt_count` | integer | 嘗試次數 |
+| `created_at` | timestamp | 進入 DLQ 的時間 |
+
+用於儲存無法處理的事件。詳見 [03-event-router](03-event-router.md) § Dead-letter 與 Poison Event 處理。
+
 ### event_dedup
 
 | 欄位 | 型別 | 說明 |
@@ -258,6 +274,52 @@ Execution log 為 append-only，用於稽核與除錯。
 | `input` | Instance 到達 terminal 狀態後保留（供查詢） |
 | `output` | Instance 到達 terminal 狀態後保留（供查詢） |
 | `intermediate` | Instance 到達 terminal 狀態後 MAY 清理 |
+
+---
+
+## Artifact Storage Backend
+
+Artifact 檔案的實際儲存與 metadata 資料庫分離。引擎透過抽象介面操作 artifact 檔案，支援多種 backend。
+
+### Backend 類型
+
+| Backend | URI 格式 | 說明 |
+|---------|---------|------|
+| `local` | `file:///path/to/file` | 本地檔案系統（預設） |
+| `s3` | `s3://bucket/key` | Amazon S3 相容儲存 |
+
+### 設定
+
+見 [cli-spec/07-configuration](../cli-spec/07-configuration.md) 的 `artifact_storage` 區段。
+
+### 操作介面
+
+引擎 MUST 實作以下 artifact storage 操作：
+
+| 操作 | 說明 |
+|------|------|
+| `Upload(local_path, artifact_name, instance_id) → uri` | 上傳本地檔案至 backend，回傳儲存 URI |
+| `Download(uri, local_path)` | 從 backend 下載至本地路徑 |
+| `Delete(uri)` | 刪除 backend 上的檔案 |
+
+### URI 生成規則
+
+引擎自動決定 artifact 的儲存路徑，確保唯一性：
+
+```
+<base>/<instance_id>/<artifact_name>/<filename>
+```
+
+- `local` backend：`<base_path>/<instance_id>/<artifact_name>/<filename>`
+- `s3` backend：`<prefix>/<instance_id>/<artifact_name>/<filename>`
+
+### 錯誤處理
+
+| 情況 | 行為 |
+|------|------|
+| Upload 失敗 | Step FAILED（`artifact_upload_failed`），整個 task 重新執行 |
+| Download 失敗 | Step FAILED（`artifact_download_failed`），可重試 |
+| Backend 不可用 | 引擎持續運作但 artifact 相關 step 會失敗 |
 
 ---
 
@@ -294,6 +356,7 @@ Execution log 為 append-only，用於稽核與除錯。
 | execution_log | 引擎 SHOULD 提供可設定的保留期限 |
 | event_record | 引擎 SHOULD 提供可設定的保留期限（建議 7 天） |
 | artifact（intermediate） | Instance 完成後 MAY 立即清理 |
+| dead_letter_event | 引擎 SHOULD 提供可設定的保留期限（建議 30 天） |
 | event_dedup | TTL 5 分鐘 |
 
 具體保留策略由部署設定決定。

@@ -240,6 +240,7 @@ Task handler 回傳的 `error.code` 由引擎原樣傳遞至 `on_error` handler 
 
 | 錯誤碼 | 觸發條件 | 說明 |
 |--------|---------|------|
+| `payload_too_large` | Event data 或 step output 超過大小上限 | 見 runtime-spec 設定 |
 | `cancelled` | Instance 被外部取消 | API 取消或 parent timeout |
 | `unknown` | 未分類的錯誤 | 兜底錯誤碼 |
 

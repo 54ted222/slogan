@@ -35,11 +35,43 @@ engine:
   lease_heartbeat: 10s           # Lease 續租間隔
   timeout_poll_interval: 1s     # Timeout Manager 輪詢間隔
 
+# 並發控制
+concurrency:
+  max_running_steps: 0           # 同時 RUNNING 的 step 上限（0 = 無限制）
+  max_running_instances: 0       # 同時 RUNNING/WAITING 的 instance 上限（0 = 無限制）
+  queue_limit: 1000              # 排隊 step 上限
+  task_limits: []                # Per-action 並發限制（見下方說明）
+  # task_limits:
+  #   - action: "payment.create"
+  #     max_concurrent: 5
+  #   - action: "email.*"
+  #     max_concurrent: 10
+
+# Dead-letter queue
+dead_letter:
+  max_route_attempts: 3          # 事件最大路由嘗試次數
+
+# Payload 大小限制
+limits:
+  max_event_data_bytes: 1048576    # Event data 最大大小（預設 1MB）
+  max_step_output_bytes: 1048576   # Step output 最大大小（預設 1MB）
+
+# Artifact storage
+artifact_storage:
+  backend: local                   # local | s3
+  local:
+    base_path: ./artifacts         # 本地儲存根目錄
+  # s3:
+  #   bucket: my-bucket
+  #   prefix: slogan/artifacts
+  #   region: ap-northeast-1
+
 # 資料保留
 retention:
   instances: 90d          # Workflow instance 保留期限
   execution_logs: 90d     # Execution log 保留期限
   events: 7d              # Event record 保留期限
+  dead_letter_events: 30d  # DLQ 事件保留期限
 ```
 
 ---
@@ -86,9 +118,18 @@ retention:
 | `engine.lease_ttl` | `30s` |
 | `engine.lease_heartbeat` | `10s` |
 | `engine.timeout_poll_interval` | `1s` |
+| `concurrency.max_running_steps` | `0`（無限制） |
+| `concurrency.max_running_instances` | `0`（無限制） |
+| `concurrency.queue_limit` | `1000` |
+| `dead_letter.max_route_attempts` | `3` |
+| `limits.max_event_data_bytes` | `1048576`（1MB） |
+| `limits.max_step_output_bytes` | `1048576`（1MB） |
+| `artifact_storage.backend` | `local` |
+| `artifact_storage.local.base_path` | `./artifacts` |
 | `retention.instances` | `90d` |
 | `retention.execution_logs` | `90d` |
 | `retention.events` | `7d` |
+| `retention.dead_letter_events` | `30d` |
 
 ---
 
@@ -117,5 +158,8 @@ $ slogan server start
 | 數值範圍 | `workers` >= 1、`port` 1-65535 |
 | Duration 格式 | 所有 duration 欄位為合法格式（如 `30s`、`5m`、`2h`） |
 | SQLite + workers | `workers` > 1 且使用 SQLite 時發出警告（不阻止啟動） |
+| Artifact backend | `artifact_storage.backend` 為 `local` 或 `s3` |
+| S3 設定 | backend 為 `s3` 時，`bucket` 與 `region` MUST 存在 |
+| 大小限制 | `limits.*` 值 > 0 |
 
 驗證失敗 → 引擎不啟動，exit code = 3。

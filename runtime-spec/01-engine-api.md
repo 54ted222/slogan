@@ -8,10 +8,13 @@
 
 | 領域 | 操作 | 說明 |
 |------|------|------|
-| Definition | Create / Get / List / Validate / Publish / Deprecate / Archive | 管理 workflow / task / secret definitions |
+| Definition | Create / Update / Delete / Get / List / Validate / Publish / Deprecate / Archive | 管理 workflow / task / secret definitions |
 | Instance | Create / Get / List / Cancel | 管理 workflow instances |
 | Event | Send | 發送事件至引擎 |
 | Step | Get / List | 查詢 step instances（唯讀） |
+| Execution Log | List | 查詢 execution logs（唯讀） |
+| Dead-letter | List / Get / Retry / Drop | 管理 dead-letter queue |
+| Artifact | Get / List | 查詢 artifact 中繼資料（唯讀） |
 
 ---
 
@@ -53,6 +56,55 @@ DRAFT → VALIDATED → PUBLISHED → DEPRECATED → ARCHIVED
 | `name` | string | `metadata.name` |
 | `version` | integer | `metadata.version` |
 | `lifecycle_state` | string | DRAFT |
+
+---
+
+### UpdateDefinition
+
+更新 DRAFT 狀態 definition 的 YAML 內容。
+
+**Request:**
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `definition_id` | string | MUST | 目標 definition |
+| `content` | string | MUST | 新的 YAML 定義內容 |
+
+**行為：**
+
+1. 載入 definition（MUST 為 DRAFT 狀態）
+2. 解析新的 YAML，驗證 `kind`、`name`、`version` 與原 definition 一致（不可透過 update 改變 identity）
+3. 更新 `content` 與 `parsed_content`
+4. 更新 `updated_at`
+5. 回傳更新後的 definition record
+
+**Response:**
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `definition_id` | string | |
+| `lifecycle_state` | string | DRAFT |
+| `updated_at` | timestamp | 更新時間 |
+
+---
+
+### DeleteDefinition
+
+刪除 DRAFT 狀態的 definition。
+
+**Request:**
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `definition_id` | string | MUST | 目標 definition |
+
+**行為：**
+
+1. 載入 definition（MUST 為 DRAFT 狀態）
+2. 從 storage 中永久刪除該 definition record
+3. 回傳成功
+
+非 DRAFT 狀態的 definition 不可刪除 → 回傳 `invalid_lifecycle_transition`。已進入 VALIDATED 以上狀態的 definition 應透過 deprecate → archive 流程處理。
 
 ---
 
@@ -373,6 +425,146 @@ DRAFT → VALIDATED → PUBLISHED → DEPRECATED → ARCHIVED
 
 ---
 
+## Execution Log API
+
+### ListExecutionLogs
+
+查詢某 instance 的 execution logs。
+
+**Request:**
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `instance_id` | string | MUST | 所屬 workflow instance |
+| `step_id` | string | MAY | 篩選特定 step |
+| `event_type` | string | MAY | 篩選事件類型（如 `state_changed`、`retry`、`dead_letter`） |
+| `cursor` | string | MAY | 分頁游標 |
+| `limit` | integer | MAY | 每頁筆數，預設 50，上限 200 |
+
+**Response:**
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `logs` | array | execution_log records |
+| `cursor` | string \| null | 下一頁游標 |
+
+每筆 log record 包含 `id`、`workflow_instance_id`、`step_id`、`event_type`、`data`、`created_at`。
+
+---
+
+## Dead-letter API
+
+### ListDeadLetterEvents
+
+列出 dead-letter queue 中的事件。
+
+**Request:**
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `reason` | string | MAY | 篩選原因（`no_match` / `routing_failed` / `poison`） |
+| `created_after` | timestamp | MAY | 建立時間下限 |
+| `cursor` | string | MAY | 分頁游標 |
+| `limit` | integer | MAY | 每頁筆數，預設 20 |
+
+**Response:**
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `events` | array | dead_letter_event records |
+| `cursor` | string \| null | 下一頁游標 |
+
+---
+
+### GetDeadLetterEvent
+
+查詢單一 DLQ 事件詳情。
+
+**Request:**
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `dlq_id` | string | MUST | DLQ 記錄 ID |
+
+**Response:**
+
+回傳完整的 dead_letter_event record。
+
+---
+
+### RetryDeadLetterEvent
+
+重新投遞 DLQ 事件至 Event Router。
+
+**Request:**
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `dlq_id` | string | MUST | DLQ 記錄 ID |
+
+**行為：**
+
+1. 載入 dead_letter_event record
+2. 將事件重新投遞至 Event Router
+3. 投遞成功 → 從 DLQ 移除，回傳成功
+4. 投遞再次失敗 → 保留在 DLQ，更新 `attempt_count`，回傳錯誤
+
+---
+
+### DropDeadLetterEvent
+
+從 DLQ 移除事件（放棄處理）。
+
+**Request:**
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `dlq_id` | string | MUST | DLQ 記錄 ID |
+
+**行為：**
+
+從 storage 刪除該 dead_letter_event record。
+
+---
+
+## Artifact API
+
+### GetArtifact
+
+查詢單一 artifact 的中繼資料。
+
+**Request:**
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `instance_id` | string | MUST | 所屬 workflow instance |
+| `name` | string | MUST | artifact 名稱 |
+
+**Response:**
+
+回傳 artifact_record（`id`、`name`、`kind`、`lifecycle`、`uri`、`size`、`content_type`、`created_at`、`updated_at`）。
+
+---
+
+### ListArtifacts
+
+列出某 instance 的所有 artifacts。
+
+**Request:**
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `instance_id` | string | MUST | 所屬 workflow instance |
+| `lifecycle` | string | MAY | 篩選 `input` / `output` / `intermediate` |
+
+**Response:**
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `artifacts` | array | artifact_record 陣列 |
+
+---
+
 ## 錯誤回傳格式
 
 所有 API 錯誤 MUST 回傳統一格式：
@@ -402,3 +594,7 @@ DRAFT → VALIDATED → PUBLISHED → DEPRECATED → ARCHIVED
 | `no_published_version` | 找不到 PUBLISHED 版本 |
 | `archive_precondition_failed` | 尚有非 terminal instance |
 | `secret_not_available` | config.secrets 所列的 secret 未載入 |
+| `definition_identity_mismatch` | UpdateDefinition 時新 YAML 的 kind/name/version 與原 definition 不一致 |
+| `dlq_event_not_found` | DLQ 事件不存在 |
+| `artifact_not_found` | Artifact 不存在 |
+| `payload_too_large` | Event data 或 step output 超過大小上限 |

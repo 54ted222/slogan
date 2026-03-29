@@ -276,6 +276,18 @@ Parent instance 被 CANCELLED 時，引擎 MUST 遞迴取消所有 child instanc
 
 ---
 
+## Step Output 大小限制
+
+引擎 MUST 限制 step output 的大小，防止過大的 output 耗盡 storage 空間。
+
+| 設定 | 預設值 | 說明 |
+|------|--------|------|
+| `limits.max_step_output_bytes` | 1MB（1,048,576 bytes） | 單一 step output 序列化為 JSON 後的最大 byte 數 |
+
+超過上限時，step → FAILED，error code: `payload_too_large`。此檢查在 schema 驗證之前執行。
+
+---
+
 ## Error Handling 整合
 
 Step Executor 在 step 失敗時，按照 [dsl-spec/v2/12-error-handling](../dsl-spec/v2/12-error-handling.md) 定義的三層錯誤處理模型處理：

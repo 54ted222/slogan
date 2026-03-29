@@ -309,6 +309,107 @@ Authentication 行為詳見 [runtime-spec/12-authentication](12-authentication.m
 
 ---
 
+## Dead-letter 與 Poison Event 處理
+
+### 定義
+
+| 術語 | 說明 |
+|------|------|
+| **Dead-letter event** | 無法被任何 subscription 匹配的事件，或處理過程中持續失敗的事件 |
+| **Poison event** | 反覆導致處理失敗的事件（如 CEL 求值 panic、input_schema 驗證失敗、instance 建立失敗） |
+
+### Dead-letter 條件
+
+事件在以下情境被標記為 dead-letter：
+
+| 情境 | 說明 |
+|------|------|
+| 無匹配 subscription | 事件 type 不匹配任何 trigger 或 wait subscription |
+| Trigger 處理失敗 | `when_expression` 求值失敗、`input_mapping` 求值失敗、`input_schema` 驗證失敗 |
+| Instance 建立失敗 | 匹配成功但 instance 建立時發生系統錯誤（如 storage 不可用） |
+
+注意：「無匹配 subscription」在正常運作中很常見（事件可能僅用於外部系統），引擎 MAY 選擇不將此情境視為 dead-letter，而僅記錄至 log。
+
+### Poison Event 偵測
+
+引擎 SHOULD 追蹤事件處理失敗次數。當同一事件在路由過程中連續失敗達到閾值時，標記為 poison event：
+
+| 設定 | 預設值 | 說明 |
+|------|--------|------|
+| `max_route_attempts` | 3 | 同一事件最大路由嘗試次數 |
+
+超過閾值 → 停止重試，將事件移入 dead-letter queue。
+
+### Dead-letter Queue
+
+引擎 MUST 提供 dead-letter queue（DLQ）儲存無法處理的事件：
+
+#### DLQ 記錄
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `id` | string | DLQ 記錄唯一識別 |
+| `event_id` | string | 原始事件 ID |
+| `event_type` | string | 事件類型 |
+| `event_data` | json | 事件酬載 |
+| `reason` | string | 進入 DLQ 的原因（`no_match`、`routing_failed`、`poison`） |
+| `error_detail` | string | 最後一次失敗的錯誤訊息 |
+| `attempt_count` | int | 嘗試次數 |
+| `created_at` | timestamp | 進入 DLQ 的時間 |
+
+#### DLQ 保留策略
+
+- 預設保留期限與事件保留策略一致（建議 30 天）
+- 過期記錄可被清理
+
+### 可觀測性
+
+引擎 MUST 在事件進入 DLQ 時記錄至 execution_log，包含：
+
+- 事件 ID、type
+- 失敗原因與錯誤訊息
+- 嘗試次數
+
+引擎 SHOULD 提供 DLQ 相關的 metrics：
+
+| Metric | 說明 |
+|--------|------|
+| `dlq_events_total` | 進入 DLQ 的事件累計數 |
+| `dlq_events_current` | DLQ 中待處理的事件數 |
+
+### CLI 支援
+
+```
+slogan event dlq list [--since <time>] [--reason <reason>] [--limit <n>]
+slogan event dlq inspect <dlq_id>
+slogan event dlq retry <dlq_id>
+slogan event dlq drop <dlq_id>
+```
+
+| 子指令 | 說明 |
+|--------|------|
+| `list` | 列出 DLQ 中的事件 |
+| `inspect` | 查看事件詳情與失敗原因 |
+| `retry` | 重新投遞事件至 Event Router |
+| `drop` | 從 DLQ 移除事件（放棄處理） |
+
+---
+
+## Event Data 大小限制
+
+引擎 MUST 限制 event data 的大小，防止過大的事件耗盡 storage 空間。
+
+| 設定 | 預設值 | 說明 |
+|------|--------|------|
+| `limits.max_event_data_bytes` | 1MB（1,048,576 bytes） | 單一事件 `data` 欄位序列化為 JSON 後的最大 byte 數 |
+
+超過上限時：
+
+- **SendEvent API** → 拒絕，回傳 `payload_too_large` 錯誤
+- **emit step** → step FAILED，error code: `payload_too_large`
+
+---
+
 ## 內部事件（emit step 產生）
 
 `emit` step 產生的事件透過相同的 Event Router 處理：
