@@ -15,6 +15,7 @@
 12. **`exists` 檢核機制** — 類似 `exists` 的語法或工具，判斷變數、物件、ID 是否存在
 13. 評估 agent 使用時 減少使用 append or override 功能，因該優先使用 input
 14. agent 提供 標準 hook
+15. agent loop 可以修改 prompt, system 的修改方式
 
 
 ## agent 功能
