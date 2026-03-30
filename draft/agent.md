@@ -802,7 +802,141 @@ Agent step 的 `execution.policy` 決定 crash recovery 行為：
 
 ---
 
-## 討論議題
+## 十、待設計功能
+
+以下功能尚在構想階段，待後續設計與定案。
+
+### 10.1 `kind: resources` — 共用資源宣告區域
+
+將 mcps、string templates、skills、vars、artifact 等共用資源統一宣告於 `kind: resources` 區域，避免散落在各處。
+
+### 10.2 `kind: tools` — 工具集合宣告
+
+將多個工具統一定義與管理，可被 agent definition 或 workflow step 引用。
+
+### 10.3 String Template + Variable Substitution
+
+定義可重用的字串模板，支援變數替換，用於 prompt 組裝等場景。
+
+```yaml
+id: "greeting"
+type: string_template
+template: "Hello, {name}! Today is {day}."
+input_schema: object # json schema 定義變數
+```
+
+Prompt 中使用 string template 的方式，支援 `override` 與 `append` 兩種模式：
+
+```yaml
+prompts:
+  override:
+    - use_template: "greeting"
+      input:
+        name: "Bob"
+        day: "Tuesday"
+    - "abcdef ${vars.name}"
+  append:
+    - use_template: "greeting"
+      input:
+        name: "Alice"
+        day: "Monday"
+    - "xyz ${vars.name}"
+```
+
+- `override`：完全取代原有 prompt
+- `append`：追加至原有 prompt 尾部
+- 每個項目可以是 `use_template`（引用 string template）或純字串（支援 `${ }` CEL 表達式）
+
+### 10.4 `expr` 條件關鍵字調整
+
+目前 `expr` 命名不直觀，難以推斷用途，需重新命名或改善語意。
+
+> **待決定**：替代命名方案（如 `condition`、`test`、`match` 等）
+
+### 10.5 分析加入 `when` 的好壞
+
+評估是否引入 `when` 作為條件判斷語法。
+
+> **待分析**：`when` 的優點（語意直觀、貼近自然語言）與缺點（與 `if` / `expr` 語意重疊、增加學習成本）
+
+### 10.6 `switch` 加入 `between`
+
+在 switch step 中支援 `between` 區間比對。
+
+> **待設計**：`between` 語法與語意定義
+
+### 10.7 考慮加入 `router`
+
+簡化版 switch，以 key → steps 映射簡化路由邏輯。
+
+> **待設計**：`router` 與 `switch` 的差異定位與適用場景
+
+### 10.8 `exists` 檢核機制
+
+類似 `exists` 的語法或工具，判斷變數、物件、ID 是否存在。
+
+> **待設計**：作為 CEL 函式、step 類型、或關鍵字
+
+### 10.9 Prompt Override / Append 語意
+
+評估 agent 使用時 exclude、append 或 override prompt/tools 的功能。應優先使用 input 傳遞參數，避免過度覆寫。
+
+> **原則**：input 優先於 prompt override，降低耦合
+
+### 10.10 Agent 標準 Hook
+
+為 agent 提供標準 hook 機制，允許在 agent 生命週期的關鍵節點執行自訂邏輯。
+
+> **待定義**：hook 觸發點（如 `on_iteration_start`、`on_tool_call`、`on_complete` 等）
+
+### 10.11 Agent Loop 中修改 Prompt / System Prompt
+
+定義在 agent loop 迭代過程中修改 prompt 與 system prompt 的方式。
+
+> **待設計**：透過 `agent.set_messages` 修改、或提供專用 API
+
+---
+
+## 十一、待定義項目
+
+以下項目需要獨立的規格設計，目前僅列出範圍與方向。
+
+### 11.1 Agent Built-in 工具清單
+
+列出 agent 內建工具（如 `get_tools`、`call_llms` 等），定義各工具的介面與行為。
+
+> **現有**：`ask_human`、`activate_skill`、`read_skill_file`（見第二節）
+> **待擴充**：是否需要更多 builtin tools
+
+### 11.2 History 定義與處理
+
+定義 history 的資料結構、操作方式（讀取、截斷、摘要）及持久化方案。
+
+> **現有**：`persist_history: full | summary | none`、`agent.set_messages`（見第四節、第七節）
+> **待補充**：history 的讀取 API、截斷策略、摘要生成機制
+
+### 11.3 Sub-agent / Fork Agent
+
+如何從 agent 中啟動子 agent 或 fork 新 agent，定義父子關係與通訊機制。
+
+> **現有**：agent-as-tool 機制（見第六節）
+> **待補充**：fork 語意、父子 context 共享範圍、生命週期關聯
+
+### 11.4 RAG / Memory 機制
+
+評估是否透過 tools 方式實現 RAG 與長期記憶，而非內建於 agent 核心。
+
+> **方向**：傾向以 MCP tools 或 builtin tools 實現，保持 agent 核心簡潔
+
+### 11.5 Agent Team
+
+多 agent 協作機制，包含共用 team tools、message box、任務分派與結果匯集。
+
+> **待設計**：team 定義格式、通訊模型（shared message box vs direct call）、任務分派策略
+
+---
+
+## 十二、討論議題
 
 > 以下列出待討論和修正的設計問題，歡迎直接在此標記意見。
 
