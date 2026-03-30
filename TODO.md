@@ -27,17 +27,17 @@ input_schema: object # json schema 定義變數
 
 prompts:
   override:
-		- use_template: "greeting"
-			input:
-				name: "Bob"
-				day: "Tuesday"
-		- "abcdef ${vars.name}"
-	append:
-		- use_template: "greeting"
-			input:
-				name: "Alice"
-				day: "Monday"
-		- "xyz ${vars.name}"
+    - use_template: "greeting"
+      input:
+        name: "Bob"
+        day: "Tuesday"
+    - "abcdef ${vars.name}"
+  append:
+    - use_template: "greeting"
+      input:
+        name: "Alice"
+        day: "Monday"
+    - "xyz ${vars.name}"
 ```
 
 ## FUTURE.md 延後項目
