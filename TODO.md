@@ -6,6 +6,33 @@
 4. **本地測試模式** — `slogan test` 命令，支援本地執行 workflow、mock task backend、replay 歷史紀錄驗證
 5. **Continue-as-new** — 長時間 workflow 重置機制，帶新 state 重啟並截斷歷史，避免無限增長
 
+## agent 功能
+
+string template + variable substitution
+
+```yaml
+id: "greeting"
+type: string_template
+template: "Hello, {name}! Today is {day}."
+input_schema: object # json schema 定義變數
+
+
+
+prompts:
+  override:
+		- use_template: "greeting"
+			input:
+				name: "Bob"
+				day: "Tuesday"
+		- "abcdef ${vars.name}"
+	append:
+		- use_template: "greeting"
+			input:
+				name: "Alice"
+				day: "Monday"
+		- "xyz ${vars.name}"
+```
+
 ## FUTURE.md 延後項目
 
 - Event Replay API
