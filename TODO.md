@@ -13,6 +13,7 @@
 10. **`switch` 加入 `between`** — 在 switch step 中支援 `between` 區間比對
 11. **考慮加入 `router`** — 簡化版 switch，以 key → steps 映射簡化路由邏輯
 12. **`exists` 檢核機制** — 類似 `exists` 的語法或工具，判斷變數、物件、ID 是否存在
+13. 評估 agent 使用時 減少使用 append or override 功能，因該優先使用 input
 
 ## agent 功能
 
