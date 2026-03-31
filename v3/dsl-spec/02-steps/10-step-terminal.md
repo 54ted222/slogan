@@ -19,7 +19,7 @@
 ### 行為
 
 - 在一般 step 序列中（包含巢狀 if、switch、foreach、parallel 內）：立即終止 workflow instance，Instance 狀態變為 FAILED
-- 在 `on_error` / `on_timeout` handler 中：視為錯誤重新拋出，繼續向上層尋找 handler（見 [21-error-handling](21-error-handling.md)）
+- 在 `on_error` / `on_timeout` handler 中：視為錯誤重新拋出，繼續向上層尋找 handler（見 [21-error-handling](../05-runtime/21-error-handling.md)）
 - `message` 與 `code` 記錄在 instance 的錯誤資訊中
 - 後續 steps 不會執行
 
@@ -77,7 +77,7 @@ Instance A (CONTINUED) ──continued_as──→ Instance B (RUNNING)
                         ←continued_from──
 ```
 
-> `CONTINUED` 是終態，語意為「已由新 instance 接續」，視為成功完成的一種。詳見 [23-lifecycle](23-lifecycle.md)。
+> `CONTINUED` 是終態，語意為「已由新 instance 接續」，視為成功完成的一種。詳見 [23-lifecycle](../05-runtime/23-lifecycle.md)。
 
 ### 範例
 
@@ -206,7 +206,7 @@ steps:
 
   # 還有更多資料 → continue-as-new
   - type: if
-    condition: ${ steps.batch.output.has_more }
+    when: ${ steps.batch.output.has_more }
     then:
       - type: return
         renew: true
@@ -244,7 +244,7 @@ steps:
     input: { target: ${ input.target } }
 
   - type: if
-    condition: ${ steps.check.output.alert }
+    when: ${ steps.check.output.alert }
     then:
       - type: task
         action: notification.send
@@ -266,7 +266,7 @@ steps:
 `fail` 和 `return` 都是 **立即終止** 指令：
 
 - 在一般 step 序列中：無論出現在哪個巢狀層級（if branch、switch case、foreach iteration、parallel branch），都會終止整個 workflow instance
-- **例外**：在 `on_error` / `on_timeout` handler 中使用 `fail` 時，不會直接終止 workflow，而是將錯誤重新拋出至上層 handler（見 [21-error-handling](21-error-handling.md)）
+- **例外**：在 `on_error` / `on_timeout` handler 中使用 `fail` 時，不會直接終止 workflow，而是將錯誤重新拋出至上層 handler（見 [21-error-handling](../05-runtime/21-error-handling.md)）
 - 不會自動執行任何 cleanup 或 compensation 邏輯
 - 若需要在失敗時進行清理，SHOULD 使用 `on_error` handler 或 `saga` 區塊（見 [12-step-saga](12-step-saga.md)）
 

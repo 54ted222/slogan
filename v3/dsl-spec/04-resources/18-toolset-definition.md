@@ -32,7 +32,7 @@ includes: array               # MAY — 引用其他 toolset（組合）
 
 ### 2.1 tools 陣列
 
-與 [14-agent-tools](14-agent-tools.md) 中定義的 tool 類型相同，支援 `task`、`workflow`、`agent`、`mcp`、`tool` 五種類型：
+與 [14-agent-tools](../03-agent/14-agent-tools.md) 中定義的 tool 類型相同，支援 `task`、`workflow`、`agent`、`mcp`、`tool` 五種類型：
 
 ```yaml
 tools:
@@ -58,7 +58,7 @@ skills:
   - name: "compliance-*"       # 支援通配符
 ```
 
-通配符規則與 [15-agent-skills](15-agent-skills.md) 相同。
+通配符規則與 [15-agent-skills](../03-agent/15-agent-skills.md) 相同。
 
 ### 2.3 includes 陣列
 

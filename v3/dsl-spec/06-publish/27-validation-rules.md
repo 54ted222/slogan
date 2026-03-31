@@ -31,14 +31,14 @@
   - 若為 string：MUST 為非空字串（alias 名稱）
   - 若為 object：`provider` 和 `name` MUST 存在且為非空字串
   - 若含 `alias` + `config`：`alias` MUST 為非空字串
-- `tools`（若存在）MUST 為陣列，每個元素依 [14-agent-tools](14-agent-tools.md) 定義驗證
+- `tools`（若存在）MUST 為陣列，每個元素依 [14-agent-tools](../03-agent/14-agent-tools.md) 定義驗證
 - `skills`（若存在）MUST 為陣列，每個元素 MUST 為 `type: toolset` 引用
 - `config.max_iterations`（若存在）MUST 為正整數
 - `config.max_tool_calls`（若存在）MUST 為正整數
 - `config.output_format`（若存在）MUST 為 `text` 或 `json`
 - `config.persist_history`（若存在）MUST 為 `full`、`summary`、`none` 之一
 - `config.stream`（若存在）MUST 為 `token`、`iteration`、`none` 之一
-- `loop`（若存在）：`loop.steps` MUST 為非空 step 陣列（詳見 [16-agent-loop](16-agent-loop.md)）
+- `loop`（若存在）：`loop.steps` MUST 為非空 step 陣列（詳見 [16-agent-loop](../03-agent/16-agent-loop.md)）
 
 ### 頂層結構（Toolset）
 
@@ -46,7 +46,7 @@
 - `kind` MUST 為 `Toolset`
 - `metadata.name` MUST 存在且為有效的 `kebab-case` 識別字
 - `metadata.version` MUST 為正整數
-- `tools`（若存在）MUST 為陣列，每個元素依 [14-agent-tools](14-agent-tools.md) 定義驗證
+- `tools`（若存在）MUST 為陣列，每個元素依 [14-agent-tools](../03-agent/14-agent-tools.md) 定義驗證
 - `skills`（若存在）MUST 為陣列
 - `includes`（若存在）MUST 為陣列，每個元素為 toolset name 字串
 
@@ -67,15 +67,15 @@
 - `apiVersion` MUST 為 `project/v3`
 - `kind` MUST 為 `Project`
 - `metadata.name` MUST 存在且為有效的 `kebab-case` 識別字
-- 資料夾中 MUST 存在 `project.yaml` 檔案（詳見 [20-project](20-project.md)）
+- 資料夾中 MUST 存在 `project.yaml` 檔案（詳見 [20-project](../04-resources/20-project.md)）
 - `defaults.labels`（若存在）MUST 為 `map<string, string>`
 
 ### Step 結構
 
 - 每個 step MUST 有 `type`；`id` 為非必填（見 Step ID 驗證）
 - `type` MUST 為已定義的 13 種類型之一（task、assign、if、switch、foreach、parallel、emit、wait_event、fail、return、sub_workflow、agent、saga）
-- 每種 step type 的必填欄位 MUST 存在（如 task 的 `action`、if 的 `condition`、switch 的 `condition`）
-- `compensate`（若存在）MUST 為非空 step 陣列，且 compensate 內的 step 須通過標準 step 驗證（詳見 [12-step-saga](12-step-saga.md)）
+- 每種 step type 的必填欄位 MUST 存在（如 task 的 `action`、if 的 `when`、switch 的 `when`）
+- `compensate`（若存在）MUST 為非空 step 陣列，且 compensate 內的 step 須通過標準 step 驗證（詳見 [12-step-saga](../02-steps/12-step-saga.md)）
 - 未知欄位 SHOULD 產生警告
 
 ---
@@ -109,7 +109,7 @@
 
 ### 型別檢查
 
-- 引擎 SHOULD 進行 CEL 型別檢查（如 boolean 型別的 `condition` 確認回傳 boolean）
+- 引擎 SHOULD 進行 CEL 型別檢查（如 boolean 型別的 `when` 確認回傳 boolean）
 - 型別檢查失敗 SHOULD 產生警告（不阻擋驗證，因為某些情況需要動態型別）
 
 ---
@@ -124,7 +124,7 @@
 - Toolset 的 `includes` 陣列形成有向圖，引擎 MUST 在載入時偵測循環引用
 - 若 toolset A includes B，B includes C，C includes A → validation error
 - 不存在的引用（`includes` 引用不存在或非 PUBLISHED 的 toolset）→ validation error
-- 詳見 [18-toolset-definition](18-toolset-definition.md)
+- 詳見 [18-toolset-definition](../04-resources/18-toolset-definition.md)
 
 ---
 
@@ -194,7 +194,7 @@
 ## Task 參照驗證
 
 - `task` step 的 `action` MUST 為非空字串
-- `action` MUST 為兩段式命名格式 `namespace.action`（詳見 [06-step-task](06-step-task.md)）
+- `action` MUST 為兩段式命名格式 `namespace.action`（詳見 [06-step-task](../02-steps/06-step-task.md)）
 - `version` 若為 integer，MUST 為正整數
 - `version` 若為 string，MUST 為 `"latest"`
 - 引擎 SHOULD 檢查 `action` 對應的 task definition 是否存在且為 PUBLISHED
@@ -203,7 +203,7 @@
   - `apiVersion` MUST 為 `task/v3`
   - `kind` MUST 為 `Task`
   - `metadata.name` MUST 為有效的 dotted namespace（兩段式命名 `namespace.action`）
-  - `backend.type` MUST 為 `stdio` 或 `http`（`builtin` 已移除，改用 `type: tool` 搭配兩段式命名，詳見 [14-agent-tools](14-agent-tools.md)）
+  - `backend.type` MUST 為 `stdio` 或 `http`（`builtin` 已移除，改用 `type: tool` 搭配兩段式命名，詳見 [14-agent-tools](../03-agent/14-agent-tools.md)）
   - 各 backend type 的必填欄位 MUST 存在（如 stdio 的 `command`、http 的 `url`）
 
 ### 兩段式 Tool 命名驗證
@@ -231,7 +231,7 @@
 - `tools_override`（若存在）：完全取代 agent definition 預設 tools
 - `tools_exclude`（若存在）MUST 為 string 陣列
 - 合併後的 tool 列表中不可有重複的 tool name
-- 詳見 [16-agent-loop](16-agent-loop.md)
+- 詳見 [16-agent-loop](../03-agent/16-agent-loop.md)
 
 ---
 
@@ -253,7 +253,7 @@
 - Saga MUST NOT 巢狀：saga step 內的 steps 不可包含另一個 `type: saga` step
 - Saga 內 step 的 `compensate` 區塊 MUST 為有效 step 陣列（通過標準 step 驗證）
 - Compensate 區塊內不可包含 `type: saga` step
-- 詳見 [12-step-saga](12-step-saga.md)
+- 詳見 [12-step-saga](../02-steps/12-step-saga.md)
 
 ---
 
@@ -287,18 +287,18 @@
 
 ### if
 
-- `condition` MUST 存在且為有效的 CEL 表達式
-- `condition` SHOULD 回傳 boolean（型別檢查為 warning）
+- `when` MUST 存在且為有效的 CEL 表達式
+- `when` SHOULD 回傳 boolean（型別檢查為 warning）
 - `then` MUST 存在且為非空 step 陣列
 - `else`（若存在）MUST 為非空 step 陣列
 
 ### switch
 
-- `condition` MUST 存在且為有效的 CEL 表達式
+- `when` MUST 存在且為有效的 CEL 表達式
 - `cases` MUST 存在且為非空陣列（至少一個 case）
 - 每個 `cases[]` MUST 有 `value` 和 `then`
 - `cases[].then` MUST 為非空 step 陣列
-- `cases[].value` 的型別 SHOULD 與 `condition` 的推斷回傳型別相容（warning）
+- `cases[].value` 的型別 SHOULD 與 `when` 的推斷回傳型別相容（warning）
 - `default`（若存在）MUST 為非空 step 陣列
 
 ### foreach
@@ -355,16 +355,16 @@
 
 | 主題 | 文件 |
 |------|------|
-| Step 類型總覽 | [05-steps-overview](05-steps-overview.md) |
-| Task step 與兩段式命名 | [06-step-task](06-step-task.md) |
-| 控制流程 step | [08-step-control-flow](08-step-control-flow.md) |
-| Saga 與 compensate | [12-step-saga](12-step-saga.md) |
-| Agent Definition | [13-agent-definition](13-agent-definition.md) |
-| Agent Tools | [14-agent-tools](14-agent-tools.md) |
-| Agent Loop | [16-agent-loop](16-agent-loop.md) |
-| Toolset Definition | [18-toolset-definition](18-toolset-definition.md) |
-| Resources Definition | [19-resources-definition](19-resources-definition.md) |
-| Project Definition | [20-project](20-project.md) |
-| Lifecycle 狀態 | [23-lifecycle](23-lifecycle.md) |
-| Triggers | [26-triggers](26-triggers.md) |
+| Step 類型總覽 | [05-steps-overview](../02-steps/05-steps-overview.md) |
+| Task step 與兩段式命名 | [06-step-task](../02-steps/06-step-task.md) |
+| 控制流程 step | [08-step-control-flow](../02-steps/08-step-control-flow.md) |
+| Saga 與 compensate | [12-step-saga](../02-steps/12-step-saga.md) |
+| Agent Definition | [13-agent-definition](../03-agent/13-agent-definition.md) |
+| Agent Tools | [14-agent-tools](../03-agent/14-agent-tools.md) |
+| Agent Loop | [16-agent-loop](../03-agent/16-agent-loop.md) |
+| Toolset Definition | [18-toolset-definition](../04-resources/18-toolset-definition.md) |
+| Resources Definition | [19-resources-definition](../04-resources/19-resources-definition.md) |
+| Project Definition | [20-project](../04-resources/20-project.md) |
+| Lifecycle 狀態 | [23-lifecycle](../05-runtime/23-lifecycle.md) |
+| Triggers | [26-triggers](../05-runtime/26-triggers.md) |
 | 版本管理 | [28-versioning](28-versioning.md) |

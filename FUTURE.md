@@ -84,6 +84,27 @@ GET  /instances?filter=state:running,workflow:order_*&sort=created_at:desc
 
 ---
 
+## Label Schema（Instance Label 建議性 Schema）
+
+在 Workflow Definition 頂層宣告 `label_schema`，描述 instance 預期使用的 label keys，用於文件化與 IDE 提示。
+
+```yaml
+label_schema:
+  customer_id:
+    type: string
+    description: "客戶 ID"
+  region:
+    description: "區域代碼"
+```
+
+設計考量：
+
+- 純建議性（advisory only），引擎不以此拒絕 instance 建立
+- 主要用途為文件化與 IDE 自動補全
+- 待確認是否需要更嚴格的驗證模式（如 `strict: true` 選項）
+
+---
+
 ## Scheduled Trigger DST 處理
 
 定義 scheduled trigger 在日光節約時間（DST）轉換時的行為。

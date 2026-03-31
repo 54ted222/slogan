@@ -9,12 +9,12 @@
 | Kind | apiVersion | 說明 | 詳見 |
 |------|------------|------|------|
 | `Workflow` | `workflow/v3` | 工作流程定義 | [02-document-structure](02-document-structure.md) |
-| `Task` | `task/v3` | 可被呼叫的工作單元及其執行後端 | [06-step-task](06-step-task.md) |
-| `Agent` | `agent/v3` | AI agent 角色模板 | [13-agent-definition](13-agent-definition.md) |
-| `Toolset` | `toolset/v3` | 具名的 tools + skills 集合 | [18-toolset-definition](18-toolset-definition.md) |
-| `Resources` | `resource/v3` | 共用資源宣告（MCP servers、templates、model aliases） | [19-resources-definition](19-resources-definition.md) |
-| `Project` | `project/v3` | 所有 definition 檔案的 project 層級組織 | [20-project](20-project.md) |
-| `Secret` | `secret/v3` | 加密的機密鍵值對 | [25-secrets-and-env](25-secrets-and-env.md) |
+| `Task` | `task/v3` | 可被呼叫的工作單元及其執行後端 | [06-step-task](../02-steps/06-step-task.md) |
+| `Agent` | `agent/v3` | AI agent 角色模板 | [13-agent-definition](../03-agent/13-agent-definition.md) |
+| `Toolset` | `toolset/v3` | 具名的 tools + skills 集合 | [18-toolset-definition](../04-resources/18-toolset-definition.md) |
+| `Resources` | `resource/v3` | 共用資源宣告（MCP servers、templates、model aliases） | [19-resources-definition](../04-resources/19-resources-definition.md) |
+| `Project` | `project/v3` | 所有 definition 檔案的 project 層級組織 | [20-project](../04-resources/20-project.md) |
+| `Secret` | `secret/v3` | 加密的機密鍵值對 | [25-secrets-and-env](../04-resources/25-secrets-and-env.md) |
 
 ---
 
@@ -71,7 +71,7 @@ kind: Workflow        # ← 偵測依據
 
 ## 生命週期
 
-各 kind 的生命週期狀態機詳見 [23-lifecycle](23-lifecycle.md)。概要：
+各 kind 的生命週期狀態機詳見 [23-lifecycle](../05-runtime/23-lifecycle.md)。概要：
 
 | Kind | 生命週期 |
 |------|---------|

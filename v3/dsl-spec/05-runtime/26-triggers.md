@@ -36,7 +36,7 @@ triggers:
 
 ### 行為
 
-- 呼叫端提供 input 資料（需符合 `input_schema`，詳見 [04-input-output-schema](04-input-output-schema.md)）
+- 呼叫端提供 input 資料（需符合 `input_schema`，詳見 [04-input-output-schema](../01-core/04-input-output-schema.md)）
 - 引擎建立 instance，狀態設為 CREATED，隨即轉為 RUNNING（詳見 [23-lifecycle](23-lifecycle.md)）
 
 ---
@@ -64,7 +64,7 @@ triggers:
     notify_customer: ${ default(event.data.notify, true) }
 ```
 
-> **注意**：trigger 的 `when` 欄位用於事件過濾條件，與曾提議但已否決的 step-level `when` 條件守衛無關（該提議已由 `if` step 取代，詳見 [08-step-control-flow](08-step-control-flow.md)）。trigger `when` 的行為維持不變。
+> **注意**：trigger 的 `when` 欄位用於事件過濾條件，與曾提議但已否決的 step-level `when` 條件守衛無關（該提議已由 `if` step 取代，詳見 [08-step-control-flow](../02-steps/08-step-control-flow.md)）。trigger `when` 的行為維持不變。
 
 ### 行為
 
@@ -86,7 +86,7 @@ triggers:
 | `event.timestamp` | 事件時間戳 |
 | `event.source` | 事件來源 |
 
-注意：`input`、`steps`、`vars` 在 trigger 的 `when` 中不可用（instance 尚未建立）。關於 CEL 表達式的完整 namespace 定義，詳見 [03-expressions](03-expressions.md)。
+注意：`input`、`steps`、`vars` 在 trigger 的 `when` 中不可用（instance 尚未建立）。關於 CEL 表達式的完整 namespace 定義，詳見 [03-expressions](../01-core/03-expressions.md)。
 
 ---
 
@@ -104,7 +104,7 @@ Event trigger 透過 `input_mapping` 將事件資料轉換為 workflow input：
 
 - 每個 key 為 workflow input 的欄位名
 - 每個 value 為 CEL 表達式，在 `event` namespace 下求值
-- 映射結果 MUST 符合 `input_schema`（若有定義，詳見 [04-input-output-schema](04-input-output-schema.md)）
+- 映射結果 MUST 符合 `input_schema`（若有定義，詳見 [04-input-output-schema](../01-core/04-input-output-schema.md)）
 - 映射表達式求值失敗 → instance 不建立，記錄錯誤
 
 ```yaml
@@ -208,7 +208,7 @@ triggers:
 1. Definition PUBLISHED 時，引擎根據 `cron` 或 `interval` 建立排程
 2. 每次排程觸發時建立新的 workflow instance
 3. Instance input = `input`（靜態）或 `input_mapping` 求值結果
-4. 若有 `input_schema` → 驗證 input（詳見 [04-input-output-schema](04-input-output-schema.md)）
+4. 若有 `input_schema` → 驗證 input（詳見 [04-input-output-schema](../01-core/04-input-output-schema.md)）
 5. Definition DEPRECATED 時，停止排程（不再觸發新 instance）
 
 ### 錯漏觸發處理
@@ -437,9 +437,9 @@ steps:
 
 ## 相關文件
 
-- [02-document-structure](02-document-structure.md) — `triggers` 在 Workflow 頂層結構中的位置
-- [03-expressions](03-expressions.md) — CEL 表達式與 `event`、`schedule`、`request` namespace
-- [04-input-output-schema](04-input-output-schema.md) — Input schema 驗證
-- [09-step-events](09-step-events.md) — `emit` / `wait_event` 步驟（與 event trigger 共用事件系統）
+- [02-document-structure](../01-core/02-document-structure.md) — `triggers` 在 Workflow 頂層結構中的位置
+- [03-expressions](../01-core/03-expressions.md) — CEL 表達式與 `event`、`schedule`、`request` namespace
+- [04-input-output-schema](../01-core/04-input-output-schema.md) — Input schema 驗證
+- [09-step-events](../02-steps/09-step-events.md) — `emit` / `wait_event` 步驟（與 event trigger 共用事件系統）
 - [23-lifecycle](23-lifecycle.md) — Instance 狀態機（CREATED → RUNNING）
 - [24-instance-labels](24-instance-labels.md) — 建立 instance 時可同時指定 labels

@@ -63,7 +63,7 @@ emit step 提供 **at-least-once** 保證：
 | stdio | `context.idempotency_key`（request JSON 欄位）+ `SLOGAN_IDEMPOTENCY_KEY` 環境變數 |
 | http | `Idempotency-Key` HTTP header |
 
-> `builtin` backend 已在 v3 中移除（詳見 [14-agent-tools](14-agent-tools.md)），改以 `type: tool` 兩段式命名取代。
+> `builtin` backend 已在 v3 中移除（詳見 [14-agent-tools](../03-agent/14-agent-tools.md)），改以 `type: tool` 兩段式命名取代。
 
 ### Handler 端實作建議
 
@@ -188,7 +188,7 @@ Agent step 的 crash recovery 比 task step 更複雜，因為 agent session 包
 - `persist_history: summary` 或 `none` 時，無法恢復中間狀態，必須重新執行
 - 已執行的 tool calls（如 task、workflow）已產生副作用，重跑時需注意 idempotency
 
-詳見 [13-agent-definition](13-agent-definition.md) 中的 `config.persist_history`。
+詳見 [13-agent-definition](../03-agent/13-agent-definition.md) 中的 `config.persist_history`。
 
 ### 自訂 Loop 的 Crash Recovery 優勢
 
@@ -201,7 +201,7 @@ Agent step 的 crash recovery 比 task step 更複雜，因為 agent session 包
 
 與系統預設 loop 相比，自訂 loop 的中間狀態更明確（因為每個 step 都有持久化的 output），recovery 更可靠。
 
-詳見 [16-agent-loop](16-agent-loop.md)。
+詳見 [16-agent-loop](../03-agent/16-agent-loop.md)。
 
 ---
 
@@ -229,7 +229,7 @@ Agent session 結束
 
 此設計確保 MCP server 的狀態與 agent session 一對一綁定，避免跨 session 的狀態污染。
 
-詳見 [19-resources-definition](19-resources-definition.md) 中的 MCP server 配置。
+詳見 [19-resources-definition](../04-resources/19-resources-definition.md) 中的 MCP server 配置。
 
 ---
 
@@ -264,7 +264,7 @@ tools:
 - `sequential_only: true` 適用於有副作用且順序敏感的操作（如扣款、資料庫寫入）
 - 大多數 read-only 操作無需設定 `sequential_only`，預設並行可提升效能
 
-詳見 [14-agent-tools](14-agent-tools.md)。
+詳見 [14-agent-tools](../03-agent/14-agent-tools.md)。
 
 ---
 
@@ -342,14 +342,14 @@ Timeline:
 
 | 主題 | 文件 |
 |------|------|
-| Step 類型與共通屬性 | [05-steps-overview](05-steps-overview.md) |
-| Task step | [06-step-task](06-step-task.md) |
-| 事件 step（wait_event） | [09-step-events](09-step-events.md) |
-| Agent Definition 與 persist_history | [13-agent-definition](13-agent-definition.md) |
-| Agent Tools 與 sequential_only | [14-agent-tools](14-agent-tools.md) |
-| Agent Loop（自訂 loop） | [16-agent-loop](16-agent-loop.md) |
-| Resources（MCP servers） | [19-resources-definition](19-resources-definition.md) |
+| Step 類型與共通屬性 | [05-steps-overview](../02-steps/05-steps-overview.md) |
+| Task step | [06-step-task](../02-steps/06-step-task.md) |
+| 事件 step（wait_event） | [09-step-events](../02-steps/09-step-events.md) |
+| Agent Definition 與 persist_history | [13-agent-definition](../03-agent/13-agent-definition.md) |
+| Agent Tools 與 sequential_only | [14-agent-tools](../03-agent/14-agent-tools.md) |
+| Agent Loop（自訂 loop） | [16-agent-loop](../03-agent/16-agent-loop.md) |
+| Resources（MCP servers） | [19-resources-definition](../04-resources/19-resources-definition.md) |
 | 錯誤處理 | [21-error-handling](21-error-handling.md) |
 | Lifecycle 狀態 | [23-lifecycle](23-lifecycle.md) |
-| 驗證規則 | [27-validation-rules](27-validation-rules.md) |
-| 版本管理 | [28-versioning](28-versioning.md) |
+| 驗證規則 | [27-validation-rules](../06-publish/27-validation-rules.md) |
+| 版本管理 | [28-versioning](../06-publish/28-versioning.md) |

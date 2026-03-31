@@ -356,7 +356,7 @@ steps:
       order_id: ${ input.order_id }
 
   - type: if
-    condition: ${ steps.analyze.output.risk_level == "high" }
+    when: ${ steps.analyze.output.risk_level == "high" }
     then:
       - id: flag
         type: task
@@ -451,6 +451,6 @@ slogan test workflow-v2.yaml --replay recording.json
 
 ## 相關文件
 
-- [05-steps-overview](05-steps-overview.md) — Step 共通屬性與類型
-- [13-agent-definition](13-agent-definition.md) — Agent Definition
-- [21-error-handling](21-error-handling.md) — 錯誤處理機制
+- [05-steps-overview](../02-steps/05-steps-overview.md) — Step 共通屬性與類型
+- [13-agent-definition](../03-agent/13-agent-definition.md) — Agent Definition
+- [21-error-handling](../05-runtime/21-error-handling.md) — 錯誤處理機制

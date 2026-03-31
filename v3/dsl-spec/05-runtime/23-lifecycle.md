@@ -38,7 +38,7 @@ DRAFT ──→ VALIDATED ──→ PUBLISHED ──→ DEPRECATED ──→ ARC
 
 ### Toolset / Resources / Project Definition
 
-Toolset（[18-toolset-definition](18-toolset-definition.md)）、Resources（[19-resources-definition](19-resources-definition.md)）與 Project（[20-project](20-project.md)）使用較簡化的發布流程：
+Toolset（[18-toolset-definition](../04-resources/18-toolset-definition.md)）、Resources（[19-resources-definition](../04-resources/19-resources-definition.md)）與 Project（[20-project](../04-resources/20-project.md)）使用較簡化的發布流程：
 
 ```
 DRAFT ──→ PUBLISHED ──→ ARCHIVED
@@ -143,8 +143,8 @@ CREATED ──→ RUNNING ──⇄── WAITING
 | SUCCEEDED | 正常完成（透過 `return` 或所有 steps 完成） |
 | FAILED | 異常終止（透過 `fail`、未處理的錯誤、或 timeout） |
 | CANCELLED | 被外部取消（API / parent workflow） |
-| CONTINUED | 由 `continue_as_new` 產生新 instance 接續，原 instance 視為成功完成（見 [10-step-terminal](10-step-terminal.md)） |
-| COMPENSATING | 正在執行 saga 補償流程（見 [12-step-saga](12-step-saga.md)） |
+| CONTINUED | 由 `continue_as_new` 產生新 instance 接續，原 instance 視為成功完成（見 [10-step-terminal](../02-steps/10-step-terminal.md)） |
+| COMPENSATING | 正在執行 saga 補償流程（見 [12-step-saga](../02-steps/12-step-saga.md)） |
 | COMPENSATED | 補償流程已成功完成（所有 compensate 皆 SUCCEEDED） |
 | COMPENSATION_FAILED | 補償流程中有 compensate step 失敗 |
 
@@ -211,7 +211,7 @@ Agent session 狀態與其所屬的 step instance 狀態對應：
 | SUCCEEDED | SUCCEEDED | 繼續執行（或 SUCCEEDED 若為最後一個 step） |
 | FAILED | FAILED | 進入錯誤處理流程（見 [21-error-handling](21-error-handling.md)） |
 
-> Agent session 的 storage schema 詳見 [13-agent-definition](13-agent-definition.md) 的「對話歷史持久化」章節。
+> Agent session 的 storage schema 詳見 [13-agent-definition](../03-agent/13-agent-definition.md) 的「對話歷史持久化」章節。
 
 ---
 
@@ -243,7 +243,7 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 | WAITING | 等待外部事件（`wait_event`）或人類回覆（`agent` 呼叫 `ask_human`） |
 | TIMED_OUT | 執行超時 |
 | CANCELLED | 被外部取消（workflow timeout、parent 取消、API 取消） |
-| SKIPPED | condition 為 false、所在分支未被選中、或控制流程 step 無匹配的執行分支（if 無 else 且 condition 為 false、switch 無匹配且無 default） |
+| SKIPPED | when 為 false、所在分支未被選中、或控制流程 step 無匹配的執行分支（if 無 else 且 when 為 false、switch 無匹配且無 default） |
 
 ### 允許的轉換
 
@@ -251,8 +251,8 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 |----|-----|----------|
 | PENDING | READY | 前一個 step 完成（SUCCEEDED、SKIPPED、或 FAILED / TIMED_OUT 但錯誤已被 handler 處理） |
 | READY | RUNNING | 排程器開始執行 |
-| READY | SKIPPED | condition 為 false |
-| RUNNING | SKIPPED | 控制流程 step 無匹配的執行分支（if 無 else 且 condition 為 false、switch 無匹配且無 default） |
+| READY | SKIPPED | when 為 false |
+| RUNNING | SKIPPED | 控制流程 step 無匹配的執行分支（if 無 else 且 when 為 false、switch 無匹配且無 default） |
 | RUNNING | SUCCEEDED | 執行完成 |
 | RUNNING | FAILED | 執行失敗 |
 | RUNNING | WAITING | wait_event 進入等待；agent 呼叫 `ask_human` |

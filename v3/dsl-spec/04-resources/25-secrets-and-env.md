@@ -316,7 +316,7 @@ secrets/*.plain.yaml
 
 ## 相關文件
 
-- [01-kind-definitions](01-kind-definitions.md) — `kind: Secret` 在 Kind 總覽中的定義
-- [03-expressions](03-expressions.md) — `env` 與 `secret` namespace 在 CEL 中的存取方式
-- [13-agent-definition](13-agent-definition.md) — Agent `system_prompt` 中使用 `secret` namespace
+- [01-kind-definitions](../01-core/01-kind-definitions.md) — `kind: Secret` 在 Kind 總覽中的定義
+- [03-expressions](../01-core/03-expressions.md) — `env` 與 `secret` namespace 在 CEL 中的存取方式
+- [13-agent-definition](../03-agent/13-agent-definition.md) — Agent `system_prompt` 中使用 `secret` namespace
 - [19-resources-definition](19-resources-definition.md) — Resources 中 MCP server `env` 使用 `secret` namespace

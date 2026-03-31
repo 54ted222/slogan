@@ -102,8 +102,8 @@ match: ${ event.data.order_id == input.order_id && event.data.status == "confirm
 - 超過 `timeout` 且仍未收到匹配事件 → step TIMED_OUT
 - 若有 `on_timeout` → 執行 handler steps
   - Handler 正常完成 → workflow 繼續後續 steps
-  - Handler 內使用 `fail` → 錯誤重新拋出，繼續向上層尋找 handler（見 [12-error-handling](12-error-handling.md)）
-- 若無 `on_timeout` → 視為未處理錯誤，進入錯誤處理流程（block-level → workflow-level `on_error`），詳見 [12-error-handling](12-error-handling.md)
+  - Handler 內使用 `fail` → 錯誤重新拋出，繼續向上層尋找 handler（見 [21-error-handling](../05-runtime/21-error-handling.md)）
+- 若無 `on_timeout` → 視為未處理錯誤，進入錯誤處理流程（block-level → workflow-level `on_error`），詳見 [21-error-handling](../05-runtime/21-error-handling.md)
 
 ### 範例
 

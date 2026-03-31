@@ -14,7 +14,6 @@
 | `triggers` | array | MUST | 啟動機制，至少一個 |
 | `input_schema` | object | MAY | 輸入 schema 定義 |
 | `output_schema` | object | MAY | 輸出 schema 定義 |
-| `label_schema` | object | MAY | instance label 的 schema 定義（建議性，不強制驗證） |
 | `artifacts` | map | MAY | artifact 宣告 |
 | `config` | object | MAY | workflow 級設定 |
 | `steps` | array | MUST | 主要步驟序列 |
@@ -42,27 +41,6 @@ metadata:
 
 ---
 
-## label_schema
-
-定義此 workflow 的 instance 支援哪些 label key。為**建議性**，不驗證——缺少 label 不會阻擋 instance 建立。
-
-```yaml
-label_schema:
-  customer_id:
-    type: string
-  region:
-    type: string
-    enum: [tw, jp, us, eu]
-  priority:
-    type: string
-    enum: [low, medium, high]
-    default: medium
-```
-
-詳見 [24-instance-labels](24-instance-labels.md)。
-
----
-
 ## config
 
 Workflow 級設定。所有欄位皆為可選。
@@ -71,9 +49,9 @@ Workflow 級設定。所有欄位皆為可選。
 |------|------|------|
 | `timeout` | duration | workflow instance 的最長執行時間 |
 | `max_step_executions` | integer | step 執行次數上限（防止無限迴圈），超過時 instance FAILED（錯誤碼 `max_step_executions_exceeded`） |
-| `on_error` | step 陣列 | workflow 級錯誤處理（見 [21-error-handling](21-error-handling.md)） |
+| `on_error` | step 陣列 | workflow 級錯誤處理（見 [21-error-handling](../05-runtime/21-error-handling.md)） |
 | `on_timeout` | step 陣列 | workflow 級 timeout 處理 |
-| `secrets` | string 陣列 | 依賴的 secret 名稱列表（見 [25-secrets-and-env](25-secrets-and-env.md)） |
+| `secrets` | string 陣列 | 依賴的 secret 名稱列表（見 [25-secrets-and-env](../04-resources/25-secrets-and-env.md)） |
 
 ```yaml
 config:
@@ -145,13 +123,6 @@ output_schema:
   properties:
     status:
       type: string
-
-label_schema:
-  customer_id:
-    type: string
-  region:
-    type: string
-    enum: [tw, jp, us, eu]
 
 artifacts:
   order_file:

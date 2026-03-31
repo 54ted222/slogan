@@ -56,34 +56,34 @@
 | [02-document-structure](02-document-structure.md) | Workflow 頂層 YAML 結構 |
 | [03-expressions](03-expressions.md) | CEL 表達式語法與求值上下文 |
 | [04-input-output-schema](04-input-output-schema.md) | Input / Output schema 定義 |
-| [05-steps-overview](05-steps-overview.md) | Step 共通屬性與生命週期 |
-| [06-step-task](06-step-task.md) | task 步驟 + Task Definition |
-| [07-step-assign](07-step-assign.md) | assign 步驟 |
-| [08-step-control-flow](08-step-control-flow.md) | if / switch / foreach / parallel |
-| [09-step-events](09-step-events.md) | emit / wait_event |
-| [10-step-terminal](10-step-terminal.md) | fail / return / continue-as-new（renew） |
-| [11-step-sub-workflow](11-step-sub-workflow.md) | sub_workflow 步驟 |
-| [12-step-saga](12-step-saga.md) | saga 步驟與 step-level compensate |
-| [13-agent-definition](13-agent-definition.md) | Agent Definition（`kind: Agent`） |
-| [14-agent-tools](14-agent-tools.md) | Agent 的 tool 類型與內建 tools |
-| [15-agent-skills](15-agent-skills.md) | Agent Skills（agentskills.io） |
-| [16-agent-loop](16-agent-loop.md) | Agentic Loop（預設 / 自訂） |
-| [17-agent-hooks-and-streaming](17-agent-hooks-and-streaming.md) | Agent Hooks 與 Streaming |
-| [18-toolset-definition](18-toolset-definition.md) | Toolset Definition（`kind: Toolset`） |
-| [19-resources-definition](19-resources-definition.md) | Resources Definition（`kind: Resources`） |
-| [20-project](20-project.md) | Project Definition（`kind: Project`） |
-| [21-error-handling](21-error-handling.md) | 錯誤處理模型 |
-| [22-artifacts](22-artifacts.md) | Artifact 系統 |
-| [23-lifecycle](23-lifecycle.md) | 生命週期狀態機 |
-| [24-instance-labels](24-instance-labels.md) | Instance Labels |
-| [25-secrets-and-env](25-secrets-and-env.md) | Secrets 與環境變數 |
-| [26-triggers](26-triggers.md) | Trigger 模型（manual / event） |
-| [27-validation-rules](27-validation-rules.md) | 靜態驗證規則 |
-| [28-versioning](28-versioning.md) | 版本管理與遷移策略 |
-| [29-execution-guarantees](29-execution-guarantees.md) | 執行語意保證 |
-| [30-testing](30-testing.md) | 本地測試模式（`slogan test`） |
-| [31-json-schema-publication](31-json-schema-publication.md) | JSON Schema 發布策略 |
-| [99-examples](99-examples.md) | 完整範例集 |
+| [05-steps-overview](../02-steps/05-steps-overview.md) | Step 共通屬性與生命週期 |
+| [06-step-task](../02-steps/06-step-task.md) | task 步驟 + Task Definition |
+| [07-step-assign](../02-steps/07-step-assign.md) | assign 步驟 |
+| [08-step-control-flow](../02-steps/08-step-control-flow.md) | if / switch / foreach / parallel |
+| [09-step-events](../02-steps/09-step-events.md) | emit / wait_event |
+| [10-step-terminal](../02-steps/10-step-terminal.md) | fail / return / continue-as-new（renew） |
+| [11-step-sub-workflow](../02-steps/11-step-sub-workflow.md) | sub_workflow 步驟 |
+| [12-step-saga](../02-steps/12-step-saga.md) | saga 步驟與 step-level compensate |
+| [13-agent-definition](../03-agent/13-agent-definition.md) | Agent Definition（`kind: Agent`） |
+| [14-agent-tools](../03-agent/14-agent-tools.md) | Agent 的 tool 類型與內建 tools |
+| [15-agent-skills](../03-agent/15-agent-skills.md) | Agent Skills（agentskills.io） |
+| [16-agent-loop](../03-agent/16-agent-loop.md) | Agentic Loop（預設 / 自訂） |
+| [17-agent-hooks-and-streaming](../03-agent/17-agent-hooks-and-streaming.md) | Agent Hooks 與 Streaming |
+| [18-toolset-definition](../04-resources/18-toolset-definition.md) | Toolset Definition（`kind: Toolset`） |
+| [19-resources-definition](../04-resources/19-resources-definition.md) | Resources Definition（`kind: Resources`） |
+| [20-project](../04-resources/20-project.md) | Project Definition（`kind: Project`） |
+| [21-error-handling](../05-runtime/21-error-handling.md) | 錯誤處理模型 |
+| [22-artifacts](../05-runtime/22-artifacts.md) | Artifact 系統 |
+| [23-lifecycle](../05-runtime/23-lifecycle.md) | 生命週期狀態機 |
+| [24-instance-labels](../05-runtime/24-instance-labels.md) | Instance Labels |
+| [25-secrets-and-env](../04-resources/25-secrets-and-env.md) | Secrets 與環境變數 |
+| [26-triggers](../05-runtime/26-triggers.md) | Trigger 模型（manual / event） |
+| [27-validation-rules](../06-publish/27-validation-rules.md) | 靜態驗證規則 |
+| [28-versioning](../06-publish/28-versioning.md) | 版本管理與遷移策略 |
+| [29-execution-guarantees](../05-runtime/29-execution-guarantees.md) | 執行語意保證 |
+| [30-testing](../06-publish/30-testing.md) | 本地測試模式（`slogan test`） |
+| [31-json-schema-publication](../06-publish/31-json-schema-publication.md) | JSON Schema 發布策略 |
+| [99-examples](../99-examples.md) | 完整範例集 |
 
 ---
 
@@ -93,7 +93,7 @@
 |------|----------|
 | v1 | 初版範例（非正式規格） |
 | v2 | 正式規格：CEL + `${ }` 定界符、新增 `sub_workflow`、統一錯誤處理三層模型、`config` 區塊、task definition 獨立化（`kind: Task`）、event trigger `input_mapping`、`kind: Secret` 加密機密管理 |
-| v3 | Agent 一等公民（`kind: Agent`、`type: agent` step）、Saga 補償模式（`type: saga` step + step-level `compensate`）、continue-as-new（`return` + `renew`）、`kind: Toolset`（統一 tools + skills 集合）、`kind: Resources`（MCP servers、string templates、model aliases）、`kind: Project`（definition 檔案 project 組織）、instance labels、`expr` 改名為 `condition`、兩段式 tool 命名（`namespace.action`）、本地測試模式、JSON Schema 發布 |
+| v3 | Agent 一等公民（`kind: Agent`、`type: agent` step）、Saga 補償模式（`type: saga` step + step-level `compensate`）、continue-as-new（`return` + `renew`）、`kind: Toolset`（統一 tools + skills 集合）、`kind: Resources`（MCP servers、string templates、model aliases）、`kind: Project`（definition 檔案 project 組織）、instance labels、`expr` 改名為 `when`、兩段式 tool 命名（`namespace.action`）、本地測試模式、JSON Schema 發布 |
 
 ---
 

@@ -80,7 +80,6 @@ https://slogan.dev/schemas/<kind-lowercase>/v3.json
     "metadata": { "$ref": "#/$defs/metadata" },
     "input_schema": { "$ref": "#/$defs/jsonSchema" },
     "output_schema": { "$ref": "#/$defs/jsonSchema" },
-    "label_schema": { "$ref": "#/$defs/labelSchema" },
     "triggers": { "$ref": "#/$defs/triggers" },
     "config": { "$ref": "#/$defs/workflowConfig" },
     "artifacts": { "$ref": "#/$defs/artifacts" },
@@ -137,7 +136,7 @@ https://slogan.dev/schemas/<kind-lowercase>/v3.json
           "description": "Task definition name（兩段式命名，如 order.load）"
         },
         "input": { "type": "object" },
-        "condition": {
+        "when": {
           "type": "string",
           "description": "CEL 表達式，支援 ${ } 語法。為 false 時 step 被 SKIPPED"
         },
@@ -155,10 +154,10 @@ https://slogan.dev/schemas/<kind-lowercase>/v3.json
     },
     "stepIf": {
       "type": "object",
-      "required": ["type", "condition"],
+      "required": ["type", "when"],
       "properties": {
         "type": { "const": "if" },
-        "condition": {
+        "when": {
           "type": "string",
           "description": "CEL 表達式，支援 ${ } 語法。求值為 true 時執行 then 分支"
         },
@@ -222,7 +221,7 @@ https://slogan.dev/schemas/<kind-lowercase>/v3.json
 
 ```json
 {
-  "condition": {
+  "when": {
     "type": "string",
     "description": "CEL 表達式，支援 ${ } 語法。求值結果 MUST 為 boolean"
   }
@@ -336,7 +335,7 @@ JSON Schema 從引擎程式碼的型別定義自動生成，確保 schema 與引
 
 ## 相關文件
 
-- [01-kind-definitions](01-kind-definitions.md) — Kind 一覽與 metadata 結構
-- [05-steps-overview](05-steps-overview.md) — Step 類型與共通屬性
-- [08-step-control-flow](08-step-control-flow.md) — if / switch 的 `condition` 欄位
-- [13-agent-definition](13-agent-definition.md) — Agent Definition schema
+- [01-kind-definitions](../01-core/01-kind-definitions.md) — Kind 一覽與 metadata 結構
+- [05-steps-overview](../02-steps/05-steps-overview.md) — Step 類型與共通屬性
+- [08-step-control-flow](../02-steps/08-step-control-flow.md) — if / switch 的 `when` 欄位
+- [13-agent-definition](../03-agent/13-agent-definition.md) — Agent Definition schema

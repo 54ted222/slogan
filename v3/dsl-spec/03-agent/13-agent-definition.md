@@ -84,7 +84,7 @@ skills:
     toolset: risk-analysis-tools    # 引用 kind: Toolset 定義
 ```
 
-詳見 [15-agent-skills](15-agent-skills.md) 與 [18-toolset-definition](18-toolset-definition.md)。
+詳見 [15-agent-skills](15-agent-skills.md) 與 [18-toolset-definition](../04-resources/18-toolset-definition.md)。
 
 ---
 
@@ -99,7 +99,7 @@ skills:
 
 ## 4. 生命週期
 
-與 Workflow / Task Definition 相同（詳見 [01-kind-definitions](01-kind-definitions.md)）：
+與 Workflow / Task Definition 相同（詳見 [01-kind-definitions](../01-core/01-kind-definitions.md)）：
 
 ```
 DRAFT → VALIDATED → PUBLISHED → DEPRECATED → ARCHIVED
@@ -380,7 +380,7 @@ config:
 
 # 根據 agent output 決定後續流程
 - type: if
-  condition: ${ steps.analyze.output.risk_level == "high" }
+  when: ${ steps.analyze.output.risk_level == "high" }
   then:
     - type: task
       action: order.flag_for_review

@@ -46,12 +46,12 @@ should_notify: ${ input.notify_customer == true }
 
 ### 特定欄位的表達式
 
-某些欄位（如 `condition`、`match`、`when`）本身即預期為 CEL 表達式，在這些欄位中也 MUST 使用 `${ }` 定界符：
+某些欄位（如 `when`、`match`、`when`）本身即預期為 CEL 表達式，在這些欄位中也 MUST 使用 `${ }` 定界符：
 
 ```yaml
 - id: check
   type: if
-  condition: ${ steps.load_order.output.status == "cancelled" }
+  when: ${ steps.load_order.output.status == "cancelled" }
 
 - id: wait
   type: wait_event
@@ -95,13 +95,13 @@ steps.create_payment.output.payment_id
 |----|------|
 | `"SUCCEEDED"` | step 成功完成 |
 | `"FAILED"` | step 失敗（已被 on_error 處理，workflow 繼續） |
-| `"SKIPPED"` | step 被跳過（condition 為 false 或分支未選中） |
+| `"SKIPPED"` | step 被跳過（when 為 false 或分支未選中） |
 | `null` | step 尚未執行 |
 
 ```yaml
 # 使用 status 檢查 step 是否已執行
 - type: if
-  condition: ${ steps.load_order.status == "SUCCEEDED" }
+  when: ${ steps.load_order.status == "SUCCEEDED" }
   then: [...]
 ```
 
@@ -109,7 +109,7 @@ steps.create_payment.output.payment_id
 
 **非 SUCCEEDED step 的 output**：
 
-- **SKIPPED**（`condition` 為 false 或所在分支未被選中）：`steps.<id>.output` 回傳 `null`
+- **SKIPPED**（`when` 為 false 或所在分支未被選中）：`steps.<id>.output` 回傳 `null`
 - **FAILED**（錯誤已被 `on_error` handler 處理，workflow 繼續執行）：`steps.<id>.output` 回傳 `null`
 
 使用 `default()` 做防禦性存取：
@@ -117,6 +117,54 @@ steps.create_payment.output.payment_id
 ```
 default(steps.process_payment.output.payment_id, "")
 ```
+
+### prev
+
+前一個 step 的輸出與狀態。使用 `prev` 可免去為 step 定義 `id` 僅為了參照其輸出。
+
+**Output 存取**：`prev.output.<field>`
+
+```
+prev.output.id
+prev.output.amount
+prev.output.status
+```
+
+**Status 存取**：`prev.status`
+
+```yaml
+steps:
+  - type: task
+    action: order.load
+    input:
+      order_id: ${ input.order_id }
+
+  # 不需要知道前一個 step 的 id
+  - type: task
+    action: order.process
+    input:
+      amount: ${ prev.output.amount }
+
+  - type: if
+    when: ${ prev.output.success }
+    then:
+      - type: emit
+        event: order.completed
+```
+
+`prev` 為**靜態綁定**——永遠指向 YAML 語法上的前一個 step，不因執行狀態（如 SKIPPED）而改變指向。
+
+| 情境 | `prev` 指向 |
+|------|------------|
+| steps 陣列中的第 N 個 step（N > 0） | 第 N-1 個 step（語法位置，固定不變） |
+| steps 陣列中的第 0 個 step | `null`（不可用） |
+| `then` / `else` / `do` 等巢狀陣列中的第 0 個 step | `null`（不可用） |
+| 前一個 step 為 SKIPPED | `prev.output` 回傳 `null`，`prev.status` 回傳 `"SKIPPED"` |
+| 前一個 step 為 FAILED（已被 handler 處理） | `prev.output` 回傳 `null`，`prev.status` 回傳 `"FAILED"` |
+
+> **注意**：`prev` 僅指向同一個 step 陣列中語法上的前一個 step，不會跨越巢狀邊界（如不會從 `then` 陣列指向 `if` step 本身），也不會因為前一個 step 被跳過而自動指向更前面的 step。
+
+---
 
 ### vars
 
@@ -152,13 +200,13 @@ Agent 自訂 loop 的 session 資料。
 | `session.iteration` | integer | 當前迭代次數（從 0 開始） |
 | `session.tool_call_count` | integer | 累計 tool 呼叫次數 |
 
-可用時機：僅限 agent definition 的 `loop.steps` 內、以及 agent 的 `prompt` 與 `system_prompt` 中。詳見 [16-agent-loop](16-agent-loop.md)。
+可用時機：僅限 agent definition 的 `loop.steps` 內、以及 agent 的 `prompt` 與 `system_prompt` 中。詳見 [16-agent-loop](../03-agent/16-agent-loop.md)。
 
 ### hook
 
 Agent hook 的觸發上下文。
 
-可用時機：僅限 agent definition 的 `hooks` 區塊 steps 內。每個 hook 觸發點提供不同的 `hook.*` 變數。詳見 [17-agent-hooks-and-streaming](17-agent-hooks-and-streaming.md)。
+可用時機：僅限 agent definition 的 `hooks` 區塊 steps 內。每個 hook 觸發點提供不同的 `hook.*` 變數。詳見 [17-agent-hooks-and-streaming](../03-agent/17-agent-hooks-and-streaming.md)。
 
 ### event
 
@@ -212,7 +260,7 @@ secret.STRIPE_SECRET
 
 可用時機：所有 steps、task definition、agent definition 的 `system_prompt`、Resources definition 的 MCP server `env`。值一律為 `string`，不存在時回傳 `null`。
 
-詳見 [25-secrets-and-env](25-secrets-and-env.md)。
+詳見 [25-secrets-and-env](../04-resources/25-secrets-and-env.md)。
 
 ### error（限 on_error handler 內）
 
@@ -242,7 +290,7 @@ Timeout 資訊，僅在 `on_timeout` handler 的 steps 中可用。
 ```yaml
 # 檢查 output 中是否有 address 欄位
 - type: if
-  condition: ${ has(steps.load_order.output.address) }
+  when: ${ has(steps.load_order.output.address) }
   then: [...]
 ```
 
@@ -251,7 +299,7 @@ Timeout 資訊，僅在 `on_timeout` handler 的 steps 中可用。
 ```yaml
 # 檢查 step 是否已執行且成功
 - type: if
-  condition: ${ steps.load_order.status == "SUCCEEDED" }
+  when: ${ steps.load_order.status == "SUCCEEDED" }
   then: [...]
 ```
 
@@ -433,4 +481,4 @@ List 的 `filter()`、`map()` 等巨集 MUST 保持原始順序。
 - 引擎 MUST 在同一時間點求值所有表達式（語意上為原子）
 - 同一 map 內各表達式的求值順序為**未定義**（implementation-defined）
 - 表達式之間 MUST NOT 互相依賴（同一 step 內的表達式不可參照彼此的結果）
-- `condition` 表達式 MUST 在其他欄位的表達式之前求值（condition 為 false 時不求值其他欄位）
+- `when` 表達式 MUST 在其他欄位的表達式之前求值（when 為 false 時不求值其他欄位）

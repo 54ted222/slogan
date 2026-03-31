@@ -1,6 +1,6 @@
 # 99 — 完整範例集
 
-本文件提供完整範例，示範 DSL v3 的各項功能。所有範例使用 v3 語法（`apiVersion: */v3`、`condition:` 取代 `expr:`、兩段式 tool 命名）。
+本文件提供完整範例，示範 DSL v3 的各項功能。所有範例使用 v3 語法（`apiVersion: */v3`、`when:` 取代 `expr:`、兩段式 tool 命名）。
 
 ---
 
@@ -136,7 +136,7 @@ steps:
       is_high_value: ${ steps.load_order.output.amount > 1000 }
 
   - type: if
-    condition: ${ steps.load_order.output.status == "cancelled" }
+    when: ${ steps.load_order.output.status == "cancelled" }
     then:
       - type: fail
         message: "order has been cancelled"
@@ -350,7 +350,7 @@ steps:
 
   # 3. 根據風險等級分流
   - type: switch
-    condition: ${ steps.analyze.output.risk_level }
+    when: ${ steps.analyze.output.risk_level }
     cases:
       - value: "high"
         then:
@@ -680,7 +680,7 @@ steps:
 
   # 4. 判斷是否還有下一頁
   - type: if
-    condition: ${ steps.fetch_batch.output.has_more == true }
+    when: ${ steps.fetch_batch.output.has_more == true }
     then:
       # 還有資料 → continue-as-new，帶 cursor 繼續
       - type: return
@@ -705,7 +705,7 @@ steps:
 
 ## 範例 10：Instance Labels
 
-展示 `label_schema` 宣告、建立 instance 時附帶 labels、以及在 workflow 執行中動態更新 labels。
+展示建立 instance 時附帶 labels、以及在 workflow 執行中動態更新 labels。
 
 ```yaml
 apiVersion: workflow/v3
@@ -715,17 +715,6 @@ metadata:
   name: order_processing
   version: 1
   description: "訂單處理流程（含 instance labels）"
-
-label_schema:
-  customer_id:
-    description: "客戶 ID"
-  region:
-    description: "部署區域"
-    enum: [tw, jp, us, eu]
-  priority:
-    description: "優先級"
-    enum: [low, medium, high]
-    default: medium
 
 triggers:
   - type: manual
@@ -801,12 +790,12 @@ slogan instance list --label region=tw --label priority=high --status running
 
 ## 相關文件
 
-- [01-kind-definitions](01-kind-definitions.md) — Kind 一覽與 apiVersion 格式
-- [05-steps-overview](05-steps-overview.md) — Step 共通屬性
-- [08-step-control-flow](08-step-control-flow.md) — if / switch（`condition:` 語法）
-- [10-step-terminal](10-step-terminal.md) — return / fail / renew
-- [12-step-saga](12-step-saga.md) — saga 與 step-level compensate
-- [13-agent-definition](13-agent-definition.md) — Agent Definition
-- [18-toolset-definition](18-toolset-definition.md) — Toolset Definition
-- [19-resources-definition](19-resources-definition.md) — Resources Definition
-- [24-instance-labels](24-instance-labels.md) — Instance Labels
+- [01-kind-definitions](01-core/01-kind-definitions.md) — Kind 一覽與 apiVersion 格式
+- [05-steps-overview](02-steps/05-steps-overview.md) — Step 共通屬性
+- [08-step-control-flow](02-steps/08-step-control-flow.md) — if / switch（`when:` 語法）
+- [10-step-terminal](02-steps/10-step-terminal.md) — return / fail / renew
+- [12-step-saga](02-steps/12-step-saga.md) — saga 與 step-level compensate
+- [13-agent-definition](03-agent/13-agent-definition.md) — Agent Definition
+- [18-toolset-definition](04-resources/18-toolset-definition.md) — Toolset Definition
+- [19-resources-definition](04-resources/19-resources-definition.md) — Resources Definition
+- [24-instance-labels](05-runtime/24-instance-labels.md) — Instance Labels

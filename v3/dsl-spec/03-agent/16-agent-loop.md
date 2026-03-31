@@ -265,7 +265,7 @@ Agent 的最終回應依 `output_format` 處理後作為 step output：
 
 # output_format: json → steps.analyze.output 為 map
 - type: if
-  condition: ${ steps.analyze.output.risk_level == "high" }
+  when: ${ steps.analyze.output.risk_level == "high" }
   then:
     - type: task
       action: order.flag_for_review
@@ -301,7 +301,7 @@ loop:
 
     # 3. 無 tool call → 結束
     - type: if
-      condition: ${ !steps.response.output.has_tool_calls }
+      when: ${ !steps.response.output.has_tool_calls }
       then:
         - type: return
           output: ${ steps.response.output.message.content }
@@ -341,7 +341,7 @@ loop:
         messages: ${ session.messages.append(steps.response.output.message) }
 
     - type: if
-      condition: ${ !steps.response.output.has_tool_calls }
+      when: ${ !steps.response.output.has_tool_calls }
       then:
         - type: return
           output: ${ steps.response.output.message.content }
@@ -359,7 +359,7 @@ loop:
 
     # 每 5 輪壓縮對話紀錄
     - type: if
-      condition: ${ session.iteration > 0 && session.iteration % 5 == 0 }
+      when: ${ session.iteration > 0 && session.iteration % 5 == 0 }
       then:
         - id: summarize
           type: task
@@ -404,7 +404,7 @@ loop:
         has_tool_calls: ${ steps.response.output.has_tool_calls }
 
     - type: if
-      condition: ${ !steps.response.output.has_tool_calls }
+      when: ${ !steps.response.output.has_tool_calls }
       then:
         - type: return
           output: ${ steps.response.output.message.content }
@@ -425,8 +425,8 @@ loop:
 
 ## 相關文件
 
-- [05-steps-overview](05-steps-overview.md) — step 類型總覽
-- [06-step-task](06-step-task.md) — task step 與 task definition
-- [11-step-sub-workflow](11-step-sub-workflow.md) — sub_workflow step（自訂 loop 中可使用）
+- [05-steps-overview](../02-steps/05-steps-overview.md) — step 類型總覽
+- [06-step-task](../02-steps/06-step-task.md) — task step 與 task definition
+- [11-step-sub-workflow](../02-steps/11-step-sub-workflow.md) — sub_workflow step（自訂 loop 中可使用）
 - [15-agent-skills](15-agent-skills.md) — Agent skills 與 agentskills.io 規格
 - [17-agent-hooks-and-streaming](17-agent-hooks-and-streaming.md) — Agent hooks 與 streaming

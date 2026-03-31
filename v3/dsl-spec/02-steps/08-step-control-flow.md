@@ -12,7 +12,7 @@
 
 ```yaml
 - type: if
-  condition: CEL expression        # MUST, 回傳 boolean
+  when: CEL expression        # MUST, 回傳 boolean
   then: [...]                      # MUST, step 陣列
   else: [...]                      # MAY, step 陣列
   on_error: [...]                  # MAY
@@ -20,9 +20,9 @@
 
 ### 行為
 
-- `condition` 求值為 `true` → 執行 `then` 陣列
-- `condition` 求值為 `false` → 執行 `else` 陣列（若有），否則 SKIP
-- `condition` 求值失敗 → step FAILED
+- `when` 求值為 `true` → 執行 `then` 陣列
+- `when` 求值為 `false` → 執行 `else` 陣列（若有），否則 SKIP
+- `when` 求值失敗 → step FAILED
 - 分支內的 steps 按順序執行
 - 未被選中的分支中的 steps 狀態為 SKIPPED
 
@@ -34,7 +34,7 @@
 
 ```yaml
 - type: if
-  condition: ${ steps.load_order.output.status == "cancelled" }
+  when: ${ steps.load_order.output.status == "cancelled" }
   then:
     - type: emit
       event: order.rejected
@@ -59,7 +59,7 @@
 
 ```yaml
 - type: switch
-  condition: CEL expression        # MUST
+  when: CEL expression        # MUST
   cases:                           # MUST, 至少一個
     - value: any                   #   比對值
       then: [...]                  #   step 陣列
@@ -69,11 +69,11 @@
 
 ### 行為
 
-- `condition` 求值一次，結果與每個 `case.value` 做相等比較
+- `when` 求值一次，結果與每個 `case.value` 做相等比較
 - 匹配第一個符合的 case → 執行其 `then` 陣列
 - 無匹配且有 `default` → 執行 default 陣列
 - 無匹配且無 `default` → step SKIPPED
-- `condition` 求值失敗 → step FAILED
+- `when` 求值失敗 → step FAILED
 - `value` 可以是 string、number、boolean
 
 ### output
@@ -84,7 +84,7 @@
 
 ```yaml
 - type: switch
-  condition: ${ input.action }
+  when: ${ input.action }
   cases:
     - value: "pay"
       then:
@@ -218,7 +218,7 @@
     - steps:
         - type: task
           action: notify.customer
-          condition: ${ input.notify_customer == true }
+          when: ${ input.notify_customer == true }
           input:
             order_id: ${ steps.load_order.output.id }
 

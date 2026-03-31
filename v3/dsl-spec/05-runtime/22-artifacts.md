@@ -110,7 +110,7 @@ artifacts:
 
 ```yaml
 - type: if
-  condition: ${ artifacts.order_file.size > 0 }
+  when: ${ artifacts.order_file.size > 0 }
   then:
     - type: task
       action: file.process
@@ -144,7 +144,7 @@ artifacts:
 
 ## Agent Artifact 存取
 
-Agent 可透過內建 tool 存取 workflow 層級的 artifacts。這些 builtin tools 定義於 [14-agent-tools](14-agent-tools.md)。
+Agent 可透過內建 tool 存取 workflow 層級的 artifacts。這些 builtin tools 定義於 [14-agent-tools](../03-agent/14-agent-tools.md)。
 
 ### 內建 Artifact Tools
 
@@ -164,7 +164,7 @@ Agent 呼叫這些 builtin tools 時，引擎根據 artifact 的 `lifecycle` 與
 
 Agent-as-tool 的子 agent **不繼承**父 agent 的 artifact 存取權限。子 agent 的 session 獨立執行，無法存取父 workflow instance 的 artifacts。
 
-此設計與 sub_workflow 的資料隔離原則一致：子 agent 透過 input 接收必要資料，不直接跨邊界存取（詳見 [13-agent-definition](13-agent-definition.md) 的 Agent-as-Tool 章節）。
+此設計與 sub_workflow 的資料隔離原則一致：子 agent 透過 input 接收必要資料，不直接跨邊界存取（詳見 [13-agent-definition](../03-agent/13-agent-definition.md) 的 Agent-as-Tool 章節）。
 
 若需讓子 agent 存取特定 artifact，父 agent 應在 tool call input 中傳遞 artifact 的 URI 或內容。
 

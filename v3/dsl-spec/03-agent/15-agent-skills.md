@@ -209,6 +209,6 @@ v1 階段 skills 僅支援本地路徑引用，不支援版本號或遠端 regis
 
 ## 相關文件
 
-- [01-kind-definitions](01-kind-definitions.md) — `kind: Toolset` 定義
-- [05-steps-overview](05-steps-overview.md) — step 類型總覽
+- [01-kind-definitions](../01-core/01-kind-definitions.md) — `kind: Toolset` 定義
+- [05-steps-overview](../02-steps/05-steps-overview.md) — step 類型總覽
 - [16-agent-loop](16-agent-loop.md) — Agent step schema 與能力合併規則
