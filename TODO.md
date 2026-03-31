@@ -1,21 +1,20 @@
 # TODO — DSL v2 規格補完清單
 
-1. **Saga / Compensation 模式** — 宣告式補償區塊設計，語言層面決策，越晚加入越難
-2. **JSON Schema 發布** — 為 YAML DSL 產出 JSON Schema，提供 IDE autocompletion / linting
-3. **Instance Labels + 搜尋 API** — instance 自訂標籤（key-value）與進階查詢（按標籤、時間範圍、workflow name 過濾）
-4. **本地測試模式** — `slogan test` 命令，支援本地執行 workflow、mock task backend、replay 歷史紀錄驗證
-5. **Continue-as-new** — 長時間 workflow 重置機制，帶新 state 重啟並截斷歷史，避免無限增長
+## 草稿
 
-## agent 功能
+1. **Saga / Compensation 模式** — [draft/saga-compensation.md](draft/saga-compensation.md)
+2. **JSON Schema 發布** — [draft/json-schema.md](draft/json-schema.md)
+3. **Instance Labels + 搜尋 API** — [draft/instance-labels.md](draft/instance-labels.md)
+4. **本地測試模式** — [draft/local-test.md](draft/local-test.md)
+5. **Continue-as-new** — [draft/continue-as-new.md](draft/continue-as-new.md)
+6. **Skills 專案資料夾結構** — [draft/skills-project.md](draft/skills-project.md)
+7. **Toolset 概念** — [draft/toolset.md](draft/toolset.md)
+
+## Agent 功能
 
 - Agent 相關：[draft/agent.md](draft/agent.md)（第十節「待設計功能」、第十一節「待定義項目」）
 - DSL 擴充：[draft/dsl-extensions.md](draft/dsl-extensions.md)（resources、tools、string template、expr、when、between、router、exists、model alias、tool 命名）
 
 ## FUTURE.md 延後項目
 
-- Event Replay API
-- Transactional Outbox / Inbox Pattern
-- JWT Authentication（公鑰配置）
-- Pause / Resume 機制
-- Bulk Operations
-- Scheduled Trigger DST 轉換行為
+- [FUTURE.md](FUTURE.md)（Event Replay API、Transactional Outbox/Inbox、JWT Authentication、Pause/Resume、Bulk Operations、Scheduled Trigger DST）
