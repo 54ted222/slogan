@@ -1,6 +1,6 @@
 # 27 — 靜態驗證規則
 
-本文件定義 definition 在發布前 MUST 通過的靜態驗證規則，涵蓋所有 kind（Workflow、Task、Agent、Toolset、Resources、SkillProject、Secret）。
+本文件定義 definition 在發布前 MUST 通過的靜態驗證規則，涵蓋所有 kind（Workflow、Task、Agent、Toolset、Resources、Project、Secret）。
 
 ---
 
@@ -62,12 +62,12 @@
 - `string_templates`（若存在）MUST 為 map，每個 value 為非空字串
 - `model_aliases`（若存在）MUST 為 map，每個 value 為 object，含 `provider` 和 `name`
 
-### 頂層結構（SkillProject）
+### 頂層結構（Project）
 
-- `apiVersion` MUST 為 `skillproject/v3`
-- `kind` MUST 為 `SkillProject`
+- `apiVersion` MUST 為 `project/v3`
+- `kind` MUST 為 `Project`
 - `metadata.name` MUST 存在且為有效的 `kebab-case` 識別字
-- 資料夾中 MUST 存在 `project.yaml` 檔案（詳見 [20-skill-project](20-skill-project.md)）
+- 資料夾中 MUST 存在 `project.yaml` 檔案（詳見 [20-project](20-project.md)）
 - `defaults.labels`（若存在）MUST 為 `map<string, string>`
 
 ### Step 結構
@@ -364,7 +364,7 @@
 | Agent Loop | [16-agent-loop](16-agent-loop.md) |
 | Toolset Definition | [18-toolset-definition](18-toolset-definition.md) |
 | Resources Definition | [19-resources-definition](19-resources-definition.md) |
-| SkillProject Definition | [20-skill-project](20-skill-project.md) |
+| Project Definition | [20-project](20-project.md) |
 | Lifecycle 狀態 | [23-lifecycle](23-lifecycle.md) |
 | Triggers | [26-triggers](26-triggers.md) |
 | 版本管理 | [28-versioning](28-versioning.md) |

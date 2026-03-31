@@ -26,7 +26,7 @@
 | `Agent` | `https://slogan.dev/schemas/agent/v3.json` | Agent definition（model、tools、loop） |
 | `Toolset` | `https://slogan.dev/schemas/toolset/v3.json` | 具名 tools + skills 集合 |
 | `Resources` | `https://slogan.dev/schemas/resource/v3.json` | 共用資源宣告（MCP servers、templates、model aliases） |
-| `SkillProject` | `https://slogan.dev/schemas/skillproject/v3.json` | Skill 資料夾 project 組織 |
+| `Project` | `https://slogan.dev/schemas/project/v3.json` | Definition 檔案 project 組織 |
 
 ### URL 格式
 
@@ -34,7 +34,7 @@
 https://slogan.dev/schemas/<kind-lowercase>/v3.json
 ```
 
-其中 `<kind-lowercase>` 對應 `apiVersion` 的前半段（如 `workflow`、`task`、`agent`、`toolset`、`resource`、`skillproject`）。
+其中 `<kind-lowercase>` 對應 `apiVersion` 的前半段（如 `workflow`、`task`、`agent`、`toolset`、`resource`、`project`）。
 
 ---
 

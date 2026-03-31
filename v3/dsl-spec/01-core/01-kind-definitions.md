@@ -13,7 +13,7 @@
 | `Agent` | `agent/v3` | AI agent 角色模板 | [13-agent-definition](13-agent-definition.md) |
 | `Toolset` | `toolset/v3` | 具名的 tools + skills 集合 | [18-toolset-definition](18-toolset-definition.md) |
 | `Resources` | `resource/v3` | 共用資源宣告（MCP servers、templates、model aliases） | [19-resources-definition](19-resources-definition.md) |
-| `SkillProject` | `skillproject/v3` | Skill 資料夾的 project 層級組織 | [20-skill-project](20-skill-project.md) |
+| `Project` | `project/v3` | 所有 definition 檔案的 project 層級組織 | [20-project](20-project.md) |
 | `Secret` | `secret/v3` | 加密的機密鍵值對 | [25-secrets-and-env](25-secrets-and-env.md) |
 
 ---
@@ -41,7 +41,7 @@ metadata:
 | Agent | `namespace.role`（dotted） | `order.analyzer`、`fraud.detector` |
 | Toolset | `kebab-case` | `order-processing`、`full-order-suite` |
 | Resources | `kebab-case` | `shared-resources` |
-| SkillProject | `kebab-case` | `order`、`customer` |
+| Project | `kebab-case` | `order`、`customer` |
 | Secret | `snake_case` | `payment_secrets` |
 
 ### version 規則
@@ -76,4 +76,4 @@ kind: Workflow        # ← 偵測依據
 | Kind | 生命週期 |
 |------|---------|
 | Workflow, Task, Agent | DRAFT → VALIDATED → PUBLISHED → DEPRECATED → ARCHIVED |
-| Toolset, Resources, SkillProject, Secret | DRAFT → PUBLISHED → ARCHIVED |
+| Toolset, Resources, Project, Secret | DRAFT → PUBLISHED → ARCHIVED |

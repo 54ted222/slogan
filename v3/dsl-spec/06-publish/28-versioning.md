@@ -6,7 +6,7 @@
 
 ## 版本模型
 
-每個 definition（Workflow / Task / Secret / Agent / Toolset / Resources / SkillProject）以 `(kind, name, version)` 唯一識別。
+每個 definition（Workflow / Task / Secret / Agent / Toolset / Resources / Project）以 `(kind, name, version)` 唯一識別。
 
 ### 版本號規則
 
@@ -14,7 +14,7 @@
 - 同一 `name` 下可存在多個版本，各自擁有獨立的 lifecycle state
 - 新版本 MUST 的 version 值大於同 name 下所有已存在的版本
 - 引擎 MUST 拒絕建立 version <= 已存在最大版本的 definition
-- 此規則適用於所有 kind：Workflow、Task、Secret、Agent、Toolset、Resources、SkillProject
+- 此規則適用於所有 kind：Workflow、Task、Secret、Agent、Toolset、Resources、Project
 
 ### 多版本並存
 
@@ -37,7 +37,7 @@ order_fulfillment v5  →  DRAFT
 | Agent | Agent step 執行時解析（固定版本或 latest） |
 | Toolset | Agent 初始化時解析並展開 includes |
 | Resources | Definition 載入時解析 MCP servers、templates、aliases |
-| SkillProject | Skill 載入時解析 project 路徑與前綴 |
+| Project | Definition 載入時解析 project 路徑與前綴 |
 | Secret | 引擎啟動時載入所有 PUBLISHED secrets |
 
 ---
@@ -225,7 +225,7 @@ Breaking change 指新版 definition 的變更導致既有的呼叫端（workflo
 | Agent | — | `agent/v3`（新增） |
 | Toolset | — | `toolset/v3`（新增） |
 | Resources | — | `resource/v3`（新增） |
-| SkillProject | — | `skillproject/v3`（新增） |
+| Project | — | `project/v3`（新增） |
 
 ### 必要變更（Breaking）
 
@@ -301,7 +301,7 @@ skills:
 | Continue-as-new | `return` + `renew: true` | Workflow 續接，可指定新版本 | [10-step-terminal](10-step-terminal.md) |
 | Toolset | `kind: Toolset` | 統一 tools + skills 集合 | [18-toolset-definition](18-toolset-definition.md) |
 | Resources | `kind: Resources` | MCP servers、string templates、model aliases | [19-resources-definition](19-resources-definition.md) |
-| SkillProject | `kind: SkillProject` | Skill 資料夾分組與管理 | [20-skill-project](20-skill-project.md) |
+| Project | `kind: Project` | Definition 檔案 project 組織 | [20-project](20-project.md) |
 | Instance Labels | workflow instance | 鍵值對分類與查詢 | [24-instance-labels](24-instance-labels.md) |
 | 兩段式 Tool 命名 | task / agent tools | `namespace.action` 格式 | [06-step-task](06-step-task.md)、[14-agent-tools](14-agent-tools.md) |
 
@@ -336,7 +336,7 @@ skills:
 | Agent Skills | [15-agent-skills](15-agent-skills.md) |
 | Toolset Definition | [18-toolset-definition](18-toolset-definition.md) |
 | Resources Definition | [19-resources-definition](19-resources-definition.md) |
-| SkillProject Definition | [20-skill-project](20-skill-project.md) |
+| Project Definition | [20-project](20-project.md) |
 | Lifecycle 狀態 | [23-lifecycle](23-lifecycle.md) |
 | Instance Labels | [24-instance-labels](24-instance-labels.md) |
 | 驗證規則 | [27-validation-rules](27-validation-rules.md) |

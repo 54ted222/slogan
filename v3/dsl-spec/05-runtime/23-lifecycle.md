@@ -36,9 +36,9 @@ DRAFT ──→ VALIDATED ──→ PUBLISHED ──→ DEPRECATED ──→ ARC
 - PUBLISHED → DRAFT（已發布的版本不可修改，需建新版本）
 - ARCHIVED → 任何狀態
 
-### Toolset / Resources / SkillProject Definition
+### Toolset / Resources / Project Definition
 
-Toolset（[18-toolset-definition](18-toolset-definition.md)）、Resources（[19-resources-definition](19-resources-definition.md)）與 SkillProject（[20-skill-project](20-skill-project.md)）使用較簡化的發布流程：
+Toolset（[18-toolset-definition](18-toolset-definition.md)）、Resources（[19-resources-definition](19-resources-definition.md)）與 Project（[20-project](20-project.md)）使用較簡化的發布流程：
 
 ```
 DRAFT ──→ PUBLISHED ──→ ARCHIVED
@@ -61,7 +61,7 @@ DRAFT ──→ PUBLISHED ──→ ARCHIVED
 - PUBLISHED → DRAFT（需建新版本）
 - ARCHIVED → 任何狀態
 
-> 簡化原因：Toolset、Resources、SkillProject 不直接執行，僅作為組裝素材被 Workflow / Agent 引用。不需要 VALIDATED 階段（發布時即驗證）和 DEPRECATED 階段（無 trigger 或獨立執行的概念）。
+> 簡化原因：Toolset、Resources、Project 不直接執行，僅作為組裝素材被 Workflow / Agent 引用。不需要 VALIDATED 階段（發布時即驗證）和 DEPRECATED 階段（無 trigger 或獨立執行的概念）。
 
 ---
 

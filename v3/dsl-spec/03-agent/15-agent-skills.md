@@ -124,7 +124,7 @@ description: "訂單風險分析指引，包含評估框架與判斷標準"
 
 > **決策 F1–F4**：skill 可透過 project 資料夾組織。
 
-當 skill 數量增多時，使用 `kind: SkillProject` 的 `project.yaml` 組織：
+當 skill 數量增多時，使用 `kind: Project` 的 `project.yaml` 組織：
 
 ```
 skills/

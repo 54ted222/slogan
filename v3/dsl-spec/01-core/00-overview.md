@@ -32,7 +32,7 @@
 | **Agent Session** | 一次 agent step 的執行實例，擁有獨立的對話紀錄與狀態 |
 | **Toolset Definition** | 獨立的 YAML 文件（`kind: Toolset`），定義具名的 tools + skills 集合 |
 | **Resources Definition** | 獨立的 YAML 文件（`kind: Resources`），集中宣告 MCP servers、string templates、model aliases 等共用資源 |
-| **SkillProject Definition** | 獨立的 YAML 文件（`kind: SkillProject`），定義 skill 資料夾的 project 層級組織 |
+| **Project Definition** | 獨立的 YAML 文件（`kind: Project`），定義所有 definition 檔案的 project 層級組織 |
 | **Trigger** | 啟動 workflow instance 的機制（manual 或 event） |
 | **Event** | 系統內的具名訊息，包含 `type` 與 `data` |
 | **Artifact** | workflow 使用或產生的外部資源（檔案、資料） |
@@ -71,7 +71,7 @@
 | [17-agent-hooks-and-streaming](17-agent-hooks-and-streaming.md) | Agent Hooks 與 Streaming |
 | [18-toolset-definition](18-toolset-definition.md) | Toolset Definition（`kind: Toolset`） |
 | [19-resources-definition](19-resources-definition.md) | Resources Definition（`kind: Resources`） |
-| [20-skill-project](20-skill-project.md) | SkillProject Definition（`kind: SkillProject`） |
+| [20-project](20-project.md) | Project Definition（`kind: Project`） |
 | [21-error-handling](21-error-handling.md) | 錯誤處理模型 |
 | [22-artifacts](22-artifacts.md) | Artifact 系統 |
 | [23-lifecycle](23-lifecycle.md) | 生命週期狀態機 |
@@ -93,7 +93,7 @@
 |------|----------|
 | v1 | 初版範例（非正式規格） |
 | v2 | 正式規格：CEL + `${ }` 定界符、新增 `sub_workflow`、統一錯誤處理三層模型、`config` 區塊、task definition 獨立化（`kind: Task`）、event trigger `input_mapping`、`kind: Secret` 加密機密管理 |
-| v3 | Agent 一等公民（`kind: Agent`、`type: agent` step）、Saga 補償模式（`type: saga` step + step-level `compensate`）、continue-as-new（`return` + `renew`）、`kind: Toolset`（統一 tools + skills 集合）、`kind: Resources`（MCP servers、string templates、model aliases）、`kind: SkillProject`（skill 資料夾組織）、instance labels、`expr` 改名為 `condition`、兩段式 tool 命名（`namespace.action`）、本地測試模式、JSON Schema 發布 |
+| v3 | Agent 一等公民（`kind: Agent`、`type: agent` step）、Saga 補償模式（`type: saga` step + step-level `compensate`）、continue-as-new（`return` + `renew`）、`kind: Toolset`（統一 tools + skills 集合）、`kind: Resources`（MCP servers、string templates、model aliases）、`kind: Project`（definition 檔案 project 組織）、instance labels、`expr` 改名為 `condition`、兩段式 tool 命名（`namespace.action`）、本地測試模式、JSON Schema 發布 |
 
 ---
 
