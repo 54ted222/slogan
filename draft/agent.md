@@ -125,6 +125,7 @@ tools:
 
 skills:
   - name: risk-analysis
+  - name: compliance-review
 
 config:
   max_iterations: 10
@@ -215,9 +216,18 @@ Agent skills 遵循 [agentskills.io](https://agentskills.io/) 規格，是給 ag
 
 ```yaml
 skills:
-  - name: risk-analysis        # 本地 skill 目錄路徑
+  - name: risk-analysis        # 指定單一 skill
   - name: compliance-review
+  - name: "compliance-*"       # 通配符：載入所有符合 pattern 的 skills
+  - name: "*"                  # 載入所有可用的 skills
 ```
+
+**通配符規則：**
+
+- `*` 匹配零或多個字元（不含 `/`）
+- 通配符在引擎啟動時展開為符合 pattern 的所有已註冊 skill name
+- 展開結果與明確指定的 skill 合併（去重）
+- 若通配符未匹配到任何 skill，不產生錯誤（靜默忽略）
 
 每個 skill 目錄遵循 agentskills.io 結構：
 
@@ -1421,6 +1431,7 @@ tools:
 
 skills:
   - name: risk-analysis
+  - name: compliance-review
 
 config:
   max_iterations: 10
