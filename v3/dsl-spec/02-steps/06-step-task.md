@@ -227,38 +227,55 @@ backend:
   url: string # MUST — 完整 URL（支援 ${ } 表達式）
   method: string # MAY — HTTP method，預設 POST
   headers: map # MAY — HTTP headers
-  body_mapping: string # MAY — full | none，預設 full
   timeout: duration # MAY — HTTP 請求 timeout
   retry_on_status: array # MAY — 可重試的 HTTP status code（如 [429, 502, 503]）
-  response_mapping: # MAY — response 到 output 的映射
-    body: string
-    status_code: string
-  openapi: string # MAY — OpenAPI spec 的 URL 或路徑
 ```
 
-- Task input 預設以 JSON body 傳送（`Content-Type: application/json`）
-- Response body MUST 為 JSON
+##### 預設 OpenAPI 協議
+
+HTTP backend 採用預設的 OpenAPI 格式作為 task 的呼叫協議。引擎根據 task definition 的 `input_schema` 與 `output_schema` 自動產生 OpenAPI spec，工具開發者可直接針對該 OpenAPI 寫程式，無需在 YAML 中定義 `body_mapping`、`response_mapping` 等轉換邏輯。
+
+**預設行為**：
+
+- 引擎根據每個 HTTP task definition 自動產生 OpenAPI operation
+- Request body schema = task 的 `input_schema`
+- Response body schema = task 的 `output_schema`
+- `Content-Type: application/json`（固定）
 - HTTP 2xx = 成功，其他 = 失敗
+- 工具開發者依照引擎發布的 OpenAPI spec 實作 HTTP endpoint 即可
 
-##### OpenAPI 整合
+**引擎發布的 OpenAPI spec**：
 
-HTTP backend 預設支援 OpenAPI 格式。當指定 `openapi` 時，引擎自動依據 OpenAPI spec 處理 input/output 的映射，省去手動轉換：
-
-- 引擎根據 `url` + `method` 匹配 OpenAPI spec 中的 operation
-- 自動從 operation 的 `requestBody` schema 推導 `input_schema`（若 task 未定義）
-- 自動從 operation 的 `responses` schema 推導 `output_schema`（若 task 未定義）
-- Request/Response 的序列化與反序列化依 OpenAPI spec 中的 `content-type` 設定
-
-若同時定義了 `input_schema` / `output_schema` 與 `openapi`，以 task 定義的 schema 為準（覆蓋 OpenAPI 推導的結果）。
+引擎 MUST 提供一個 endpoint（如 `/api/openapi.json`）發布所有 HTTP task 的 OpenAPI spec。每個 HTTP task definition 對應一個 operation：
 
 ```yaml
-# 使用 OpenAPI — 自動推導 schema，省去手動定義
+# Task Definition
+apiVersion: task/v3
+kind: Task
+metadata:
+  name: order.load
+  version: 1
+input_schema:
+  type: object
+  properties:
+    order_id: { type: string }
+  required: [order_id]
+output_schema:
+  type: object
+  properties:
+    id: { type: string }
+    amount: { type: number }
 backend:
   type: http
-  url: "https://api.example.com/orders"
-  method: POST
-  openapi: "https://api.example.com/openapi.json"
+  url: "https://tools.example.com/order/load"
 ```
+
+工具開發者只需查看引擎發布的 OpenAPI spec，即可知道：
+- Request body 結構（來自 `input_schema`）
+- Response body 結構（來自 `output_schema`）
+- URL 與 HTTP method
+
+省去在 YAML 中定義大量轉換規則。
 
 #### builtin
 
