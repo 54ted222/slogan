@@ -54,7 +54,7 @@ should_notify: ${ input.notify_customer == true }
   when: ${ steps.load_order.output.status == "cancelled" }
 
 - id: wait
-  type: wait_event
+  type: wait
   event: payment.confirmed
   match: ${ event.data.order_id == input.order_id }
 ```
@@ -222,8 +222,8 @@ event.timestamp
 
 可用時機：
 - `trigger` 的 `when` 欄位：事件觸發時
-- `wait_event` 的 `match` 欄位：事件比對時
-- `wait_event` 完成後的後續 steps：透過 `steps.<wait_step_id>.output`
+- `wait`（event 模式）的 `match` 欄位：事件比對時
+- `wait` 完成後的後續 steps：透過 `steps.<wait_step_id>.output`
 
 ### artifacts
 

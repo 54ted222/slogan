@@ -52,7 +52,7 @@ on_error:
 | `agent` | 捕捉 agent session 錯誤（見下方 [Agent 錯誤碼](#agent-錯誤碼)） |
 | `saga` | 捕捉 saga 補償後的最終錯誤（見 [12-step-saga](../02-steps/12-step-saga.md)） |
 | `if` / `switch` / `foreach` / `parallel` | Block-level 捕捉 |
-| `wait_event` | 捕捉等待逾時降級的錯誤 |
+| `wait` | 捕捉等待逾時降級的錯誤 |
 
 ### Handler 內可用的 namespace
 
@@ -170,7 +170,7 @@ workflow FAILED
 
 ### Step timeout
 
-- 適用於 `task`、`sub_workflow`、`wait_event`、`agent`
+- 適用於 `task`、`sub_workflow`、`wait`、`agent`
 - 超時 → step TIMED_OUT → 觸發該 step 的 `on_timeout`
 - `on_timeout` 不存在 → 視為 step FAILED，進入錯誤處理流程
 
@@ -246,7 +246,7 @@ Task handler 回傳的 `error.code` 由引擎原樣傳遞至 `on_error` handler 
 |--------|---------|------|
 | `step_timeout` | Step 執行超過 `timeout` 設定 | Step 級 timeout |
 | `workflow_timeout` | Instance 超過 `config.timeout` 設定 | Workflow 級 timeout |
-| `wait_timeout` | `wait_event` 等待超過 `timeout` 設定 | Wait event 專用 timeout |
+| `wait_timeout` | `wait`（event 模式）等待超過 `timeout` 設定 | Wait event 專用 timeout |
 
 注意：`on_timeout` handler 透過 `timeout` namespace（而非 `error` namespace）取得 timeout 資訊。上述錯誤碼用於 timeout 未被 `on_timeout` 處理而降級為 `on_error` 時。
 

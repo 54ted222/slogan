@@ -60,7 +60,7 @@
 | [06-step-task](../02-steps/06-step-task.md) | task 步驟 + Task Definition |
 | [07-step-assign](../02-steps/07-step-assign.md) | assign 步驟 |
 | [08-step-control-flow](../02-steps/08-step-control-flow.md) | if / switch / foreach / parallel |
-| [09-step-events](../02-steps/09-step-events.md) | emit / wait_event |
+| [09-step-events](../02-steps/09-step-events.md) | emit / wait |
 | [10-step-terminal](../02-steps/10-step-terminal.md) | fail / return / continue-as-new（renew） |
 | [11-step-sub-workflow](../02-steps/11-step-sub-workflow.md) | sub_workflow 步驟 |
 | [12-step-saga](../02-steps/12-step-saga.md) | saga 步驟與 step-level compensate |

@@ -440,6 +440,6 @@ steps:
 - [02-document-structure](../01-core/02-document-structure.md) — `triggers` 在 Workflow 頂層結構中的位置
 - [03-expressions](../01-core/03-expressions.md) — CEL 表達式與 `event`、`schedule`、`request` namespace
 - [04-input-output-schema](../01-core/04-input-output-schema.md) — Input schema 驗證
-- [09-step-events](../02-steps/09-step-events.md) — `emit` / `wait_event` 步驟（與 event trigger 共用事件系統）
+- [09-step-events](../02-steps/09-step-events.md) — `emit` / `wait` 步驟（與 event trigger 共用事件系統）
 - [23-lifecycle](23-lifecycle.md) — Instance 狀態機（CREATED → RUNNING）
 - [24-instance-labels](24-instance-labels.md) — 建立 instance 時可同時指定 labels

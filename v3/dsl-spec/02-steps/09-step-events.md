@@ -1,4 +1,4 @@
-# 09 — Steps: emit / wait_event
+# 09 — Steps: emit / wait
 
 本文件定義事件相關的兩種 step 類型。
 
@@ -22,7 +22,7 @@
 |------|------|------|
 | 建立 instance | trigger | 收到事件 → 建立新的 workflow instance |
 | 發送事件 | emit | 發布事件至 event bus |
-| 恢復 instance | wait_event | 等待事件 → 恢復暫停的 instance |
+| 恢復 instance | wait | 等待事件或時間 → 恢復暫停的 instance |
 
 ---
 
@@ -58,22 +58,36 @@
 
 ---
 
-## wait_event
+## wait
 
-暫停 workflow instance，等待匹配的外部事件。
+暫停 workflow instance，等待匹配的外部事件或指定的時間區間。
+
+`wait` 有兩種模式：**event 模式**（等待事件）與 **duration 模式**（等待時間），兩者互斥。
 
 ### Schema
 
 ```yaml
+# Event 模式 — 等待外部事件
 - id: string                     # MAY — 需要參照 output 時才必填
-  type: wait_event
-  event: string                  # MUST — 要等待的事件類型
+  type: wait
+  event: string                  # MUST（event 模式）— 要等待的事件類型
   match: CEL expression          # MAY — 事件匹配條件，回傳 boolean
   timeout: duration              # MAY — 等待逾時
   on_timeout: [...]              # MAY, step 陣列
+
+# Duration 模式 — 等待指定時間
+- id: string                     # MAY
+  type: wait
+  duration: duration             # MUST（duration 模式）— 等待時間（如 5m、1h、30s）
 ```
 
-### 行為
+### 模式判斷規則
+
+- `event` 與 `duration` MUST 二擇一，不可同時存在
+- 至少需要其中一個欄位，否則驗證錯誤
+- `match`、`timeout`、`on_timeout` 僅在 event 模式下有效；duration 模式下出現這些欄位 → 驗證錯誤
+
+### Event 模式行為
 
 1. Step 進入 RUNNING 狀態
 2. 引擎建立 **wait_subscription**，記錄：instance ID、step ID、event type、match expression、expires_at
@@ -86,9 +100,26 @@
    - 事件的 `data` 成為此 step 的 output（`steps.<id>.output` = `event.data`）
 6. Instance 恢復為 RUNNING，繼續後續 steps
 
+### Duration 模式行為
+
+1. Step 進入 RUNNING 狀態
+2. 引擎建立 **wait_timer**，記錄：instance ID、step ID、resume_at（當前時間 + duration）
+3. Step 狀態轉為 WAITING，instance 狀態轉為 WAITING
+4. Instance 暫停（不佔用運算資源，非 blocking）
+5. 當到達 resume_at 時間：
+   - Step 恢復為 RUNNING → SUCCEEDED
+   - 此 step 的 output 為空 map `{}`
+6. Instance 恢復為 RUNNING，繼續後續 steps
+
+### Duration 模式的持久化
+
+- 引擎 MUST 將 wait_timer 持久化，確保 crash recovery 後仍能正確恢復
+- 已過期的 wait_timer（`resume_at` <= 當前時間）→ 立即恢復 instance
+- Instance 被取消 → 刪除對應的 wait_timer
+
 ### match 的求值上下文
 
-`match` 表達式中可用的 namespaces：
+`match` 表達式中可用的 namespaces（僅 event 模式）：
 
 - `event.data`、`event.type`、`event.id` 等（當前候選事件）
 - `input`、`steps`、`vars`（workflow instance 的資料）
@@ -99,6 +130,8 @@ match: ${ event.data.order_id == input.order_id && event.data.status == "confirm
 
 ### timeout 行為
 
+（僅 event 模式）
+
 - 超過 `timeout` 且仍未收到匹配事件 → step TIMED_OUT
 - 若有 `on_timeout` → 執行 handler steps
   - Handler 正常完成 → workflow 繼續後續 steps
@@ -108,8 +141,9 @@ match: ${ event.data.order_id == input.order_id && event.data.status == "confirm
 ### 範例
 
 ```yaml
+# Event 模式 — 等待付款確認
 - id: wait_payment
-  type: wait_event
+  type: wait
   event: payment.confirmed
   match: ${ event.data.order_id == steps.load_order.output.id }
   timeout: 30m
@@ -120,6 +154,18 @@ match: ${ event.data.order_id == input.order_id && event.data.status == "confirm
         order_id: ${ steps.load_order.output.id }
     - type: fail
       message: "payment confirmation timeout"
+
+# Duration 模式 — 等待 5 分鐘後繼續
+- type: wait
+  duration: 5m
+
+# Duration 模式 — 等待 1 小時後發送提醒
+- type: wait
+  duration: 1h
+- type: emit
+  event: order.reminder
+  data:
+    order_id: ${ input.order_id }
 ```
 
 ---

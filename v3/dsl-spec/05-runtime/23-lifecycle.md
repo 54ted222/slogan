@@ -139,7 +139,7 @@ CREATED ──→ RUNNING ──⇄── WAITING
 |------|------|
 | CREATED | Instance 已建立，尚未開始執行 |
 | RUNNING | 正在執行 steps |
-| WAITING | 暫停中，等待外部事件（`wait_event`） |
+| WAITING | 暫停中，等待外部事件或時間（`wait`） |
 | SUCCEEDED | 正常完成（透過 `return` 或所有 steps 完成） |
 | FAILED | 異常終止（透過 `fail`、未處理的錯誤、或 timeout） |
 | CANCELLED | 被外部取消（API / parent workflow） |
@@ -153,14 +153,14 @@ CREATED ──→ RUNNING ──⇄── WAITING
 | 從 | 到 | 觸發條件 |
 |----|-----|----------|
 | CREATED | RUNNING | 排程器開始執行 |
-| RUNNING | WAITING | 遇到 `wait_event` step |
+| RUNNING | WAITING | 遇到 `wait` step |
 | RUNNING | SUCCEEDED | 遇到 `return` 或所有 steps 完成 |
 | RUNNING | FAILED | 遇到 `fail`、未處理錯誤、或 workflow timeout |
 | RUNNING | CANCELLED | 外部取消請求 |
 | RUNNING | CONTINUED | 遇到 `continue_as_new`，新 instance 已建立 |
 | RUNNING | COMPENSATING | Saga 範圍內 step 失敗，觸發補償流程 |
-| WAITING | RUNNING | 收到匹配事件，或 wait_event timeout 觸發且有 handler 需執行 |
-| WAITING | FAILED | wait_event timeout 且所有層級均無 handler（on_timeout 及 on_error） |
+| WAITING | RUNNING | 收到匹配事件、wait duration 到期，或 wait timeout 觸發且有 handler 需執行 |
+| WAITING | FAILED | wait timeout 且所有層級均無 handler（on_timeout 及 on_error） |
 | WAITING | CANCELLED | 外部取消請求 |
 | COMPENSATING | COMPENSATED | 所有補償 step 成功完成 |
 | COMPENSATING | COMPENSATION_FAILED | 補償 step 失敗（abort 模式中止 / continue 模式部分失敗） |
@@ -224,7 +224,7 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
                 │        │   │
                 │        │   ├──→ FAILED
                 │        │   ├──→ SKIPPED    （if/switch 無匹配分支）
-                │        │   ├──→ WAITING    （僅 wait_event / agent）
+                │        │   ├──→ WAITING    （僅 wait / agent）
                 │        │   │      ├──→ TIMED_OUT （等待逾時）
                 │        │   │      └──→ CANCELLED
                 │        │   ├──→ TIMED_OUT
@@ -240,7 +240,7 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 | RUNNING | 正在執行中 |
 | SUCCEEDED | 執行成功 |
 | FAILED | 執行失敗（retry 用盡，且 on_error 未處理或不存在） |
-| WAITING | 等待外部事件（`wait_event`）或人類回覆（`agent` 呼叫 `ask_human`） |
+| WAITING | 等待外部事件或時間（`wait`）或人類回覆（`agent` 呼叫 `ask_human`） |
 | TIMED_OUT | 執行超時 |
 | CANCELLED | 被外部取消（workflow timeout、parent 取消、API 取消） |
 | SKIPPED | when 為 false、所在分支未被選中、或控制流程 step 無匹配的執行分支（if 無 else 且 when 為 false、switch 無匹配且無 default） |
@@ -255,11 +255,11 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 | RUNNING | SKIPPED | 控制流程 step 無匹配的執行分支（if 無 else 且 when 為 false、switch 無匹配且無 default） |
 | RUNNING | SUCCEEDED | 執行完成 |
 | RUNNING | FAILED | 執行失敗 |
-| RUNNING | WAITING | wait_event 進入等待；agent 呼叫 `ask_human` |
+| RUNNING | WAITING | wait 進入等待；agent 呼叫 `ask_human` |
 | RUNNING | TIMED_OUT | 超過 timeout |
 | RUNNING | CANCELLED | 外部取消（workflow timeout 或取消請求） |
 | WAITING | RUNNING | 收到匹配事件或人類回覆 |
-| WAITING | TIMED_OUT | `wait_event` 等待逾時 |
+| WAITING | TIMED_OUT | `wait` 等待逾時 |
 | WAITING | CANCELLED | 外部取消（workflow timeout 或取消請求） |
 
 SUCCEEDED、FAILED、TIMED_OUT、CANCELLED、SKIPPED 為 terminal 狀態。

@@ -227,7 +227,7 @@ tools_exclude:
 - `if` / `switch`（條件判斷）
 - `foreach` / `parallel`（迴圈與平行）
 - `emit`（發送事件）
-- `wait_event`（等待外部事件，loop 暫停）
+- `wait`（等待外部事件或時間，loop 暫停）
 - `return`（結束 loop，產生 output）
 - `fail`（中止 loop 並報錯）
 - `sub_workflow`（呼叫子 workflow）

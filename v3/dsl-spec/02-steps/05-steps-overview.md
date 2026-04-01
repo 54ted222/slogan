@@ -15,7 +15,7 @@
 | `foreach`      | 迴圈迭代                                        |
 | `parallel`     | 平行分支                                        |
 | `emit`         | 發送事件                                        |
-| `wait_event`   | 等待外部事件                                    |
+| `wait`         | 等待外部事件或指定時間                          |
 | `fail`         | 中止 workflow 並報錯                            |
 | `return`       | 回傳結果並完成 workflow（支援 continue-as-new） |
 | `sub_workflow` | 呼叫另一個 workflow definition                  |
@@ -38,10 +38,10 @@
 
 | 屬性         | 適用類型                                                       | 說明                           |
 | ------------ | -------------------------------------------------------------- | ------------------------------ |
-| `timeout`    | task, sub_workflow, wait_event, agent                          | 執行時間上限                   |
+| `timeout`    | task, sub_workflow, wait, agent                                | 執行時間上限                   |
 | `retry`      | task, sub_workflow, agent                                      | 重試設定                       |
 | `on_error`   | task, sub_workflow, agent, if, switch, foreach, parallel, saga | 錯誤處理（值為 step 陣列）     |
-| `on_timeout` | task, sub_workflow, wait_event, agent                          | timeout 處理（值為 step 陣列） |
+| `on_timeout` | task, sub_workflow, wait, agent                                | timeout 處理（值為 step 陣列） |
 
 ### when 範例
 
@@ -189,7 +189,7 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 | RUNNING   | 正在執行中                                                          |
 | SUCCEEDED | 執行成功完成                                                        |
 | FAILED    | 執行失敗（包含 retry 用盡後仍失敗）                                 |
-| WAITING   | 等待外部事件（`wait_event`）或人類回覆（agent `ask_human`）         |
+| WAITING   | 等待外部事件或時間（`wait`）或人類回覆（agent `ask_human`）         |
 | TIMED_OUT | 執行超時                                                            |
 | CANCELLED | 被外部取消（workflow timeout、parent 取消、API 取消）               |
 | SKIPPED   | `when` 為 false、所在分支未被選中、或控制流程 step 無匹配的執行分支 |
@@ -202,7 +202,7 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 - RUNNING → SKIPPED：控制流程 step 無匹配的執行分支
 - RUNNING → SUCCEEDED：執行完成
 - RUNNING → FAILED：執行失敗（retry 用盡）
-- RUNNING → WAITING：`wait_event` 進入等待、或 agent `ask_human` 等待人類回覆
+- RUNNING → WAITING：`wait` 進入等待、或 agent `ask_human` 等待人類回覆
 - RUNNING → TIMED_OUT：超過 `timeout`
 - RUNNING → CANCELLED：外部取消（workflow timeout 或取消請求）
 - WAITING → RUNNING：收到匹配事件或人類回覆，恢復執行

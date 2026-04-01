@@ -86,7 +86,7 @@ hooks:
 
 Hook steps 支援與一般 workflow 相同的 step 類型：`task`、`assign`、`if`、`switch`、`emit`、`fail` 等。
 
-但不支援 `return`（hook 不能中斷 agent 流程）和 `wait_event`（hook 必須同步完成）。
+但不支援 `return`（hook 不能中斷 agent 流程）和 `wait`（hook 必須同步完成）。
 
 若 hook 中的 `fail` step 被觸發，agent session 將中止並標記為 FAILED。
 
@@ -315,6 +315,6 @@ loop:
 
 ## 相關文件
 
-- [09-step-events](../02-steps/09-step-events.md) — emit 與 wait_event step
+- [09-step-events](../02-steps/09-step-events.md) — emit 與 wait step
 - [16-agent-loop](16-agent-loop.md) — Agent step schema 與自訂 loop
 - [15-agent-skills](15-agent-skills.md) — Agent skills 與 agentskills.io 規格

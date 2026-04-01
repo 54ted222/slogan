@@ -291,7 +291,7 @@ steps:
     timeout: 30s
 
   - id: wait_confirmed
-    type: wait_event
+    type: wait
     event: payment.confirmed
     match: ${ event.data.payment_id == steps.create_payment.output.payment_id }
     timeout: 30m

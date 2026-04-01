@@ -73,7 +73,7 @@
 ### Step 結構
 
 - 每個 step MUST 有 `type`；`id` 為非必填（見 Step ID 驗證）
-- `type` MUST 為已定義的 13 種類型之一（task、assign、if、switch、foreach、parallel、emit、wait_event、fail、return、sub_workflow、agent、saga）
+- `type` MUST 為已定義的 13 種類型之一（task、assign、if、switch、foreach、parallel、emit、wait、fail、return、sub_workflow、agent、saga）
 - 每種 step type 的必填欄位 MUST 存在（如 task 的 `action`、if 的 `when`、switch 的 `when`）
 - `compensate`（若存在）MUST 為非空 step 陣列，且 compensate 內的 step 須通過標準 step 驗證（詳見 [12-step-saga](../02-steps/12-step-saga.md)）
 - 未知欄位 SHOULD 產生警告
@@ -261,7 +261,9 @@
 
 - `timeout` 值 MUST 為有效的 duration 格式（如 `10s`、`5m`、`1h`、`2h30m`）
 - Step timeout SHOULD 小於 workflow timeout（若兩者都定義）— 違反時產生警告
-- `wait_event` 的 timeout SHOULD 被定義 — 缺少時產生警告
+- `wait`（event 模式）的 timeout SHOULD 被定義 — 缺少時產生警告
+- `wait` 的 `event` 與 `duration` MUST 二擇一，不可同時存在，也不可都不存在
+- `wait`（duration 模式）MUST NOT 包含 `match`、`timeout`、`on_timeout` 欄位
 
 ---
 

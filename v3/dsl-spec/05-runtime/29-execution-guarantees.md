@@ -272,11 +272,11 @@ tools:
 
 ### Timeout 與 Event 同時到達
 
-當 `wait_event` step 的 timeout 和匹配事件幾乎同時到達時：
+當 `wait` step（event 模式）的 timeout 和匹配事件幾乎同時到達時：
 
 ```
 Timeline:
-  t=0    wait_event 進入 WAITING
+  t=0    wait 進入 WAITING
   t=30m  timeout fires_at
 
   Case A: event 在 t=29m59s 到達，timeout 在 t=30m 觸發
@@ -344,7 +344,7 @@ Timeline:
 |------|------|
 | Step 類型與共通屬性 | [05-steps-overview](../02-steps/05-steps-overview.md) |
 | Task step | [06-step-task](../02-steps/06-step-task.md) |
-| 事件 step（wait_event） | [09-step-events](../02-steps/09-step-events.md) |
+| 事件 step（wait） | [09-step-events](../02-steps/09-step-events.md) |
 | Agent Definition 與 persist_history | [13-agent-definition](../03-agent/13-agent-definition.md) |
 | Agent Tools 與 sequential_only | [14-agent-tools](../03-agent/14-agent-tools.md) |
 | Agent Loop（自訂 loop） | [16-agent-loop](../03-agent/16-agent-loop.md) |
