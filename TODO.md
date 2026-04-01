@@ -11,6 +11,7 @@ v3 DSL spec 已完成，尚需更新對應的 runtime-spec 與 cli-spec：
 
 3. **分析 Task toolset 是否合併** — 評估 task step 與 toolset 概念是否應合併，分析合併與不合併的優缺點
 4. **Agent stream 處理方式** — 定義 agent step 的 streaming 輸出如何傳遞與消費
+5. **Switch value 支援 CEL 表達式** — `switch` 的 `value` 欄位應可撰寫 CEL 表達式，而非僅限靜態值
 
 ## FUTURE.md 延後項目
 
