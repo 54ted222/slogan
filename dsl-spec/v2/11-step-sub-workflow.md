@@ -21,8 +21,7 @@
   version: integer | "latest"         # MAY, 預設 "latest"
   input: map | CEL expression         # MAY — 傳給子 workflow 的輸入
   timeout: duration                   # MAY
-  execution:
-    policy: replayable | idempotent | non_repeatable  # MAY, 預設 replayable
+  execution_policy: replayable | idempotent | non_repeatable  # MAY, 預設 replayable
   retry:
     max_attempts: integer             # MAY
     delay: duration                   # MAY
@@ -130,8 +129,7 @@ Child workflow 的失敗資訊可在 parent 的 `on_error` handler 中存取：
     order_id: ${ steps.load_order.output.id }
     amount: ${ steps.load_order.output.amount }
   timeout: 5m
-  execution:
-    policy: non_repeatable
+  execution_policy: non_repeatable
   on_error:
     - type: emit
       event: payment.failed
@@ -185,8 +183,7 @@ steps:
     input:
       order_id: ${ input.order_id }
       amount: ${ input.amount }
-    execution:
-      policy: non_repeatable
+    execution_policy: non_repeatable
     timeout: 30s
 
   - id: wait_confirmed

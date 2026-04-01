@@ -375,7 +375,7 @@ DRAFT → VALIDATED → PUBLISHED → DEPRECATED → ARCHIVED
 
 ## Execution Policy 與 Task Definition 的關係
 
-Execution policy（`replayable` / `idempotent` / `non_repeatable`）定義在 **workflow step** 中，而非 task definition 中。
+`execution_policy`（`replayable` / `idempotent` / `non_repeatable`）定義在 **workflow step** 中，而非 task definition 中。
 
 原因：同一個 task definition 在不同 workflow context 下可能有不同的 execution policy 需求。例如 `payment.create` 在主流程中是 `non_repeatable`，但在測試用的 mock workflow 中可以是 `replayable`。
 

@@ -111,6 +111,22 @@ Event / API / Timer
 | `fires_at` | 觸發時間 |
 | `type` | `step_timeout` / `workflow_timeout` |
 
+### expression_cache
+
+| 欄位 | 說明 |
+|------|------|
+| `id` | 唯一識別 |
+| `workflow_instance_id` | 所屬 instance |
+| `step_id` | 所屬 step |
+| `expression_position` | 表達式在 step 定義中的位置識別 |
+| `function_name` | 非確定性函式名稱（`now` / `uuid`） |
+| `value` | 函式回傳值（JSON 序列化） |
+| `created_at` | 記錄時間 |
+
+用於 deterministic replay：runtime 首次求值 `now()` 或 `uuid()` 時 MUST 記錄回傳值；replay 時 MUST 使用記錄值而非重新求值。
+
+---
+
 ### execution_log
 
 | 欄位 | 說明 |

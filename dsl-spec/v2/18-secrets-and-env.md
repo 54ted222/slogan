@@ -90,12 +90,11 @@ encryption:
   type: aes
   config:
     algorithm: aes-256-gcm
-    iv: "base64_encoded_iv"
     salt: "base64_encoded_salt"
 
 data:
-  PAYMENT_API_KEY: "base64_encrypted_value"
-  PAYMENT_WEBHOOK_SECRET: "base64_encrypted_value"
+  PAYMENT_API_KEY: "base64(iv + ciphertext + tag)"
+  PAYMENT_WEBHOOK_SECRET: "base64(iv + ciphertext + tag)"
 ```
 
 ### 欄位說明
@@ -121,9 +120,14 @@ data:
 | 欄位 | 型別 | 說明 |
 |------|------|------|
 | `algorithm` | string | `aes-256-gcm`（預設）或 `aes-256-cbc` |
-| `iv` | string | Base64 編碼的初始化向量 |
-| `salt` | string | Base64 編碼的鹽值 |
-| `tag` | string | Base64 編碼的 authentication tag（GCM 模式） |
+| `salt` | string | Base64 編碼的鹽值（用於 PBKDF2 衍生金鑰） |
+
+每個 `data` value 為獨立加密，格式為 `base64(iv + ciphertext + tag)`：
+- `iv`：12 bytes（AES-GCM）或 16 bytes（AES-CBC），每個 value 獨立隨機產生
+- `ciphertext`：加密後的密文
+- `tag`：16 bytes authentication tag（僅 GCM 模式）
+
+**重要**：每個 value MUST 使用獨立的 IV。AES-GCM 下重用 IV 會破壞認證性與機密性。
 
 ### 在 CEL 中存取
 
@@ -195,11 +199,11 @@ $ slogan secret encode secrets/payment.yaml -o secrets/payment.enc.yaml
 
 1. 讀取明文 YAML（`is_encrypted: false`）
 2. 提示輸入密碼（或從 `SLOGAN_SECRET_KEY` 環境變數讀取）
-3. 產生隨機 salt 與 IV
+3. 產生隨機 salt
 4. 使用 PBKDF2 從密碼衍生 256-bit 加密金鑰
-5. 以 AES-256-GCM 加密每個 `data` 中的值
-6. 將加密結果以 Base64 編碼寫回 `data`
-7. 設定 `is_encrypted: true` 並填入 `encryption` 區塊
+5. 對每個 `data` 中的值，產生獨立隨機 IV，以 AES-256-GCM 加密
+6. 將每個加密結果以 `base64(iv + ciphertext + tag)` 格式寫回 `data`
+7. 設定 `is_encrypted: true` 並填入 `encryption` 區塊（含 `salt`）
 8. 覆寫原檔（或寫入 `-o` 指定的檔案）
 
 ### slogan secret decode

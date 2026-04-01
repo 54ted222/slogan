@@ -55,7 +55,7 @@ on_error:
 
 | Handler 結果 | 後續行為 |
 |-------------|----------|
-| 正常完成（無 `fail`） | 錯誤視為已處理，workflow 從失敗 step 的下一個 step 繼續 |
+| 正常完成（無 `fail`） | 錯誤視為已處理，workflow 從失敗 step 的下一個 step 繼續。失敗 step 的 output 為 `null`；若需傳遞資料給後續 step，SHOULD 在 handler 中使用 `assign` 設定 `vars` |
 | 使用 `fail` step | 錯誤重新拋出，繼續向上層尋找 handler |
 | Handler 自身失敗 | 視為未處理錯誤，繼續向上層尋找 handler |
 
@@ -83,7 +83,11 @@ on_timeout:
 
 ### Handler 完成行為
 
-與 `on_error` 相同。
+| Handler 結果 | 後續行為 |
+|-------------|----------|
+| 正常完成（無 `fail`） | 錯誤視為已處理，workflow 繼續。Step 狀態仍為 TIMED_OUT，output 為 `null` |
+| 使用 `fail` step | 錯誤重新拋出，繼續向上層尋找 handler |
+| Handler 自身失敗 | 視為未處理錯誤，繼續向上層尋找 handler |
 
 ---
 
@@ -117,9 +121,11 @@ Step 執行 → 失敗
 
 ### Step timeout
 
-- 適用於 `task`、`sub_workflow`、`wait_event`
-- 超時 → step TIMED_OUT → 觸發該 step 的 `on_timeout`
-- `on_timeout` 不存在 → 視為 step FAILED，進入錯誤處理流程
+- 適用於 `task`、`sub_workflow`、`wait_event`、`foreach`、`parallel`
+- 超時 → step TIMED_OUT → 觸發該 step 的 `on_timeout`（若有）
+- `on_timeout` handler 正常完成 → 錯誤視為已處理，workflow 繼續執行下一個 step（step 狀態仍為 TIMED_OUT，output 為 `null`）
+- `on_timeout` handler 使用 `fail` → 錯誤重新拋出，繼續向上層尋找 handler
+- `on_timeout` 不存在 → 進入 `on_error` 錯誤處理流程（step-level → block-level → workflow-level）；若都沒有 → workflow FAILED
 
 ### Workflow timeout
 

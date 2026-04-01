@@ -35,7 +35,7 @@
 
 | 屬性 | 適用類型 | 說明 |
 |------|----------|------|
-| `timeout` | task, sub_workflow, wait_event | 執行時間上限 |
+| `timeout` | task, sub_workflow, wait_event, foreach, parallel | 執行時間上限 |
 | `retry` | task, sub_workflow | 重試設定 |
 | `on_error` | task, sub_workflow, if, switch, foreach, parallel | 錯誤處理（值為 step 陣列） |
 | `on_timeout` | task, sub_workflow, wait_event | timeout 處理（值為 step 陣列） |
@@ -146,12 +146,18 @@ steps:
 
 ```
 PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
-                │        │   │
-                │        │   ├──→ FAILED
-                │        │   ├──→ WAITING    （僅 wait_event）
-                │        │   └──→ TIMED_OUT
-                │
-                └──→ SKIPPED       （condition 為 false）
+   │            │        │   │
+   │            │        │   ├──→ FAILED
+   │            │        │   ├──→ WAITING    （僅 wait_event）
+   │            │        │   └──→ TIMED_OUT
+   │            │
+   │            └──→ SKIPPED       （condition 為 false）
+   │
+   ├──→ CANCELLED   （外部取消：workflow cancel / parent timeout）
+   │
+READY ──→ CANCELLED
+RUNNING ──→ CANCELLED
+WAITING ──→ CANCELLED
 ```
 
 ### 狀態說明
@@ -164,12 +170,13 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 | SUCCEEDED | 執行成功完成 |
 | FAILED | 執行失敗（包含 retry 用盡後仍失敗） |
 | WAITING | 等待外部事件（僅 `wait_event`） |
-| TIMED_OUT | 執行超時 |
-| SKIPPED | `condition` 為 false，或所在分支未被選中 |
+| TIMED_OUT | 執行超時。若有 `on_timeout` handler 且正常完成，錯誤視為已處理，workflow 繼續執行下一個 step；step 狀態仍為 TIMED_OUT，output 為 `null` |
+| SKIPPED | `condition` 為 false，或所在分支未被選中。output 為 `null` |
+| CANCELLED | 被外部取消（workflow cancel 請求或 parent timeout 觸發） |
 
 ### 狀態轉換規則
 
-- PENDING → READY：前一個 step 完成（SUCCEEDED 或 SKIPPED）
+- PENDING → READY：前一個 step 完成（SUCCEEDED、SKIPPED、或 TIMED_OUT 且 on_timeout 已處理）
 - READY → RUNNING：排程器開始執行
 - READY → SKIPPED：`condition` 求值為 `false`
 - RUNNING → SUCCEEDED：執行完成
@@ -177,5 +184,19 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 - RUNNING → WAITING：`wait_event` 進入等待
 - RUNNING → TIMED_OUT：超過 `timeout`
 - WAITING → RUNNING：收到匹配事件，恢復執行
+- PENDING → CANCELLED：外部取消時，尚未到達的 step
+- READY → CANCELLED：外部取消時，等待排程的 step
+- RUNNING → CANCELLED：外部取消時，正在執行的 step
+- WAITING → CANCELLED：外部取消時，等待事件的 step
 
-所有 terminal 狀態（SUCCEEDED、FAILED、TIMED_OUT、SKIPPED）MUST NOT 再轉換。
+所有 terminal 狀態（SUCCEEDED、FAILED、TIMED_OUT、SKIPPED、CANCELLED）MUST NOT 再轉換。
+
+### Non-terminal 狀態的 output 語意
+
+| 狀態 | `steps.<id>.output` |
+|------|---------------------|
+| SUCCEEDED | task/step 的回傳值 |
+| SKIPPED | `null` |
+| TIMED_OUT | `null`（即使 on_timeout handler 已處理） |
+| FAILED | `null`（即使 on_error handler 已處理） |
+| CANCELLED | `null` |

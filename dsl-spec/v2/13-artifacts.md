@@ -146,3 +146,34 @@ Artifact 的實際儲存機制（S3、local filesystem、database 等）由 runt
 - 存取控制語意
 - lifecycle 語意
 - CEL 可讀取的中繼資料欄位
+
+---
+
+## TODO: Task Handler 存取協議
+
+> 以下為待設計的規格區塊，目前尚未定案。
+
+目前規格定義了 artifact 的宣告與 `resources` 綁定，但尚未定義 **task handler 實際如何讀寫 artifact 內容**的協議。
+
+### 設計方向
+
+統一採用 **URI** 方式：runtime 將 artifact 的存取資訊（含 URI 與必要的認證資訊）注入到 task input 中，handler 透過 URI 自行存取內容。
+
+- Runtime 在 task 執行前解析 `resources` 綁定，將 artifact URI 與 credentials 注入到 handler 可見的 context
+- Handler 使用標準協議（HTTP GET/PUT、S3 SDK 等）透過 URI 存取內容
+- 適用所有 backend type（bash、http、sdk、builtin）
+
+### 待定義項目
+
+- 注入的資料結構（URI、credentials、metadata 的 schema）
+- 認證機制（presigned URL、bearer token、或其他）
+- Write artifact 的上傳確認與原子性保證
+- 大檔案的分片上傳支援
+
+### 另：Task HTTP Backend 預設 OpenAPI 格式
+
+Task definition 的 `http` backend 應支援以 OpenAPI 格式定義 API 介面，作為預設的 HTTP task 描述方式。待定義項目：
+
+- OpenAPI spec 的引用方式（inline 或外部檔案）
+- 從 OpenAPI 自動推導 input/output schema
+- 與現有 `url`、`method`、`headers` 欄位的關係

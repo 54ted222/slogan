@@ -107,12 +107,19 @@ vars.is_pay_action
 
 | 變數 | 型別 | 說明 |
 |------|------|------|
-| `loop.item` | any | 當前迭代的元素 |
+| `loop.<as>` | any | 當前迭代的元素（`<as>` 為 `foreach` 的 `as` 欄位值，預設為 `item`） |
 | `loop.index` | int | 當前迭代的索引（從 0 開始） |
 
 ```
+# as: item（預設）
 loop.item.sku
 loop.item.qty
+
+# as: order
+loop.order.sku
+loop.order.qty
+
+# index 不受 as 影響
 loop.index
 ```
 
@@ -258,18 +265,26 @@ CEL 原生型別：
 
 | 函式 | 回傳 | 說明 |
 |------|------|------|
-| `now()` | timestamp | 當前 UTC 時間 |
-| `uuid()` | string | 產生 UUID v4 |
+| `now()` | timestamp | 當前 UTC 時間（非確定性，見下方 Replay 語意） |
+| `uuid()` | string | 產生 UUID v4（非確定性，見下方 Replay 語意） |
 | `json_encode(value)` | string | 將值編碼為 JSON 字串 |
 | `json_decode(string)` | any | 將 JSON 字串解碼為值 |
 | `coalesce(a, b, ...)` | any | 回傳第一個非 null 的值 |
 | `default(value, fallback)` | any | 若 value 為 null 則回傳 fallback |
 
+### 非確定性函式的 Replay 語意
+
+`now()` 與 `uuid()` 為非確定性函式，會破壞 deterministic replay 保證。為確保「相同輸入 + 相同事件序列 = 相同結果」：
+
+- Runtime MUST 在首次求值時記錄這些函式的回傳值至持久化儲存（見 [15-runtime-persistence](15-runtime-persistence.md) 的 `expression_cache`）
+- Replay（crash recovery）時，runtime MUST 使用記錄的值，而非重新求值
+- 記錄的 key 為 `workflow_instance_id + step_id + expression_position`（expression_position 為該表達式在 step 定義中的位置識別）
+
 ---
 
 ## 求值語意
 
-1. **純函式**：CEL 表達式求值 MUST 為純函式，不產生副作用（`now()` 和 `uuid()` 除外）
+1. **純函式**：CEL 表達式求值 MUST 為純函式，不產生副作用（`now()` 和 `uuid()` 除外，見「非確定性函式的 Replay 語意」）
 2. **求值失敗**：表達式求值失敗（型別錯誤、null reference 等）→ 所在 step 狀態變為 FAILED
 3. **Null 傳播**：存取不存在的欄位回傳 `null`；對 null 呼叫方法將導致求值失敗。使用 `has()` 或 `default()` 做防禦性存取
 4. **求值時機**：表達式在 step 進入 RUNNING 狀態時求值，不提前求值

@@ -83,12 +83,17 @@ Step instance 的執行狀態：
 
 ```
 PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
-                │        │   │
-                │        │   ├──→ FAILED
-                │        │   ├──→ WAITING    （僅 wait_event）
-                │        │   └──→ TIMED_OUT
-                │        │
-                └──→ SKIPPED
+   │            │        │   │
+   │            │        │   ├──→ FAILED
+   │            │        │   ├──→ WAITING    （僅 wait_event）
+   │            │        │   └──→ TIMED_OUT
+   │            │
+   │            └──→ SKIPPED
+   │
+   ├──→ CANCELLED   （外部取消）
+READY ──→ CANCELLED
+RUNNING ──→ CANCELLED
+WAITING ──→ CANCELLED
 ```
 
 | 狀態 | 說明 |
@@ -99,8 +104,9 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 | SUCCEEDED | 執行成功 |
 | FAILED | 執行失敗（retry 用盡，且 on_error 未處理或不存在） |
 | WAITING | 等待外部事件（僅 `wait_event`） |
-| TIMED_OUT | 執行超時 |
-| SKIPPED | condition 為 false 或所在分支未被選中 |
+| TIMED_OUT | 執行超時。若有 `on_timeout` handler 且正常完成，錯誤視為已處理，workflow 繼續；step 狀態仍為 TIMED_OUT，output 為 `null` |
+| SKIPPED | condition 為 false 或所在分支未被選中。output 為 `null` |
+| CANCELLED | 被外部取消（workflow cancel 請求或 parent timeout）。output 為 `null` |
 
 ### 允許的轉換
 
@@ -114,8 +120,12 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 | RUNNING | WAITING | wait_event 進入等待 |
 | RUNNING | TIMED_OUT | 超過 timeout |
 | WAITING | RUNNING | 收到匹配事件 |
+| PENDING | CANCELLED | 外部取消 |
+| READY | CANCELLED | 外部取消 |
+| RUNNING | CANCELLED | 外部取消 |
+| WAITING | CANCELLED | 外部取消 |
 
-SUCCEEDED、FAILED、TIMED_OUT、SKIPPED 為 terminal 狀態。
+SUCCEEDED、FAILED、TIMED_OUT、SKIPPED、CANCELLED 為 terminal 狀態。
 
 ---
 

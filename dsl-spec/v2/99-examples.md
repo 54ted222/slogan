@@ -272,8 +272,7 @@ steps:
       delay: 2s
       backoff: exponential
     timeout: 10s
-    execution:
-      policy: replayable
+    execution_policy: replayable
 
   # ── 2. 指派變數（assign）──
   - type: assign
@@ -316,8 +315,7 @@ steps:
               order_id: ${ steps.load_order.output.id }
               amount: ${ steps.load_order.output.amount }
             timeout: 35m
-            execution:
-              policy: non_repeatable
+            execution_policy: non_repeatable
             on_error:
               - type: emit
                 event: payment.failed
@@ -333,8 +331,7 @@ steps:
             input:
               order_id: ${ steps.load_order.output.id }
               address: ${ steps.load_order.output.shipping_address }
-            execution:
-              policy: idempotent
+            execution_policy: idempotent
             timeout: 30s
 
     default:
@@ -346,7 +343,7 @@ steps:
   - id: reserve_items
     type: foreach
     items: ${ input.items }
-    as: item
+    as: order_item
     concurrency: 3
     failure_policy: fail_fast
     do:
@@ -354,10 +351,9 @@ steps:
         action: inventory.reserve
         input:
           order_id: ${ steps.load_order.output.id }
-          sku: ${ loop.item.sku }
-          qty: ${ loop.item.qty }
-        execution:
-          policy: idempotent
+          sku: ${ loop.order_item.sku }
+          qty: ${ loop.order_item.qty }
+        execution_policy: idempotent
 
   # ── 6. 平行處理（parallel）──
   - type: parallel
@@ -463,8 +459,7 @@ steps:
       order_id: ${ input.order_id }
       amount: ${ input.amount }
       idempotency_key: ${ uuid() }
-    execution:
-      policy: non_repeatable
+    execution_policy: non_repeatable
     timeout: 30s
     on_error:
       - type: emit
@@ -538,8 +533,7 @@ steps:
           sku: ${ input.sku }
           qty: 100
           priority: "urgent"
-        execution:
-          policy: idempotent
+        execution_policy: idempotent
       - type: emit
         event: inventory.urgent_reorder
         data:
@@ -552,8 +546,7 @@ steps:
           sku: ${ input.sku }
           qty: 50
           priority: "normal"
-        execution:
-          policy: idempotent
+        execution_policy: idempotent
 
   - type: task
     action: notify.warehouse
@@ -597,8 +590,7 @@ config:
       input:
         channel: "ops"
         message: ${ "pipeline failed: " + error.message }
-      execution:
-        policy: replayable
+      execution_policy: replayable
 
 steps:
   - id: fetch_data

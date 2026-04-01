@@ -126,12 +126,20 @@
 ## 其他驗證
 
 - `foreach` 的 `concurrency` MUST 為正整數
+- `foreach` 的 `as`（若存在）MUST 為有效的 `snake_case` 識別字
 - `foreach` 的 `failure_policy` MUST 為 `fail_fast`、`continue`、`ignore` 之一
 - `parallel` 的 `failure_policy` MUST 為 `fail_fast`、`wait_all` 之一
-- `parallel` 的 `branches` MUST 至少有兩個分支
-- `task` 的 `execution.policy` MUST 為 `replayable`、`idempotent`、`non_repeatable` 之一
+- `parallel` 的 `branches` MUST 至少有一個分支
+- `task` 的 `execution_policy` MUST 為 `replayable`、`idempotent`、`non_repeatable` 之一
 - `retry.max_attempts` MUST 為正整數
 - `retry.backoff` MUST 為 `fixed` 或 `exponential`
+
+---
+
+## Output Schema 與 Return 路徑
+
+- 若 workflow 定義了 `output.schema` 且有 `required` 欄位，validation SHOULD 警告缺少 `return` step 的執行路徑
+- 此為 warning（不阻擋），因為靜態分析無法涵蓋所有動態分支情境
 
 ---
 

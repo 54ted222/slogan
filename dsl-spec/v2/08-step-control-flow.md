@@ -111,21 +111,23 @@
 ```yaml
 - type: foreach
   items: CEL expression          # MUST, 回傳 list
-  as: string                     # MAY, 預設 "item"
+  as: string                     # MAY, 預設 "item"（決定 loop.<as> 的名稱）
   concurrency: integer           # MAY, 預設 1（sequential）
   failure_policy: string         # MAY, 預設 "fail_fast"
   do: [...]                      # MUST, step 陣列
+  timeout: duration              # MAY — 整個 foreach 的執行時間上限
   on_error: [...]                # MAY
+  on_timeout: [...]              # MAY
 ```
 
 ### 迭代變數
 
 | 變數 | 說明 |
 |------|------|
-| `loop.item` | 當前迭代的元素 |
+| `loop.<as>` | 當前迭代的元素（`<as>` 為 `as` 欄位的值，預設 `item`） |
 | `loop.index` | 當前迭代的索引（從 0 開始） |
 
-`as` 欄位僅作為文件用途（提升可讀性），runtime 一律使用 `loop.item` 與 `loop.index`。
+`as` 欄位決定迭代元素在 `loop` namespace 中的名稱。未指定 `as` 時預設為 `item`（即 `loop.item`）。`loop.index` 不受 `as` 影響。
 
 ### concurrency
 
@@ -141,9 +143,15 @@
 | `continue` | 所有迭代都執行完畢，若有任一失敗 → foreach FAILED |
 | `ignore` | 忽略個別迭代的失敗，foreach 永遠 SUCCEEDED |
 
+### timeout 行為
+
+- 超過 `timeout` → 取消所有進行中的迭代，foreach step TIMED_OUT
+- 若有 `on_timeout` → 執行 handler steps
+- 若無 `on_timeout` → 進入錯誤處理流程（見 [12-error-handling](12-error-handling.md)）
+
 ### output
 
-`steps.<foreach_id>.output` 為一個 array，每個元素對應一次迭代中最後一個 step 的 output。
+`steps.<foreach_id>.output` 為一個 array，每個元素對應一次迭代中最後一個 step 的 output。失敗或 SKIPPED 的迭代，其對應 output 元素為 `null`。
 
 ### 範例
 
@@ -151,7 +159,7 @@
 - id: reserve_items
   type: foreach
   items: ${ input.items }
-  as: item
+  as: order_item
   concurrency: 3
   failure_policy: fail_fast
   do:
@@ -159,8 +167,8 @@
       action: inventory.reserve
       input:
         order_id: ${ steps.load_order.output.id }
-        sku: ${ loop.item.sku }
-        qty: ${ loop.item.qty }
+        sku: ${ loop.order_item.sku }
+        qty: ${ loop.order_item.qty }
 ```
 
 ---
@@ -173,11 +181,13 @@
 
 ```yaml
 - type: parallel
-  branches:                      # MUST, 至少兩個 step 陣列
+  branches:                      # MUST, 至少一個 step 陣列
     - [...]
     - [...]
   failure_policy: string         # MAY, 預設 "fail_fast"
+  timeout: duration              # MAY — 整個 parallel 的執行時間上限
   on_error: [...]                # MAY
+  on_timeout: [...]              # MAY
 ```
 
 `branches` 為陣列的陣列：外層每個元素是一個 branch，內層是該 branch 的 step 陣列。
@@ -188,6 +198,12 @@
 |----|------|
 | `fail_fast` | 任一 branch 失敗 → 取消其他 branches，parallel FAILED |
 | `wait_all` | 等待所有 branches 完成，若有任一失敗 → parallel FAILED |
+
+### timeout 行為
+
+- 超過 `timeout` → 取消所有進行中的 branches，parallel step TIMED_OUT
+- 若有 `on_timeout` → 執行 handler steps
+- 若無 `on_timeout` → 進入錯誤處理流程（見 [12-error-handling](12-error-handling.md)）
 
 ### output
 
