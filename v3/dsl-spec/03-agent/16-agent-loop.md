@@ -33,13 +33,12 @@ Workflow 中的 `type: agent` step 引用 agent definition 並組裝實際能力
 
   # 標準 step 屬性
   timeout: duration                   # MAY
-  execution:
-    policy: replayable | idempotent | non_repeatable  # MAY, 預設 replayable
+  execution_policy: replayable | idempotent | non_repeatable  # MAY, 預設 replayable
   retry:
     max_attempts: integer             # MAY, 預設 1
     delay: duration                   # MAY, 預設 1s
     backoff: fixed | exponential      # MAY, 預設 fixed
-  on_error: [...]                     # MAY, step 陣列
+  catch: [...]                     # MAY, step 陣列
   on_timeout: [...]                   # MAY, step 陣列
 ```
 

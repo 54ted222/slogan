@@ -24,7 +24,7 @@
 | 保證 | 說明 |
 |------|------|
 | At-least-once | 每個 task / agent step 至少被嘗試執行一次。Crash 後 recovery 可能導致重複執行 |
-| **非** exactly-once | 引擎無法保證 step 只被執行恰好一次。需要 exactly-once 語意的 step 應透過 `execution.policy` + `idempotency key` 自行實現 |
+| **非** exactly-once | 引擎無法保證 step 只被執行恰好一次。需要 exactly-once 語意的 step 應透過 `execution_policy` + `idempotency key` 自行實現 |
 
 ### 各 Execution Policy 的語意
 
@@ -81,7 +81,7 @@ Step RUNNING → Engine crash
      ↓
 Engine restart → 載入 step instance（state = RUNNING, attempt = N）
      ↓
-依 execution.policy 決定：
+依 execution_policy 決定：
   replayable    → 重跑（attempt 不變 = N）
   idempotent    → 帶 key 重跑（key = instance:step:N，與 crash 前相同）
   non_repeatable → 標記 FAILED
@@ -129,7 +129,7 @@ HTTP 請求結果
 | 可重試（transient） | 暫時性問題，重試可能成功 | 正常 retry（respect delay + backoff） |
 | 永久性（permanent） | 不可能透過重試解決 | 仍然 retry（引擎不區分），直到 attempts 用盡 |
 
-引擎**不區分**可重試與永久性失敗的 retry 行為。無論失敗類型，只要 `max_attempts` 未用盡就重試。區分的用途在於讓使用者在 `on_error` handler 中透過 `error.code` 判斷失敗原因。
+引擎**不區分**可重試與永久性失敗的 retry 行為。無論失敗類型，只要 `max_attempts` 未用盡就重試。區分的用途在於讓使用者在 `catch` handler 中透過 `error.code` 判斷失敗原因。
 
 ---
 
@@ -147,7 +147,7 @@ HTTP 請求結果
 
 ### Step Recovery 規則
 
-`execution.policy` 適用於 `task`、`sub_workflow` 與 `agent` step。其他 step 類型（assign、emit、if、switch、foreach、parallel、saga）在 RUNNING 狀態下的 recovery 行為等同 `replayable`（安全重跑）。
+`execution_policy` 適用於 `task`、`sub_workflow` 與 `agent` step。其他 step 類型（assign、emit、if、switch、foreach、parallel、saga）在 RUNNING 狀態下的 recovery 行為等同 `replayable`（安全重跑）。
 
 | Step 狀態 | Execution Policy | Recovery 行為 |
 |-----------|-----------------|---------------|

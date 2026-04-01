@@ -15,7 +15,7 @@
   when: CEL expression        # MUST, 回傳 boolean
   then: [...]                      # MUST, step 陣列
   else: [...]                      # MAY, step 陣列
-  on_error: [...]                  # MAY
+  catch: [...]                     # MAY
 ```
 
 ### 行為
@@ -61,10 +61,10 @@
 - type: switch
   when: CEL expression        # MUST
   cases:                           # MUST, 至少一個
-    - value: any                   #   比對值
+    - value: any | CEL expression  #   比對值（字面值或 CEL 表達式）
       then: [...]                  #   step 陣列
   default: [...]                   # MAY, step 陣列
-  on_error: [...]                  # MAY
+  catch: [...]                     # MAY
 ```
 
 ### 行為
@@ -74,7 +74,8 @@
 - 無匹配且有 `default` → 執行 default 陣列
 - 無匹配且無 `default` → step SKIPPED
 - `when` 求值失敗 → step FAILED
-- `value` 可以是 string、number、boolean
+- `value` 可以是字面值（string、number、boolean）或 CEL 表達式
+- 當 `value` 為 CEL 表達式時，先求值再與 `when` 的結果做相等比較
 
 ### output
 
@@ -119,11 +120,10 @@
 ```yaml
 - type: foreach
   items: CEL expression          # MUST, 回傳 list
-  as: string                     # MAY, 預設 "item"
   concurrency: integer           # MAY, 預設 1（sequential）
   failure_policy: string         # MAY, 預設 "fail_fast"
   do: [...]                      # MUST, step 陣列
-  on_error: [...]                # MAY
+  catch: [...]                   # MAY
 ```
 
 ### 迭代變數
@@ -132,8 +132,6 @@
 |------|------|
 | `loop.item` | 當前迭代的元素 |
 | `loop.index` | 當前迭代的索引（從 0 開始） |
-
-`as` 欄位僅作為文件用途（提升可讀性），runtime 一律使用 `loop.item` 與 `loop.index`。
 
 ### concurrency
 
@@ -163,7 +161,6 @@
 - id: reserve_items
   type: foreach
   items: ${ input.items }
-  as: item
   concurrency: 3
   failure_policy: fail_fast
   do:
@@ -189,7 +186,7 @@
     - steps: [...]
     - steps: [...]
   failure_policy: string         # MAY, 預設 "fail_fast"
-  on_error: [...]                # MAY
+  catch: [...]                   # MAY
 ```
 
 `branches` 為 branch 物件的陣列，每個 branch 包含 `steps` 欄位（step 陣列）。
@@ -206,7 +203,7 @@
 `steps.<parallel_id>.output` 為一個 array，索引對應 `branches` 的順序：
 
 - 成功的 branch：該 branch 最後一個 step 的 output
-- 失敗的 branch（`failure_policy` 為 `wait_all` 且 `on_error` 已處理）：`null`
+- 失敗的 branch（`failure_policy` 為 `wait_all` 且 `catch` 已處理）：`null`
 
 ### 範例
 

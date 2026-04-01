@@ -94,7 +94,7 @@ steps.create_payment.output.payment_id
 | 值 | 說明 |
 |----|------|
 | `"SUCCEEDED"` | step 成功完成 |
-| `"FAILED"` | step 失敗（已被 on_error 處理，workflow 繼續） |
+| `"FAILED"` | step 失敗（已被 catch 處理，workflow 繼續） |
 | `"SKIPPED"` | step 被跳過（when 為 false 或分支未選中） |
 | `null` | step 尚未執行 |
 
@@ -110,7 +110,7 @@ steps.create_payment.output.payment_id
 **非 SUCCEEDED step 的 output**：
 
 - **SKIPPED**（`when` 為 false 或所在分支未被選中）：`steps.<id>.output` 回傳 `null`
-- **FAILED**（錯誤已被 `on_error` handler 處理，workflow 繼續執行）：`steps.<id>.output` 回傳 `null`
+- **FAILED**（錯誤已被 `catch` handler 處理，workflow 繼續執行）：`steps.<id>.output` 回傳 `null`
 
 使用 `default()` 做防禦性存取：
 
@@ -262,9 +262,9 @@ secret.STRIPE_SECRET
 
 詳見 [25-secrets-and-env](../04-resources/25-secrets-and-env.md)。
 
-### error（限 on_error handler 內）
+### error（限 catch handler 內）
 
-錯誤資訊，僅在 `on_error` handler 的 steps 中可用。
+錯誤資訊，僅在 `catch` handler 的 steps 中可用。
 
 | 變數 | 型別 | 說明 |
 |------|------|------|

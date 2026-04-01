@@ -85,7 +85,7 @@
 - `id` 為非必填；未指定 id 的 step，引擎自動產生內部 ID（`_<type>_<index>`）
 - 使用者定義的 `id` MUST NOT 以 `_` 開頭（避免與自動產生的 ID 衝突）
 - 所有使用者定義的 step id MUST 在整個 definition 中全域唯一
-- 包含巢狀於 if/switch/foreach/parallel/on_error/on_timeout/saga/compensate 內的 steps
+- 包含巢狀於 if/switch/foreach/parallel/catch/on_timeout/saga/compensate 內的 steps
 - 重複的 id → 驗證失敗
 - 若有 `steps.<id>.output` 參照，被參照的 `<id>` 對應的 step MUST 有明確指定 `id`
 
@@ -179,15 +179,6 @@
 - 同一 definition 內 artifact 名稱 MUST 唯一
 
 ---
-
-## Task Step Resources 驗證
-
-- `resources` 中每個 resource MUST 有 `name`、`type`、`ref`、`access`
-- `resources[].type` MUST 為 `artifact`
-- `resources[].ref` MUST 引用 workflow `artifacts` 中已宣告的 artifact 名稱
-- `resources[].access` MUST 為 `read`、`write`、`read_write` 之一
-- 同一 task step 內 resource `name` MUST 唯一
-- 若 task definition 使用 `backend.type: http`，step MUST NOT 定義 `resources`（HTTP backend 不支援 artifact binding）
 
 ---
 
@@ -307,8 +298,6 @@
 
 - `items` MUST 存在且為有效的 CEL 表達式（SHOULD 回傳 list）
 - `do` MUST 存在且為非空 step 陣列
-- `as`（若存在）MUST 為有效的識別字（documentation only，不影響 `loop.item` 行為）
-
 ---
 
 ## 其他驗證

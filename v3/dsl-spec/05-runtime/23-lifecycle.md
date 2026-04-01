@@ -160,7 +160,7 @@ CREATED ──→ RUNNING ──⇄── WAITING
 | RUNNING | CONTINUED | 遇到 `continue_as_new`，新 instance 已建立 |
 | RUNNING | COMPENSATING | Saga 範圍內 step 失敗，觸發補償流程 |
 | WAITING | RUNNING | 收到匹配事件、wait duration 到期，或 wait timeout 觸發且有 handler 需執行 |
-| WAITING | FAILED | wait timeout 且所有層級均無 handler（on_timeout 及 on_error） |
+| WAITING | FAILED | wait timeout 且所有層級均無 handler（on_timeout 及 catch） |
 | WAITING | CANCELLED | 外部取消請求 |
 | COMPENSATING | COMPENSATED | 所有補償 step 成功完成 |
 | COMPENSATING | COMPENSATION_FAILED | 補償 step 失敗（abort 模式中止 / continue 模式部分失敗） |
@@ -239,7 +239,7 @@ PENDING ──→ READY ──→ RUNNING ──→ SUCCEEDED
 | READY | 前置條件滿足，等待排程 |
 | RUNNING | 正在執行中 |
 | SUCCEEDED | 執行成功 |
-| FAILED | 執行失敗（retry 用盡，且 on_error 未處理或不存在） |
+| FAILED | 執行失敗（retry 用盡，且 catch 未處理或不存在） |
 | WAITING | 等待外部事件或時間（`wait`）或人類回覆（`agent` 呼叫 `ask_human`） |
 | TIMED_OUT | 執行超時 |
 | CANCELLED | 被外部取消（workflow timeout、parent 取消、API 取消） |

@@ -21,13 +21,12 @@
   version: integer | "latest"         # MAY, 預設 "latest"
   input: map | CEL expression         # MAY — 傳給子 workflow 的輸入
   timeout: duration                   # MAY
-  execution:
-    policy: replayable | idempotent | non_repeatable  # MAY, 預設 replayable
+  execution_policy: replayable | idempotent | non_repeatable  # MAY, 預設 replayable
   retry:
     max_attempts: integer             # MAY
     delay: duration                   # MAY
     backoff: fixed | exponential      # MAY
-  on_error: [...]                     # MAY, step 陣列
+  catch: [...]                     # MAY, step 陣列
   on_timeout: [...]                   # MAY, step 陣列
   compensate: [...]                   # MAY, step 陣列 — saga 補償邏輯（見 [12-step-saga](12-step-saga.md)）
 ```
@@ -44,7 +43,7 @@
 3. Child instance 獨立執行（擁有自己的 step instances、state）
 4. Parent step 等待 child instance 完成
 5. Child SUCCEEDED → parent step SUCCEEDED，`steps.<id>.output` = child 的 return output
-6. Child FAILED → parent step FAILED（可被 `on_error` 捕捉）
+6. Child FAILED → parent step FAILED（可被 `catch` 捕捉）
 
 ---
 
@@ -127,7 +126,7 @@ Sub_workflow step 的 `execution.policy` 決定 crash recovery 時 parent step �
 
 ## 錯誤傳播
 
-Child workflow 的失敗資訊可在 parent 的 `on_error` handler 中存取：
+Child workflow 的失敗資訊可在 parent 的 `catch` handler 中存取：
 
 | 變數 | 說明 |
 |------|------|
@@ -233,9 +232,8 @@ Child instance 的保留策略與一般 instance 相同（見 [runtime-spec/08-s
     order_id: ${ steps.load_order.output.id }
     amount: ${ steps.load_order.output.amount }
   timeout: 5m
-  execution:
-    policy: non_repeatable
-  on_error:
+  execution_policy: non_repeatable
+  catch:
     - type: emit
       event: payment.failed
       data:
@@ -286,8 +284,7 @@ steps:
     input:
       order_id: ${ input.order_id }
       amount: ${ input.amount }
-    execution:
-      policy: non_repeatable
+    execution_policy: non_repeatable
     timeout: 30s
 
   - id: wait_confirmed

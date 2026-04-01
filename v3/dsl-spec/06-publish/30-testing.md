@@ -125,7 +125,7 @@ tasks:
 
 #### Mock 失敗
 
-模擬 task 呼叫失敗，用於測試 `on_error`、`retry` 等錯誤處理邏輯：
+模擬 task 呼叫失敗，用於測試 `catch`、`retry` 等錯誤處理邏輯：
 
 ```yaml
 tasks:
@@ -433,7 +433,7 @@ slogan test workflow.yaml --input '{"order_id": "ORD-001"}' --mock mocks.yaml
 # 低金額 → 跳過 flag
 slogan test workflow.yaml --input '{"order_id": "ORD-999"}' --mock mocks.yaml
 
-# 找不到 → on_error 處理
+# 找不到 → catch 處理
 slogan test workflow.yaml --input '{"order_id": "ORD-XXX"}' --mock mocks.yaml
 ```
 

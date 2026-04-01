@@ -40,7 +40,7 @@
 | ------------ | -------------------------------------------------------------- | ------------------------------ |
 | `timeout`    | task, sub_workflow, wait, agent                                | 執行時間上限                   |
 | `retry`      | task, sub_workflow, agent                                      | 重試設定                       |
-| `on_error`   | task, sub_workflow, agent, if, switch, foreach, parallel, saga | 錯誤處理（值為 step 陣列）     |
+| `catch`      | task, sub_workflow, agent, if, switch, foreach, parallel, saga | 錯誤處理（值為 step 陣列）     |
 | `on_timeout` | task, sub_workflow, wait, agent                                | timeout 處理（值為 step 陣列） |
 
 ### when 範例
@@ -147,12 +147,12 @@ steps:
       action: order.process
     - type: emit
       event: order.done
-  on_error:
+  catch:
     - type: fail
       message: "process failed"
 ```
 
-適用的欄位：`then`、`else`、`default`、`on_error`、`on_timeout`、`compensate`、`branches`（每個 branch）、`foreach` 的 `do`、`saga` 的 `steps`。
+適用的欄位：`then`、`else`、`default`、`catch`、`on_timeout`、`compensate`、`branches`（每個 branch）、`foreach` 的 `do`、`saga` 的 `steps`。
 
 ---
 

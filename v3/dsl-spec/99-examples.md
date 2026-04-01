@@ -184,14 +184,13 @@ input_schema:
 config:
   timeout: 1h
   # Workflow-level: 最後防線
-  on_error:
+  catch:
     - type: task
       action: alert.send
       input:
         channel: "ops"
         message: ${ "pipeline failed: " + error.message }
-      execution:
-        policy: replayable
+      execution_policy: replayable
 
 steps:
   - id: fetch_data
@@ -205,7 +204,7 @@ steps:
       backoff: exponential
     timeout: 60s
     # Step-level: 重試用盡後，記錄錯誤但繼續
-    on_error:
+    catch:
       - type: assign
         vars:
           fetch_failed: true
@@ -214,7 +213,7 @@ steps:
   - type: parallel
     failure_policy: wait_all
     # Block-level: 捕捉 parallel 內的錯誤
-    on_error:
+    catch:
       - type: emit
         event: pipeline.partial_failure
         data:
@@ -663,15 +662,13 @@ steps:
   - id: process_items
     type: foreach
     items: ${ steps.fetch_batch.output.items }
-    as: item
     concurrency: 5
     do:
       - type: task
         action: datasource.sync_item
         input:
           item: ${ loop.item }
-        execution:
-          policy: idempotent
+        execution_policy: idempotent
 
   # 3. 計算同步數量
   - type: assign

@@ -142,7 +142,7 @@ https://slogan.dev/schemas/<kind-lowercase>/v3.json
         },
         "timeout": { "type": "string" },
         "retry": { "$ref": "#/$defs/retryConfig" },
-        "on_error": {
+        "catch": {
           "type": "array",
           "items": { "$ref": "#/$defs/step" }
         },

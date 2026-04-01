@@ -16,16 +16,14 @@
   action: string # MUST — task definition 的 name（兩段式命名：namespace.action）
   version: integer | "latest" # MAY, 預設 "latest"
   input: map | CEL expression # MAY — 傳給 task 的輸入
-  resources: array # MAY — artifact 綁定
-  execution:
-    policy: replayable | idempotent | non_repeatable # MAY, 預設 replayable
+  execution_policy: replayable | idempotent | non_repeatable # MAY, 預設 replayable
   retry:
     max_attempts: integer # MAY, 預設 1（不重試）
     delay: duration # MAY, 預設 1s
     backoff: fixed | exponential # MAY, 預設 fixed
   timeout: duration # MAY
   compensate: [...] # MAY, step 陣列（saga 補償邏輯）
-  on_error: [...] # MAY, step 陣列
+  catch: [...] # MAY, step 陣列
   on_timeout: [...] # MAY, step 陣列
 ```
 
@@ -78,20 +76,6 @@ Task handler 回傳的值即為 step output，後續 steps 透過 `steps.<id>.ou
 
 Output 會依 task definition 的 `output_schema` 驗證（若有定義）。
 
-### resources 綁定
-
-將 artifact 綁定到 task，指定存取權限：
-
-```yaml
-resources:
-  - name: order_file # handler 內部使用的名稱
-    type: artifact
-    ref: order_file # 對應 artifacts 區塊中的 key
-    access: read # read | write | read_write
-```
-
-詳見 [22-artifacts](../05-runtime/22-artifacts.md)。
-
 ### Execution Policy
 
 定義 task 在 crash recovery 時的重跑策略。Policy 定義在 **workflow step** 中，而非 task definition 中。
@@ -102,7 +86,7 @@ resources:
 | `idempotent`     | 可重跑，使用 idempotency key 確保結果一致 | 帶 key 重跑     |
 | `non_repeatable` | 不可重跑（如扣款、發送通知）              | 直接標記 FAILED |
 
-未指定 `execution.policy` 時，預設為 `replayable`。
+未指定 `execution_policy` 時，預設為 `replayable`。
 
 ### Retry 機制
 
@@ -113,7 +97,7 @@ resources:
 | `backoff`      | string   | fixed | `fixed`: 固定間隔；`exponential`: 指數遞增 |
 
 - 僅在 step FAILED 時重試，TIMED_OUT 不觸發重試
-- 重試次數用盡仍失敗 → 觸發 `on_error`（若有），否則 step 最終狀態為 FAILED
+- 重試次數用盡仍失敗 → 觸發 `catch`（若有），否則 step 最終狀態為 FAILED
 - `exponential` backoff：delay × 2^(attempt - 1)
 
 ### 範例
@@ -134,8 +118,7 @@ resources:
   input:
     order_id: ${ steps.load_order.output.id }
     amount: ${ steps.load_order.output.amount }
-  execution:
-    policy: non_repeatable
+  execution_policy: non_repeatable
   retry:
     max_attempts: 3
     delay: 2s
@@ -146,7 +129,7 @@ resources:
       action: payment.refund
       input:
         payment_id: ${ steps.create_payment.output.payment_id }
-  on_error:
+  catch:
     - type: emit
       event: payment.failed
       data:
@@ -214,8 +197,7 @@ backend:
     "instance_id": "string",
     "step_id": "string",
     "attempt": 1
-  },
-  "artifacts": {}
+  }
 }
 ```
 
@@ -251,12 +233,32 @@ backend:
   response_mapping: # MAY — response 到 output 的映射
     body: string
     status_code: string
+  openapi: string # MAY — OpenAPI spec 的 URL 或路徑
 ```
 
 - Task input 預設以 JSON body 傳送（`Content-Type: application/json`）
 - Response body MUST 為 JSON
 - HTTP 2xx = 成功，其他 = 失敗
-- HTTP backend **不支援** artifact resource binding
+
+##### OpenAPI 整合
+
+HTTP backend 預設支援 OpenAPI 格式。當指定 `openapi` 時，引擎自動依據 OpenAPI spec 處理 input/output 的映射，省去手動轉換：
+
+- 引擎根據 `url` + `method` 匹配 OpenAPI spec 中的 operation
+- 自動從 operation 的 `requestBody` schema 推導 `input_schema`（若 task 未定義）
+- 自動從 operation 的 `responses` schema 推導 `output_schema`（若 task 未定義）
+- Request/Response 的序列化與反序列化依 OpenAPI spec 中的 `content-type` 設定
+
+若同時定義了 `input_schema` / `output_schema` 與 `openapi`，以 task 定義的 schema 為準（覆蓋 OpenAPI 推導的結果）。
+
+```yaml
+# 使用 OpenAPI — 自動推導 schema，省去手動定義
+backend:
+  type: http
+  url: "https://api.example.com/orders"
+  method: POST
+  openapi: "https://api.example.com/openapi.json"
+```
 
 #### builtin
 
