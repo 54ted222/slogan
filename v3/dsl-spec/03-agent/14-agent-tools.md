@@ -328,28 +328,28 @@ POST /agents/{session_id}/respond
 
 ### 6.4 artifact.list
 
-列出 workflow artifact 的中繼資料與 URI，供 agent 自行下載或上傳。
+列出 workflow artifact 的中繼資料與 workspace 路徑，供 agent 直接操作檔案。
 
 | Tool | Input | Output | 說明 |
 |------|-------|--------|------|
-| `artifact.list` | `{}` | `{ artifacts: array }` | 列出可用 artifact 名稱、metadata 與 URI |
+| `artifact.list` | `{}` | `{ artifacts: array }` | 列出可用 artifact 名稱、metadata 與路徑 |
 
-每個 artifact 項目包含：`name`、`kind`、`lifecycle`、`uri`（下載用）、`upload_uri`（上傳用，僅 output/intermediate）、`content_type`、`size`。
+每個 artifact 項目包含：`name`、`kind`、`lifecycle`、`path`（workspace 中的絕對路徑）、`access`、`content_type`、`size`、`exists`。
 
-Agent 透過 URI 自行下載與上傳 artifact 內容（使用 HTTP tool 或其他工具）。
+Agent 可直接讀寫 workspace 中的檔案（本機 agent），或透過 CRUD API 操作（遠端 agent）。
 
-#### 在 prompt / input 中傳遞 URI
+#### 在 prompt / input 中傳遞路徑
 
-也可在 prompt 或 input 中以 CEL 表達式直接傳遞 artifact 的 URI 或內容：
+也可在 prompt 或 input 中以 CEL 表達式直接傳遞 artifact 的路徑或內容：
 
 ```yaml
 - type: agent
   agent: document.reviewer
   prompt: |
     請審閱以下文件並給出修改建議：
-    下載 URI：${ artifacts.order_file.uri }
+    檔案路徑：${ artifacts.order_file.path }
   input:
-    upload_uri: ${ artifacts.result_report.upload_uri }
+    output_file: ${ artifacts.result_report.path }
 ```
 
 ### 6.5 registry.search / registry.list / registry.activate

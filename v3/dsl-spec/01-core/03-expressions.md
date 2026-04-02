@@ -227,12 +227,16 @@ event.timestamp
 
 ### artifacts
 
-Artifact 的中繼資料。
+Artifact 的 workspace 路徑與中繼資料。
 
 ```
-artifacts.order_file.uri
+artifacts._workspace_path
+artifacts.order_file.path
 artifacts.order_file.size
 artifacts.order_file.content_type
+artifacts.order_file.content
+artifacts.order_file.access
+artifacts.order_file.exists
 ```
 
 可用時機：所有 steps。

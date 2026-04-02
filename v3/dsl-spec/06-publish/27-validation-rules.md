@@ -172,11 +172,18 @@
 
 ## Artifact 宣告驗證
 
-- `artifacts` 中每個 artifact MUST 有 `kind`（`file` 或 `data`）
+- `artifacts` 中每個 artifact MUST 有 `kind`（`file`、`data`、`directory`）
 - `artifacts` 中每個 artifact MUST 有 `lifecycle`（`input`、`output`、`intermediate`）
 - `lifecycle: input` 的 artifact 若 `required: true`，CreateInstance 時 MUST 提供
 - artifact 名稱 MUST 為有效的 `snake_case` 識別字
 - 同一 definition 內 artifact 名稱 MUST 唯一
+- `workspace_path` 若指定，MUST 為合法的相對路徑（不得以 `/` 或 `..` 開頭）
+- 同一 definition 內 `workspace_path` MUST 唯一（不得重疊）
+- `access` 若指定，MUST 為 `read` 或 `read_write`
+- `concurrency` 若指定，MUST 為 `lock` 或 `last_write_wins`
+- `source.type` 若指定，MUST 為 `s3` 或 `local`
+- `sync.strategy` 若指定，MUST 為 `on_success`、`on_step_complete`、`eager`、`manual`
+- `sync.conflict` 若指定，MUST 為 `overwrite`、`fail`、`version`
 
 ---
 

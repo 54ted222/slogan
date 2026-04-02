@@ -290,7 +290,8 @@ Task handler 回傳的 `error.code` 由引擎原樣傳遞至 `catch` handler 的
 | 錯誤碼 | 觸發條件 | 說明 |
 |--------|---------|------|
 | `artifact_required` | 必填 input artifact 未提供 | `required: true` 的 artifact 缺失 |
-| `artifact_not_found` | Artifact URI 指向不存在的資源 | URI 無效或已過期 |
+| `artifact_not_found` | Artifact source 指向不存在的資源 | S3 key 不存在或本機路徑無效 |
+| `artifact_sync_failed` | Artifact 同步回原始位置失敗 | 儲存後端不可用或衝突策略為 `fail` 時偵測到變更 |
 
 #### 系統相關
 
