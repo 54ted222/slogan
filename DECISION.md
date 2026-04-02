@@ -265,31 +265,24 @@
 
 ## N. Artifact Workspace 模型（[draft/artifact-workspace.md](draft/artifact-workspace.md)）
 
-> Artifact 系統從 URI 模型調整為 workspace 目錄模型。引擎負責實體化檔案到暫存目錄，task/agent 直接操作檔案；遠端 task 透過 CRUD API 操作。
+> 已於 2026-04-02 完成決策，歸檔至 [history/20260402_artifact_workspace_decision.md](history/20260402_artifact_workspace_decision.md)。
 
 ### N1. Workspace 目錄是否支援自訂結構
 
-- [ ] **A** — 扁平結構：所有 artifact 直接放在 workspace 根目錄
-- [ ] **B** — 支援子目錄：artifact 可指定 `workspace_path` 放在子目錄中
+- [x] **B** — 支援子目錄：artifact 可指定 `workspace_path` 放在子目錄中
 
 ### N2. 大檔案是否支援 lazy 下載
 
-- [ ] **A** — 所有 artifact 在 instance 建立時全部下載
-- [ ] **B** — 支援 `lazy: true` 標記，首次存取時才下載
+- [x] **A** — 所有 artifact 在 instance 建立時全部下載
 
 ### N3. 本機 source 是否支援目錄（不僅是檔案）
 
-- [ ] **A** — 僅支援單一檔案
-- [ ] **B** — 支援目錄（遞迴複製或 mount）
+- [x] **B** — 支援目錄（遞迴複製或 mount）
 
 ### N4. 遠端 task 的 artifact API token 注入方式
 
-- [ ] **A** — 引擎自動注入到 task input（`artifact_api_base` + `artifact_api_token`）
-- [ ] **B** — 透過 HTTP header 傳遞（如 `X-Artifact-Token`）
-- [ ] **C** — 兩者皆支援
+- [x] **C** — 兩者皆支援
 
 ### N5. 同一 artifact 的並行寫入處理
 
-- [ ] **A** — 引擎以鎖機制防止同一 artifact 同時被多個 step 寫入
-- [ ] **B** — 允許並行寫入，last-write-wins
-- [ ] **C** — 由 artifact 設定決定（`concurrency: lock | last_write_wins`）
+- [x] **C** — 由 artifact 設定決定（`concurrency: lock | last_write_wins`）
