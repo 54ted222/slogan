@@ -11,6 +11,7 @@ v3 DSL spec 已完成，尚需更新對應的 runtime-spec 與 cli-spec：
 
 3. **分析 Task toolset 是否合併** — 評估 task step 與 toolset 概念是否應合併，分析合併與不合併的優缺點
 4. **Agent stream 處理方式** — 定義 agent step 的 streaming 輸出如何傳遞與消費
+5. **wait 同時等待多個事件** — 定義 wait step 可以同時等待多個不同事件的語法與行為（例如同時等 signal + timeout + webhook 等）
 
 ## FUTURE.md 延後項目
 
