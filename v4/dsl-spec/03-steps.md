@@ -193,6 +193,9 @@ Output 為一個 array，索引對應 branches 順序。
     order_id: ${ steps.load_order.output.id }
   delay: 30m                    # MAY — 延遲發送
 ```
+### todo
+emit 到 其他workflow 
+
 
 ---
 
