@@ -204,3 +204,15 @@ backend:
   timeout: 10s
   retry_on_status: [429, 502, 503]
 ```
+
+## todo
+type: stdio
+要加入一個 text 的概念 可以使用 CEL  
+text將會取代預設的json格式，改以純字串傳給 command, 
+可以使用 CEL ，且有 backend 變數空間 可以拿 context
+
+
+tools 返回
+也要可以定義 輸出格式
+也可以 mapping 輸出格式，預設是一個字串格式輸出
+
