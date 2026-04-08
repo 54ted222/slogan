@@ -216,5 +216,5 @@ tools 返回
 也要可以定義 輸出格式
 也可以 mapping 輸出格式，預設是一個字串格式輸出
 
-
+探討支援持續性輸出的可能性
 stdio command 只接受字串輸出入，json 會被轉成string 傳輸
