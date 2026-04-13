@@ -215,7 +215,7 @@ export const DEFAULT_BINDINGS: KeybindingBlock[] = [
 
 當按鍵到達時，解析路徑是：
 
-1. 建立上下文列表：元件注冊的活動上下文加上 Global，去重並保留優先順序
+1. 建立上下文列表：元件註冊的活動上下文加上 Global，去重並保留優先順序
 2. 針對合併的綁定表呼叫 `resolveKeyWithChordState(input, key, contexts)`
 3. 在 `match` 時：清除任何待處理的和弦，呼叫處理器，在事件上呼叫 `stopImmediatePropagation()`
 4. 在 `chord_started` 時：儲存待處理的按鍵，停止傳播，啟動和弦超時

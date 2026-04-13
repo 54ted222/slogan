@@ -61,7 +61,7 @@ v1 bridge 是基於環境的遠端控制系統。當開發者運行 `claude remo
 v2 bridge 完全消除了 Environments API 層——無註冊、無輪詢、無確認、無心跳、無登出。動機：v1 要求伺服器在分發工作之前知道機器的能力。v2 將生命週期折疊為三個步驟：
 
 1. **建立 session**：帶 OAuth 憑證的 `POST /v1/code/sessions`。
-2. **連接 bridge**：`POST /v1/code/sessions/{id}/bridge`。返回 `worker_jwt`、`api_base_url` 和 `worker_epoch`。每次 `/bridge` 呼叫都會推進 epoch——它就是注冊。
+2. **連接 bridge**：`POST /v1/code/sessions/{id}/bridge`。返回 `worker_jwt`、`api_base_url` 和 `worker_epoch`。每次 `/bridge` 呼叫都會推進 epoch——它就是註冊。
 3. **開啟傳輸**：讀取用 SSE，寫入用 `CCRClient`。
 
 傳輸抽象（`ReplBridgeTransport`）在一個共同介面後統一了 v1 和 v2，因此訊息處理不需要知道它在與哪一代通訊。
