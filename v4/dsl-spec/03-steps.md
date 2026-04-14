@@ -170,7 +170,7 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 - id: finalize
   type: parallel
   async: true                   # MAY, 預設 false — 非阻塞模式，不等待完成即繼續下一步
-  failure_policy: wait_all      # MAY — fail_fast | wait_all
+  failure_policy: continue       # MAY — fail_fast | continue | ignore, 預設 fail_fast
   branches:
     - steps:
         - type: task
