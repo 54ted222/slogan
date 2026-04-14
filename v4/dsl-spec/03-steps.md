@@ -198,9 +198,6 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
     order_id: ${ steps.load_order.output.id }
   delay: 30m                    # MAY — 延遲發送
 ```
-### todo
-emit 到 其他workflow 
-
 
 ---
 
