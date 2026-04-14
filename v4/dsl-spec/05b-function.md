@@ -113,8 +113,9 @@ steps:
     event: payment.confirmed
     match: ${ event.data.payment_id == steps.create_payment.output.payment_id }
     timeout: 30m
-    on_timeout:
+    catch:
       - type: fail
+        when: ${ error.type == "timeout" }
         message: "payment confirmation timeout"
 
   - type: return

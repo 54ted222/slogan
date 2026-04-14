@@ -87,7 +87,6 @@ Workflow 中透過 `type: agent` step 呼叫 agent definition。
   timeout: 2m
   retry: { ... }
   catch: [...]
-  on_timeout: [...]
 ```
 
 ### 欄位說明

@@ -81,8 +81,7 @@ Workflow 級設定，所有欄位皆為可選。
 |------|------|------|
 | `timeout` | duration | workflow instance 的最長執行時間 |
 | `max_step_executions` | integer | step 執行次數上限（防止無限迴圈） |
-| `catch` | step 陣列 | workflow 級錯誤處理 |
-| `on_timeout` | step 陣列 | workflow 級 timeout 處理 |
+| `catch` | catch 陣列 | workflow 級錯誤處理（含 timeout） |
 | `secrets` | string 陣列 | 依賴的 secret 名稱列表 |
 
 ```yaml
@@ -90,13 +89,13 @@ config:
   timeout: 2h
   max_step_executions: 1000
   catch:
+    - type: fail
+      when: ${ error.type == "timeout" }
+      message: "workflow timeout exceeded"
     - type: emit
       event: workflow.failed
       data:
         error: ${ error.message }
-  on_timeout:
-    - type: fail
-      message: "workflow timeout exceeded"
 ```
 
 ---

@@ -81,8 +81,9 @@ steps:
     event: payment.confirmed
     match: ${ event.data.order_id == steps.load_order.output.id }
     timeout: 30m
-    on_timeout:
+    catch:
       - type: fail
+        when: ${ error.type == "timeout" }
         message: "payment timeout"
 
   - type: emit

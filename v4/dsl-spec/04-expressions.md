@@ -114,9 +114,9 @@ secret.PAYMENT_API_KEY
 secret.STRIPE_SECRET
 ```
 
-### error / timeout
+### error
 
-分別在 `catch` / `on_timeout` handler 中可用。見 [03-steps](03-steps.md) 錯誤處理模型。
+在 `catch` handler 中可用。透過 `error.type` 區分錯誤類型（如 `"timeout"`、`"step_error"`）。見 [03-steps](03-steps.md) 錯誤處理模型。
 
 ### artifacts
 

@@ -32,7 +32,7 @@
 | `description` | string         | MAY  | 人類可讀說明                 |
 | `when`        | CEL expression | MAY  | 前置條件，`false` 時 SKIPPED |
 
-部分 step 類型額外支援 `timeout`、`retry`、`catch`、`on_timeout`。
+部分 step 類型額外支援 `timeout`、`retry`、`catch`。
 
 ### id 規則
 
@@ -45,9 +45,9 @@
 
 ```yaml
 retry:
-  max_attempts: 3             # 總嘗試次數（含首次），預設 1
-  delay: 2s                   # 重試間隔，預設 1s
-  backoff: exponential        # fixed | exponential，預設 fixed
+  max_attempts: 3 # 總嘗試次數（含首次），預設 1
+  delay: 2s # 重試間隔，預設 1s
+  backoff: exponential # fixed | exponential，預設 fixed
 ```
 
 ---
@@ -59,13 +59,12 @@ retry:
 ```yaml
 - id: load_order
   type: task
-  action: order.load          # MUST — tool definition 的 name
-  input:                      # MAY — 傳給 tool 的輸入
+  action: order.load # MUST — tool definition 的 name
+  input: # MAY — 傳給 tool 的輸入
     order_id: ${ input.order_id }
   retry: { ... }
   timeout: 30s
   catch: [...]
-  on_timeout: [...]
 ```
 
 Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
@@ -78,10 +77,16 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 ```yaml
 - type: assign
-  set:
-    total_price: ${ steps.load_order.output.price * input.qty }
-    status: "processing"
+  vars:
+    is_pay: ${ input.action == "pay" }
+    payment_input:
+      order_id: ${ steps.load_order.output.id }
+      amount: ${ steps.load_order.output.amount }
+      currency: "USD"
 ```
+
+- 後續 steps 透過 `vars.<key>` 存取
+- 同名變數會被後續 `assign` 覆寫
 
 ---
 
@@ -89,16 +94,17 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 ```yaml
 - type: if
-  condition: ${ input.total > 1000 }
+  when: ${ steps.load_order.output.status == "cancelled" }
   then:
-    - type: task
-      action: approval.request
-      input: { order_id: ${ input.order_id } }
+    - type: fail
+      message: "order cancelled"
   else:
-    - type: task
-      action: order.auto_approve
-      input: { order_id: ${ input.order_id } }
+    - type: emit
+      event: order.processing
 ```
+
+- `when` 為 `true` → 執行 `then`；為 `false` → 執行 `else`（若有）
+- Output 為被選中分支最後一個 step 的 output
 
 ---
 
@@ -138,10 +144,10 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 ```yaml
 - id: reserve_items
   type: foreach
-  items: ${ input.items }       # MUST — 回傳 list 的 CEL 表達式
-  concurrency: 3                # MAY, 預設 1
-  async: true                   # MAY, 預設 false — 非阻塞模式，不等待完成即繼續下一步
-  failure_policy: fail_fast     # MAY — fail_fast | continue | ignore, 預設 fail_fast
+  items: ${ input.items } # MUST — 回傳 list 的 CEL 表達式
+  concurrency: 3 # MAY, 預設 1
+  async: true # MAY, 預設 false — 非阻塞模式，不等待完成即繼續下一步
+  failure_policy: fail_fast # MAY — fail_fast | continue | ignore, 預設 fail_fast
   do:
     - type: task
       action: inventory.reserve
@@ -163,7 +169,7 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 - id: finalize
   type: parallel
   async: true                   # MAY, 預設 false — 非阻塞模式，不等待完成即繼續下一步
-  failure_policy: continue      # MAY — fail_fast | continue | ignore, 預設 fail_fast
+  failure_policy: continue       # MAY — fail_fast | continue | ignore, 預設 fail_fast
   branches:
     - steps:
         - type: task
@@ -186,11 +192,11 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 ```yaml
 - type: emit
-  event: order.completed        # MUST — 事件類型
-  scope: project                # MAY — workflow | project | global, 預設 workflow
-  data:                         # MAY — 事件酬載
+  event: order.completed # MUST — 事件類型
+  scope: project # MAY — workflow | project | global, 預設 workflow
+  data: # MAY — 事件酬載
     order_id: ${ steps.load_order.output.id }
-  delay: 30m                    # MAY — 延遲發送
+  delay: 30m # MAY — 延遲發送
 ```
 
 `scope` 控制事件傳播範圍：`workflow`（僅當前 instance）、`project`（同 project）、`global`（跨 project）。
@@ -201,7 +207,7 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 ## wait
 
-暫停 workflow instance，等待事件或指定時間。四種模式互斥：單一事件、多事件、step、duration。
+暫停 workflow instance，等待事件或指定時間。三種模式互斥：單一事件、多事件、duration。
 
 ### 單一事件
 
@@ -211,8 +217,9 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
   event: payment.confirmed
   match: ${ event.data.order_id == input.order_id }
   timeout: 30m
-  on_timeout:
+  catch:
     - type: fail
+      when: ${ error.type == "timeout" }
       message: "payment timeout"
 ```
 
@@ -225,7 +232,7 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 ```yaml
 - id: wait_result
   type: wait
-  events:                        # MUST — 事件陣列
+  events: # MUST — 事件陣列
     - event: payment.confirmed
       match: ${ event.data.order_id == input.order_id }
     - event: payment.failed
@@ -233,17 +240,18 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
     - event: order.cancelled
       match: ${ event.data.order_id == input.order_id }
   timeout: 30m
-  on_timeout:
+  catch:
     - type: fail
+      when: ${ error.type == "timeout" }
       message: "等待逾時"
 ```
 
 Output：
 
-| 欄位 | 說明 |
-|------|------|
+| 欄位                      | 說明                                       |
+| ------------------------- | ------------------------------------------ |
 | `steps.<id>.output.event` | 匹配到的事件類型（如 `payment.confirmed`） |
-| `steps.<id>.output.data` | 該事件的 `event.data` |
+| `steps.<id>.output.data`  | 該事件的 `event.data`                      |
 
 ```yaml
 # 根據匹配到的事件分支處理
@@ -296,14 +304,13 @@ Output：
 # 阻塞等待 foreach 完成
 - id: wait_reserve
   type: wait
-  step: reserve_items            # MUST — 非阻塞步驟的 id
+  step_id: reserve_items # MUST — 等待的非阻塞步驟 ID 陣列
   timeout: 5m
-  on_timeout:
+  catch:
     - type: fail
+      when: ${ error.type == "timeout" }
       message: "reserve timeout"
 ```
-
-`steps.wait_reserve.output` = 該非阻塞步驟的原始 output（foreach 為 array，parallel 為 array）。
 
 ### 模式判斷規則
 
@@ -317,11 +324,11 @@ Output：
 
 ```yaml
 - type: fail
-  message: "order has been cancelled"   # MUST
-  code: "order_cancelled"               # MAY
+  message: "order has been cancelled" # MUST
+  code: "order_cancelled" # MAY
 ```
 
-在 `catch` / `on_timeout` handler 中使用時，視為錯誤重新拋出至上層。
+在 `catch` handler 中使用時，視為錯誤重新拋出至上層。
 
 ---
 
@@ -331,7 +338,7 @@ Output：
 
 ```yaml
 - type: return
-  output:                       # MAY
+  output: # MAY
     status: "completed"
 ```
 
@@ -344,12 +351,12 @@ Output：
 ```yaml
 - id: analyze
   type: agent
-  agent: order.analyzer         # MUST — agent definition name
-  system: "你是訂單風險等級專家。"  # MAY — 給 agent 附加的系統提示
-  prompt: "分析此訂單"            # MAY — 給 agent 附加的任務提示
+  agent: order.analyzer # MUST — agent definition name
+  system: "你是訂單風險等級專家。" # MAY — 給 agent 附加的系統提示
+  prompt: "分析此訂單" # MAY — 給 agent 附加的任務提示
   input:
     order: ${ steps.load_order.output }
-  tools:                        # MAY — 額外附加的 tools
+  tools: # MAY — 額外附加的 tools
     - type: task
       action: customer.get_history
   timeout: 2m
@@ -360,32 +367,61 @@ Output：
 
 ## saga
 
-定義一組步驟及其補償邏輯，當區塊內任一步驟失敗時，按反向順序執行已完成步驟的 compensate。
+包裹一組需要交易性補償的 steps。
 
 ```yaml
 - type: saga
   steps:
-    - id: reserve
+    - id: debit
       type: task
-      action: inventory.reserve
-      input: { sku: ${ input.sku }, qty: ${ input.qty } }
-
-    - id: charge
-      type: task
-      action: payment.charge
+      action: payment.debit
       input: { amount: ${ input.amount } }
 
-    - id: ship
+    - id: create_order
       type: task
-      action: shipment.create
-      input: { order_id: ${ input.order_id } }
+      action: order.create
+      input: { payment_ref: ${ steps.debit.output.transaction_id } }
+
+    - type: task
+      action: notification.send
+      input: { message: "訂單已建立" }
+
+  catch:
+    - type: fail
+      message: "交易已回滾"
 ```
 
-補償行為由各 tool definition 的 `compensate` 欄位定義。當 `ship` 失敗時，引擎依序執行 `charge` → `reserve` 的 compensate。
+### compensate 來源
+
+每個 `type: task` step 的補償操作來自 Tool definition 的 `compensate` 欄位（見 [05-tool](05-tool.md)）。Step 層級可覆寫：
+
+```yaml
+- type: saga
+  steps:
+    - id: debit
+      type: task
+      action: payment.debit
+      input: { amount: ${ input.amount } }
+      compensate:                  # 覆寫 Tool definition 的預設 compensate
+        action: payment.void
+        input: { transaction_id: ${ steps.debit.output.transaction_id } }
+```
+
+### 執行流程
+
+1. 依序執行 `steps`
+2. 任一 step FAILED → 反向執行已 SUCCEEDED steps 的 compensate
+3. 補償完成 → 進入 `catch`
+
+### 補償規則
+
+- 僅 SUCCEEDED 的 step 會執行其 compensate
+- 反向執行：最後 SUCCEEDED 的 step 最先補償
+- 無 `compensate` 的 step（Tool 未定義且 step 未覆寫）跳過
 
 ---
 
-## 錯誤處理層級
+## 錯誤處理模型
 
 三層 handler 由內而外：
 
@@ -395,15 +431,9 @@ Output：
 
 `catch` handler 內可用的 namespace：
 
-| 變數 | 說明 |
-|------|------|
-| `error.message` | 錯誤訊息 |
-| `error.code` | 錯誤碼 |
-| `error.step_id` | 發生錯誤的 step id |
-
-`on_timeout` handler 內可用的 namespace：
-
-| 變數 | 說明 |
-|------|------|
-| `timeout.step_id` | 超時的 step id |
-| `timeout.duration` | 設定的 timeout 值 |
+| 變數            | 說明                             |
+| --------------- | -------------------------------- |
+| `error.type`    | 錯誤類型（`timeout` 等） buildin |
+| `error.message` | 錯誤訊息                         |
+| `error.code`    | 錯誤碼 業務客製化                |
+| `error.step_id` | 發生錯誤的 step id               |
