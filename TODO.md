@@ -24,10 +24,6 @@ v3 DSL spec 已完成，尚需更新對應的 runtime-spec 與 cli-spec：
 - Project 專案定義 (像是 package.json)
 - Secret 放密鑰的地方
 
-## 待辦 — emit 跨 workflow
-
-- **emit 到其他 workflow** — 定義 emit step 如何將事件發送至其他 workflow 的語法與行為
-
 ## FUTURE.md 延後項目
 
 - [FUTURE.md](FUTURE.md)（Event Replay API、Transactional Outbox/Inbox、JWT Authentication、Pause/Resume、Bulk Operations、Scheduled Trigger DST）

@@ -6,31 +6,31 @@
 
 ## Step 類型一覽
 
-| 類型 | 說明 |
-|------|------|
-| `task` | 呼叫 tool definition |
-| `assign` | 設定 vars 變數 |
-| `if` | 條件分支 |
-| `switch` | 多值分支 |
-| `foreach` | 迴圈迭代 |
-| `parallel` | 平行分支 |
-| `emit` | 發送事件 |
-| `wait` | 等待事件或指定時間 |
-| `fail` | 中止 workflow 並報錯 |
-| `return` | 回傳結果並結束 workflow |
-| `agent` | 呼叫 agent definition |
-| `saga` | 補償區塊 |
+| 類型       | 說明                    |
+| ---------- | ----------------------- |
+| `task`     | 呼叫 tool definition    |
+| `assign`   | 設定 vars 變數          |
+| `if`       | 條件分支                |
+| `switch`   | 多值分支                |
+| `foreach`  | 迴圈迭代                |
+| `parallel` | 平行分支                |
+| `emit`     | 發送事件                |
+| `wait`     | 等待事件或指定時間      |
+| `fail`     | 中止 workflow 並報錯    |
+| `return`   | 回傳結果並結束 workflow |
+| `agent`    | 呼叫 agent definition   |
+| `saga`     | 補償區塊                |
 
 ---
 
 ## 共通屬性
 
-| 屬性 | 型別 | 必填 | 說明 |
-|------|------|------|------|
-| `id` | string | MAY | 唯一識別字（`snake_case`） |
-| `type` | string | MUST | step 類型 |
-| `description` | string | MAY | 人類可讀說明 |
-| `when` | CEL expression | MAY | 前置條件，`false` 時 SKIPPED |
+| 屬性          | 型別           | 必填 | 說明                         |
+| ------------- | -------------- | ---- | ---------------------------- |
+| `id`          | string         | MAY  | 唯一識別字（`snake_case`）   |
+| `type`        | string         | MUST | step 類型                    |
+| `description` | string         | MAY  | 人類可讀說明                 |
+| `when`        | CEL expression | MAY  | 前置條件，`false` 時 SKIPPED |
 
 部分 step 類型額外支援 `timeout`、`retry`、`catch`、`on_timeout`。
 
@@ -45,9 +45,9 @@
 
 ```yaml
 retry:
-  max_attempts: 3        # 總嘗試次數（含首次），預設 1
-  delay: 2s              # 重試間隔，預設 1s
-  backoff: exponential   # fixed | exponential，預設 fixed
+  max_attempts: 3 # 總嘗試次數（含首次），預設 1
+  delay: 2s # 重試間隔，預設 1s
+  backoff: exponential # fixed | exponential，預設 fixed
 ```
 
 ---
@@ -59,8 +59,8 @@ retry:
 ```yaml
 - id: load_order
   type: task
-  action: order.load          # MUST — tool definition 的 name
-  input:                      # MAY — 傳給 tool 的輸入
+  action: order.load # MUST — tool definition 的 name
+  input: # MAY — 傳給 tool 的輸入
     order_id: ${ input.order_id }
   retry: { ... }
   timeout: 30s
@@ -145,10 +145,10 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 ```yaml
 - id: reserve_items
   type: foreach
-  items: ${ input.items }       # MUST — 回傳 list 的 CEL 表達式
-  concurrency: 3                # MAY, 預設 1
-  async: true                   # MAY, 預設 false — 非阻塞模式，不等待完成即繼續下一步
-  failure_policy: fail_fast     # MAY — fail_fast | continue | ignore, 預設 fail_fast
+  items: ${ input.items } # MUST — 回傳 list 的 CEL 表達式
+  concurrency: 3 # MAY, 預設 1
+  async: true # MAY, 預設 false — 非阻塞模式，不等待完成即繼續下一步
+  failure_policy: fail_fast # MAY — fail_fast | continue | ignore, 預設 fail_fast
   do:
     - type: task
       action: inventory.reserve
@@ -193,11 +193,16 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 ```yaml
 - type: emit
-  event: order.completed        # MUST — 事件類型
-  data:                         # MAY — 事件酬載
+  event: order.completed # MUST — 事件類型
+  scope: project # MAY — workflow | project | global, 預設 workflow
+  data: # MAY — 事件酬載
     order_id: ${ steps.load_order.output.id }
-  delay: 30m                    # MAY — 延遲發送
+  delay: 30m # MAY — 延遲發送
 ```
+
+`scope` 控制事件傳播範圍：`workflow`（僅當前 instance）、`project`（同 project）、`global`（跨 project）。
+
+事件透過 event bus 路由，可觸發其他 workflow 的 `event` trigger（建立新 instance）或恢復其他 instance 的 `wait` step。無匹配接收者時事件被丟棄，不產生錯誤。
 
 ---
 
@@ -227,7 +232,7 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 ```yaml
 - id: wait_result
   type: wait
-  events:                        # MUST — 事件陣列
+  events: # MUST — 事件陣列
     - event: payment.confirmed
       match: ${ event.data.order_id == input.order_id }
     - event: payment.failed
@@ -242,10 +247,10 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 Output：
 
-| 欄位 | 說明 |
-|------|------|
+| 欄位                      | 說明                                       |
+| ------------------------- | ------------------------------------------ |
 | `steps.<id>.output.event` | 匹配到的事件類型（如 `payment.confirmed`） |
-| `steps.<id>.output.data` | 該事件的 `event.data` |
+| `steps.<id>.output.data`  | 該事件的 `event.data`                      |
 
 ```yaml
 # 根據匹配到的事件分支處理
@@ -298,7 +303,7 @@ Output：
 # 阻塞等待 foreach 完成
 - id: wait_reserve
   type: wait
-  step: reserve_items            # MUST — 非阻塞步驟的 id
+  step: reserve_items # MUST — 非阻塞步驟的 id
   timeout: 5m
   on_timeout:
     - type: fail
@@ -319,8 +324,8 @@ Output：
 
 ```yaml
 - type: fail
-  message: "order has been cancelled"   # MUST
-  code: "order_cancelled"               # MAY
+  message: "order has been cancelled" # MUST
+  code: "order_cancelled" # MAY
 ```
 
 在 `catch` / `on_timeout` handler 中使用時，視為錯誤重新拋出至上層。
@@ -331,12 +336,12 @@ Output：
 
 結束 workflow instance，標記為 SUCCEEDED。
 
-```yaml
+````yaml
 ```yaml
 - type: return
   output:                       # MAY
     status: "completed"
-```
+````
 
 ---
 
@@ -347,12 +352,12 @@ Output：
 ```yaml
 - id: analyze
   type: agent
-  agent: order.analyzer          # MUST — agent definition name
-  system: "你是訂單風險等級專家。"  # MAY — 給 agent 附加的系統提示
-  prompt: "分析此訂單"            # MAY — 給 agent 附加的任務提示
+  agent: order.analyzer # MUST — agent definition name
+  system: "你是訂單風險等級專家。" # MAY — 給 agent 附加的系統提示
+  prompt: "分析此訂單" # MAY — 給 agent 附加的任務提示
   input:
     order: ${ steps.load_order.output }
-  tools:                         # MAY — 額外附加的 tools
+  tools: # MAY — 額外附加的 tools
     - type: task
       action: customer.get_history
   timeout: 2m
@@ -427,15 +432,15 @@ Output：
 
 `catch` handler 內可用的 namespace：
 
-| 變數 | 說明 |
-|------|------|
-| `error.message` | 錯誤訊息 |
-| `error.code` | 錯誤碼 |
+| 變數            | 說明               |
+| --------------- | ------------------ |
+| `error.message` | 錯誤訊息           |
+| `error.code`    | 錯誤碼             |
 | `error.step_id` | 發生錯誤的 step id |
 
 `on_timeout` handler 內可用的 namespace：
 
-| 變數 | 說明 |
-|------|------|
-| `timeout.step_id` | 超時的 step id |
+| 變數               | 說明              |
+| ------------------ | ----------------- |
+| `timeout.step_id`  | 超時的 step id    |
 | `timeout.duration` | 設定的 timeout 值 |
