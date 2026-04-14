@@ -4,6 +4,16 @@
 
 ---
 
+## TODO
+
+- Agent Definition 的生命週期 hooks
+- Agent-as-tool 的使用範例
+- Agentic Loop 的使用範例
+- tools_override 與 tools_exclude 的使用範例
+- agent 使用固定程式
+- 動態 system prompt 與 prompt 的使用範例
+- before_loop 與 after_loop 的使用範例
+
 ## Agent Definition
 
 Agent Definition 是 AI agent 的**角色模板**——定義「這個 agent 是誰、預設能做什麼」。實際任務（prompt）由 workflow step 提供。
@@ -15,19 +25,22 @@ apiVersion: agent/v4
 kind: Agent
 
 metadata:
-  name: order.analyzer          # MUST — dotted namespace
+  name: order.analyzer # MUST — dotted namespace
   version: 1
   description: "訂單風險分析 agent"
 
-model: fast                     # MUST — alias 或完整物件
+model: fast # MUST — alias 或完整物件
 
-system_prompt: |                # MAY — 角色定義
+system: | # MAY — 角色定義
   你是訂單風險分析專家。
 
-input_schema: object            # MAY
-output_schema: object           # MAY
+prompt: | # MAY — 任務定義
+  分析訂單資料，評估風險等級（low/medium/high），並提供建議。
 
-tools:                          # MAY — 預設可用 tool 列表
+input_schema: object # MAY
+output_schema: object # MAY
+
+tools: # MAY — 預設可用 tool 列表
   - type: task
     action: order.load
   - type: mcp
@@ -36,24 +49,24 @@ tools:                          # MAY — 預設可用 tool 列表
     name: agent.ask_human
 
 config:
-  max_iterations: 20            # MAY, 預設 20
-  max_tool_calls: 50            # MAY
-  output_format: json           # MAY — text | json, 預設 json
-  persist_history: summary      # MAY — full | summary | none, 預設 summary
-  stream: none                  # MAY — token | iteration | none, 預設 none
+  max_iterations: 20 # MAY, 預設 20
+  max_tool_calls: 50 # MAY
+  output_format: json # MAY — text | json, 預設 json
+  persist_history: summary # MAY — full | summary | none, 預設 summary
+  stream: none # MAY — token | iteration | none, 預設 none
 
-hooks: { ... }                  # MAY — 生命週期 hooks
-loop:                           # MAY — 自訂 loop steps
+hooks: { ... } # MAY — 生命週期 hooks
+loop: # MAY — 自訂 loop steps
   steps: [...]
 ```
 
 ### model 欄位
 
-| 寫法 | 範例 | 說明 |
-|------|------|------|
-| string（alias） | `model: fast` | 引用 Resources 中定義的 model alias |
-| object（完整） | `model: { provider: anthropic, name: claude-sonnet-4-20250514 }` | 直接指定 |
-| alias + 部分覆寫 | `model: { alias: fast, config: { max_tokens: 8192 } }` | 覆寫部分設定 |
+| 寫法             | 範例                                                             | 說明                                |
+| ---------------- | ---------------------------------------------------------------- | ----------------------------------- |
+| string（alias）  | `model: fast`                                                    | 引用 Resources 中定義的 model alias |
+| object（完整）   | `model: { provider: anthropic, name: claude-sonnet-4-20250514 }` | 直接指定                            |
+| alias + 部分覆寫 | `model: { alias: fast, config: { max_tokens: 8192 } }`           | 覆寫部分設定                        |
 
 ---
 
@@ -64,19 +77,19 @@ Workflow 中透過 `type: agent` step 呼叫 agent definition。
 ```yaml
 - id: analyze
   type: agent
-  agent: order.analyzer         # MUST — agent definition name
-  system: "你是訂單風險等級專家。"  # MAY — 給 agent 附加的系統提示
-  prompt: |                     # MAY — 給 agent 附加的任務提示
+  agent: order.analyzer # MUST — agent definition name
+  system: "你是訂單風險等級專家。" # MAY — 給 agent 附加的系統提示
+  prompt: | # MAY — 給 agent 附加的任務提示
     分析訂單 ${ steps.load_order.output.id } 的風險等級。
-  input:                        # MAY
+  input: # MAY
     order: ${ steps.load_order.output }
 
   # 能力調整
-  tools:                        # MAY — 額外附加的 tools（合併）
+  tools: # MAY — 額外附加的 tools（合併）
     - type: task
       action: customer.get_history
-  tools_override: [...]         # MAY — 完全覆寫 tools（與 tools 互斥）
-  tools_exclude:                # MAY — 排除特定 tools
+  tools_override: [...] # MAY — 完全覆寫 tools（與 tools 互斥）
+  tools_exclude: # MAY — 排除特定 tools
     - agent.ask_human
 
   # 執行控制覆寫
@@ -91,13 +104,13 @@ Workflow 中透過 `type: agent` step 呼叫 agent definition。
 
 ### 欄位說明
 
-| 欄位 | 說明 |
-|------|------|
-| `system` | 附加到 agent definition 的 `system_prompt` 尾部 |
-| `prompt` | 附加的任務指令，作為 user message 傳入 |
-| `tools` | 額外 tools，與 agent definition 預設合併 |
+| 欄位             | 說明                                                      |
+| ---------------- | --------------------------------------------------------- |
+| `system`         | 附加到 agent definition 的 `system_prompt` 尾部           |
+| `prompt`         | 附加的任務指令，作為 user message 傳入                    |
+| `tools`          | 額外 tools，與 agent definition 預設合併                  |
 | `tools_override` | 完全取代 agent definition 的預設 tools（與 `tools` 互斥） |
-| `tools_exclude` | 從合併後的 tools 中移除指定項目 |
+| `tools_exclude`  | 從合併後的 tools 中移除指定項目                           |
 
 ### 能力合併規則
 
@@ -121,9 +134,9 @@ Agent 可使用 5 種 tool 類型，對 LLM 統一為 function call。
 
 ```yaml
 - type: task
-  action: order.load            # tool definition name
-  name: "載入訂單"              # MAY — 覆寫 LLM 看到的名稱
-  description: "..."            # MAY — 覆寫描述
+  action: order.load # tool definition name
+  name: "載入訂單" # MAY — 覆寫 LLM 看到的名稱
+  description: "..." # MAY — 覆寫描述
 ```
 
 ### type: workflow
@@ -150,8 +163,8 @@ Agent 可使用 5 種 tool 類型，對 LLM 統一為 function call。
 
 ```yaml
 - type: mcp
-  server: github-mcp            # Resources 中定義的 server name
-  tools: [search_repos]         # MAY — 限定工具，省略 = 全部
+  server: github-mcp # Resources 中定義的 server name
+  tools: [search_repos] # MAY — 限定工具，省略 = 全部
 ```
 
 ### type: tool
@@ -174,7 +187,6 @@ Agent 可使用 5 種 tool 類型，對 LLM 統一為 function call。
 ```yaml
 # Input
 { questions: [{ id: "approve", question: "是否核准？", type: "confirm" }] }
-
 # type: text | select | multi_select | confirm
 ```
 
