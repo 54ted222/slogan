@@ -13,6 +13,8 @@
 - agent 使用固定程式
 - 動態 system prompt 與 prompt 的使用範例
 - before_loop 與 after_loop 的使用範例
+- 考慮 agent CEL 函數化
+- 考慮 agent function 化 or task 化
 
 ## Agent Definition
 
