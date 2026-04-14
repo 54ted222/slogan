@@ -147,6 +147,7 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
   type: foreach
   items: ${ input.items }       # MUST — 回傳 list 的 CEL 表達式
   concurrency: 3                # MAY, 預設 1
+  async: true                   # MAY, 預設 false — 非阻塞模式，不等待完成即繼續下一步
   failure_policy: fail_fast     # MAY — fail_fast | continue | ignore, 預設 fail_fast
   do:
     - type: task
@@ -158,7 +159,8 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 迭代變數：`loop.item`（當前元素）、`loop.index`（索引，從 0 開始）。
 
-Output 為一個 array，索引與 items 一一對應。
+- `async: false`（預設）：阻塞模式，等待所有迭代完成後才繼續。Output 為一個 array，索引與 items 一一對應。
+- `async: true`：非阻塞模式，啟動後立即繼續下一步。須搭配 `type: wait` 的 `step` 模式取得結果。
 
 ---
 
@@ -167,6 +169,7 @@ Output 為一個 array，索引與 items 一一對應。
 ```yaml
 - id: finalize
   type: parallel
+  async: true                   # MAY, 預設 false — 非阻塞模式，不等待完成即繼續下一步
   failure_policy: wait_all      # MAY — fail_fast | wait_all
   branches:
     - steps:
@@ -179,7 +182,8 @@ Output 為一個 array，索引與 items 一一對應。
           input: { order_id: ${ input.order_id } }
 ```
 
-Output 為一個 array，索引對應 branches 順序。
+- `async: false`（預設）：阻塞模式，等待所有 branches 完成。Output 為一個 array，索引對應 branches 順序。
+- `async: true`：非阻塞模式，啟動後立即繼續下一步。須搭配 `type: wait` 的 `step` 模式取得結果。
 
 ---
 
@@ -272,9 +276,43 @@ Output：
   duration: 5m
 ```
 
+### Step 模式
+
+等待一個 `async: true` 的非阻塞步驟（`foreach` 或 `parallel`）完成，並取得其結果。
+
+```yaml
+- id: reserve_items
+  type: foreach
+  async: true
+  items: ${ input.items }
+  concurrency: 5
+  do:
+    - type: task
+      action: inventory.reserve
+      input:
+        sku: ${ loop.item.sku }
+        qty: ${ loop.item.qty }
+
+# 中間可穿插其他不依賴 reserve_items 結果的步驟
+- type: task
+  action: analytics.track
+  input: { event: "reserve_started" }
+
+# 阻塞等待 foreach 完成
+- id: wait_reserve
+  type: wait
+  step: reserve_items            # MUST — 非阻塞步驟的 id
+  timeout: 5m
+  on_timeout:
+    - type: fail
+      message: "reserve timeout"
+```
+
+`steps.wait_reserve.output` = 該非阻塞步驟的原始 output（foreach 為 array，parallel 為 array）。
+
 ### 模式判斷規則
 
-- `event`、`events`、`duration` 三者 MUST 擇一，不可同時存在
+- `event`、`events`、`duration`、`step` 四者 MUST 擇一，不可同時存在
 
 ---
 
