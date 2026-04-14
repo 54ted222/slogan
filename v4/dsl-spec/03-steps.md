@@ -62,10 +62,6 @@ retry:
   action: order.load          # MUST — tool definition 的 name
   input:                      # MAY — 傳給 tool 的輸入
     order_id: ${ input.order_id }
-  idempotent: true            # MAY — 覆寫 tool definition 的預設值
-  compensate:                 # MAY — 覆寫 tool definition 的預設 compensate
-    action: order.undo
-    input: { ... }
   retry: { ... }
   timeout: 30s
   catch: [...]
@@ -129,6 +125,11 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
         - type: task
           action: shipment.create
           input: { order_id: ${ input.order_id } }
+    - value: ${ input.some_value == "cancel" }
+      then:
+        - type: task
+          action: order.cancel
+          input: { order_id: ${ input.order_id } }
   default:
     - type: fail
       message: ${ "unknown action: " + input.action }
@@ -146,7 +147,7 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
   type: foreach
   items: ${ input.items }       # MUST — 回傳 list 的 CEL 表達式
   concurrency: 3                # MAY, 預設 1
-  failure_policy: fail_fast     # MAY — fail_fast | continue | ignore
+  failure_policy: fail_fast     # MAY — fail_fast | continue | ignore, 預設 fail_fast
   do:
     - type: task
       action: inventory.reserve
