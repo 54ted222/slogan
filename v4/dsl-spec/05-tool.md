@@ -543,14 +543,14 @@ backend:
 
 ---
 
-### builtin
+### extension
 
-引擎內建 handler。
+引擎擴充點，允許第三方開發者定義自訂 backend 類型。引擎會將請求轉發給對應 handler，由 handler 負責執行並回傳結果。
 
 ```yaml
 backend:
-  type: builtin
-  handler: echo # MUST — handler 識別字
+  type: extension
+  handler: string # MUST — handler 名稱
   config: {} # MAY
 ```
 
