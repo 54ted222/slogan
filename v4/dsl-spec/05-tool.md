@@ -12,6 +12,10 @@
 
 ---
 
+## todo
+加入inti, destroy, 等相關 生命週期 指令觸發，使其可以使用oauth 登入 或是登入secret 
+
+
 ## 頂層結構
 
 ```yaml
