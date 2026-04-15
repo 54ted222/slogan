@@ -1,0 +1,940 @@
+# 05 — Tool Definition（`kind: Tool`）
+
+本文件定義 `kind: Tool` 的 YAML 結構。Tool definition 描述一個可被 workflow step 呼叫的工具及其執行後端。
+
+---
+
+## 設計動機
+
+- **定義與使用分離**：workflow 描述「呼叫什麼」（`type: task` step），tool definition 描述「怎麼執行」
+- **多 backend 支援**：同一個 tool 介面可切換不同的執行方式
+- **統一命名**：兩段式 `namespace.action` 命名，同時作為 agent 的 function call 名稱
+- **零修改包裝**：現有程式、腳本、CLI 工具可直接作為 tool 使用，無需實作特定協議
+
+---
+
+## 頂層結構
+
+```yaml
+apiVersion: tool/v5
+kind: Tool
+
+metadata:
+  name: order.load # MUST — snake_case + dotted 命名
+  version: 3 # MUST
+  description: "從資料庫載入訂單" # MAY
+
+input_schema: object # MAY — 輸入 JSON Schema
+output_schema: object # MAY — 輸出 JSON Schema
+
+idempotent: bool # MAY, 預設 false — 是否為冪等操作
+
+compensate: # MAY — 預設補償操作
+  action: string #   MUST — 補償用的 tool name
+  input: map #   MAY — 補償輸入（支援 ${ }，可引用原 step 的 output）
+
+lifecycle: # MAY — 生命週期鉤子
+  init: ...
+  destroy: ...
+
+backend:
+  type: exec | http | extension # MUST
+  # ... backend 專屬設定
+```
+
+> `builtin` 不是 `backend.type`；系統內建 tool（如 `agent.ask_human`）由引擎直接提供，不需要使用者撰寫 Tool definition。
+
+---
+
+## Backend Types
+
+### exec
+
+執行外部程式。支援兩種模式：`protocol`（引擎 JSON 協議）與 `raw`（任意程式）。
+
+#### 共通欄位
+
+```yaml
+backend:
+  type: exec
+  command: string # MUST — 啟動命令
+  args: [string] # MAY — 命令列參數（支援 ${ }）
+  shell: string # MAY — 指定 shell（預設引擎自動判斷）
+  env: map # MAY — 環境變數（支援 ${ }）
+  working_dir: string # MAY — 工作目錄
+  mode: protocol | raw # MAY, 預設 raw
+```
+
+#### protocol 模式
+
+與引擎交換結構化 JSON。適用於**專為此引擎開發**的 tool。
+
+```yaml
+backend:
+  type: exec
+  mode: protocol
+  command: "node ./tools/order/load.js"
+  env:
+    DB_URL: ${ secret.DATABASE_URL }
+  config: # MAY — 傳入 tool 的靜態設定
+    db_pool: "primary"
+```
+
+引擎 → tool（stdin）：
+
+```json
+{
+  "input": { ... },
+  "config": { ... },
+  "context": {
+    "idempotency_key": "string | null",
+    "instance_id": "string",
+    "step_id": "string",
+    "attempt": 1
+  }
+}
+```
+
+tool → 引擎（stdout）：
+
+```json
+{
+  "success": true,
+  "output": { ... },
+  "error": null
+}
+```
+
+Exit code 在 protocol 模式下被忽略，以 JSON response 的 `success` 為準。
+
+#### raw 模式
+
+**直接執行任意程式**，不要求 tool 理解引擎協議。適用於包裝現有腳本、CLI 工具、或其他語言程式。
+
+```yaml
+backend:
+  type: exec
+  mode: raw # 預設值，可省略
+  command: "python"
+  args:
+    - "./scripts/analyze.py"
+    - "--order-id"
+    - ${ input.order_id }
+  env:
+    API_KEY: ${ secret.API_KEY }
+```
+
+原生 Linux 指令與 Tool 包裝對照：
+
+```bash
+python ./scripts/analyze.py --order-id order-123
+```
+
+```yaml
+backend:
+  type: exec
+  mode: raw
+  command: "python"
+  args:
+    - "./scripts/analyze.py"
+    - "--order-id"
+    - ${ input.order_id }
+```
+
+```bash
+grep -c "ERROR" /var/log/app.log || echo 0
+```
+
+```yaml
+backend:
+  type: exec
+  mode: raw
+  command: "sh"
+  args:
+    - "-c"
+    - 'grep -c "$PATTERN" "$LOG_FILE" || echo 0'
+  env:
+    LOG_FILE: ${ input.log_file }
+    PATTERN: ${ default(input.pattern, "ERROR") }
+```
+
+差異在於：Linux 指令直接寫死參數；Tool 定義把可變部分提升為 `input` / `env` / `stdin` / `stdout` 設定，讓 workflow 可重複呼叫與解析結果。
+
+##### stdin — 輸入控制
+
+控制透過 stdin 傳送給程式的內容。
+
+```yaml
+backend:
+  type: exec
+  command: "jq"
+  args: [".items[] | .sku"]
+  stdin:
+    format: json | text | none # MAY, 預設 none
+    # format: json 時 — 將 input 序列化為 JSON 字串傳入
+    # format: text 時 — 使用 template 產生純文字
+    # format: none 時 — 不傳送 stdin
+    template: string # MAY — 僅 format: text 時使用，支援 ${ }
+```
+
+format 說明：
+
+| format | stdin 內容                 | 適用場景                        |
+| ------ | -------------------------- | ------------------------------- |
+| `none` | 不傳送                     | 程式僅靠 args / env 取得輸入    |
+| `json` | `input` 序列化為 JSON 字串 | 程式自行解析 JSON               |
+| `text` | `template` 求值結果        | 需要自訂格式（CSV、指令字串等） |
+
+`text` template 範例：
+
+原生 Linux 指令：
+
+```bash
+printf '%s\n' "https://api.example.com/orders/order-123" | sh -c 'read line && curl -s "$line"'
+```
+
+對應 Tool 包裝：
+
+```yaml
+backend:
+  type: exec
+  command: "sh"
+  args: ["-c", "read line && curl -s $line"]
+  stdin:
+    format: text
+    template: "https://api.example.com/orders/${ input.order_id }"
+```
+
+template 的求值上下文：
+
+| Namespace | 說明                                              |
+| --------- | ------------------------------------------------- |
+| `input`   | tool 的輸入資料                                   |
+| `env`     | 環境變數                                          |
+| `secret`  | 機密值                                            |
+| `context` | 執行上下文（`instance_id`、`step_id`、`attempt`） |
+
+##### stdout — 輸出解析
+
+定義如何解析程式的 stdout 為結構化輸出。
+
+```yaml
+backend:
+  type: exec
+  command: "python ./scripts/analyze.py"
+  stdout:
+    format: json | text | lines # MAY, 預設 text
+    mapping: map # MAY — 將解析結果映射至 output_schema
+```
+
+format 說明：
+
+| format  | `raw` 變數型別 | 說明                                  |
+| ------- | -------------- | ------------------------------------- |
+| `text`  | `string`       | 整段 stdout 作為單一字串（自動 trim） |
+| `json`  | `any`          | 解析 stdout 為 JSON                   |
+| `lines` | `list<string>` | 按換行拆分為字串陣列（空行忽略）      |
+
+**無 mapping 時**：`raw` 直接作為 output。
+
+- `format: text` → output 為字串
+- `format: json` → output 為 JSON 解析結果
+- `format: lines` → output 為字串陣列
+
+**有 mapping 時**：透過 CEL 表達式將 `raw` 映射至結構化 output。
+
+原生 Linux 指令與輸出：
+
+```bash
+./bin/order-export --format json
+./bin/order-export --format lines
+./bin/order-export --format text
+```
+
+```yaml
+# stdout 為 JSON，映射特定欄位
+stdout:
+  format: json
+  mapping:
+    order_id: ${ raw.data.id }
+    total: ${ raw.data.amount }
+    items: ${ raw.data.line_items.map(i, i.sku) }
+```
+
+```yaml
+# stdout 為 lines，解析固定格式輸出
+# 程式輸出：
+#   OK
+#   order-123
+#   1500
+stdout:
+  format: lines
+  mapping:
+    status: ${ raw[0] }
+    order_id: ${ raw[1] }
+    amount: ${ int(raw[2]) }
+```
+
+```yaml
+# stdout 為 text，使用 extractMatches 正則解析
+# 程式輸出：Order #12345 total: $150.00
+stdout:
+  format: text
+  mapping:
+    order_id: ${ raw.extractMatches("Order #(\\d+)")[1] }
+    total: ${ double(raw.extractMatches("total: \\$(\\d+\\.\\d+)")[1]) }
+```
+
+mapping 的求值上下文：
+
+| Namespace | 說明                                          |
+| --------- | --------------------------------------------- |
+| `raw`     | stdout 解析後的原始資料（型別依 format 而定） |
+| `input`   | tool 的輸入資料                               |
+
+##### exit code — 成功判斷
+
+```yaml
+backend:
+  type: exec
+  command: "grep"
+  args: ["-q", ${ input.pattern }, ${ input.file }]
+  exit_code:
+    success: [0]                # MAY, 預設 [0] — 視為成功的 exit code
+    # 不在 success 列表中的 exit code → step FAILED
+```
+
+原生 Linux 指令：
+
+```bash
+grep -q "ERROR" /var/log/app.log
+echo $?
+```
+
+exit code 不在 `success` 列表中時，step 進入 FAILED 狀態，`error` 包含：
+
+| 欄位            | 說明                       |
+| --------------- | -------------------------- |
+| `error.type`    | `"exit_code"`              |
+| `error.message` | stderr 內容（若有）        |
+| `error.code`    | exit code 數值（字串型別） |
+
+##### stderr 處理
+
+- raw 模式下 stderr 不影響成功判斷（僅看 exit code）
+- step FAILED 時 stderr 會被放入 `error.message`
+- 引擎 MAY 將 stderr 寫入執行日誌
+
+#### raw 模式完整範例
+
+包裝 Python 腳本：
+
+原生 Linux 指令：
+
+```bash
+printf '%s' "This product is great" | python ./tools/sentiment.py
+```
+
+對應 Tool 包裝：
+
+```yaml
+apiVersion: tool/v5
+kind: Tool
+
+metadata:
+  name: sentiment.analyze
+  version: 1
+  description: "分析文本情感傾向"
+
+input_schema:
+  type: object
+  properties:
+    text: { type: string }
+  required: [text]
+
+output_schema:
+  type: object
+  properties:
+    score: { type: number }
+    label: { type: string }
+
+backend:
+  type: exec
+  command: "python"
+  args: ["./tools/sentiment.py"]
+  stdin:
+    format: text
+    template: ${ input.text }
+  stdout:
+    format: json
+```
+
+對應的 `sentiment.py`（無需任何引擎相關邏輯）：
+
+```python
+import sys, json
+from textblob import TextBlob
+
+text = sys.stdin.read()
+blob = TextBlob(text)
+score = blob.sentiment.polarity
+
+print(json.dumps({
+    "score": score,
+    "label": "positive" if score > 0 else "negative" if score < 0 else "neutral"
+}))
+```
+
+包裝 shell 管線：
+
+原生 Linux 指令：
+
+```bash
+grep -c "ERROR" /var/log/app.log || echo 0
+```
+
+對應 Tool 包裝：
+
+```yaml
+apiVersion: tool/v5
+kind: Tool
+
+metadata:
+  name: log.count_errors
+  version: 1
+  description: "計算日誌檔中的錯誤數量"
+
+input_schema:
+  type: object
+  properties:
+    log_file: { type: string }
+    pattern: { type: string, default: "ERROR" }
+  required: [log_file]
+
+output_schema:
+  type: object
+  properties:
+    count: { type: integer }
+
+backend:
+  type: exec
+  command: "sh"
+  args:
+    - "-c"
+    - 'grep -c "$PATTERN" "$LOG_FILE" || echo 0'
+  env:
+    LOG_FILE: ${ input.log_file }
+    PATTERN: ${ default(input.pattern, "ERROR") }
+  stdout:
+    format: text
+    mapping:
+      count: ${ int(raw) }
+  exit_code:
+    success: [0, 1] # grep 無匹配時 exit 1，仍視為成功
+```
+
+包裝現有 CLI 工具：
+
+原生 Linux 指令：
+
+```bash
+convert input.png -resize 300x200 /tmp/resized.png
+```
+
+對應 Tool 包裝：
+
+```yaml
+apiVersion: tool/v5
+kind: Tool
+
+metadata:
+  name: image.resize
+  version: 1
+  description: "使用 ImageMagick 縮放圖片"
+
+input_schema:
+  type: object
+  properties:
+    source: { type: string }
+    width: { type: integer }
+    height: { type: integer }
+  required: [source, width, height]
+
+output_schema:
+  type: object
+  properties:
+    path: { type: string }
+
+backend:
+  type: exec
+  command: "convert"
+  args:
+    - ${ input.source }
+    - "-resize"
+    - "${ string(input.width) }x${ string(input.height) }"
+    - "/tmp/resized_${ context.step_id }.png"
+  stdout:
+    format: text
+    mapping:
+      path: "/tmp/resized_${ context.step_id }.png"
+  exit_code:
+    success: [0]
+```
+
+---
+
+### http
+
+呼叫 HTTP endpoint。預設採用 OpenAPI 協議：request body = `input_schema`，response body = `output_schema`。
+
+```yaml
+backend:
+  type: http
+  url: "https://api.payment.example.com/v1/charges" # MUST
+  method: POST # MAY, 預設 POST
+  headers: # MAY
+    Authorization: "Bearer ${ secret.PAYMENT_API_KEY }"
+  timeout: 10s # MAY
+  retry_on_status: [429, 502, 503] # MAY
+```
+
+#### 進階 HTTP 設定
+
+當 API 不符合預設 OpenAPI 協議時，可自訂 request / response 映射：
+
+```yaml
+backend:
+  type: http
+  url: "https://legacy.example.com/api"
+  method: POST
+  headers:
+    Content-Type: "application/x-www-form-urlencoded"
+  request:
+    # MAY — 自訂 request body，預設為 input 直接序列化
+    body: "order_id=${ input.order_id }&amount=${ string(input.amount) }"
+  response:
+    # MAY — 映射 response body 至 output_schema
+    mapping:
+      payment_id: ${ raw.result.txn_id }
+      status: ${ raw.result.state == "OK" ? "confirmed" : "pending" }
+  error_on_status: [400, 401, 403, 404, 500]  # MAY — 這些 status code 視為 FAILED
+```
+
+JSON request 範例：
+
+```yaml
+backend:
+  type: http
+  url: "https://risk.example.com/v1/evaluate"
+  method: POST
+  headers:
+    Authorization: "Bearer ${ secret.RISK_API_KEY }"
+    Content-Type: "application/json"
+  request:
+    body:
+      order_id: ${ input.order_id }
+      amount: ${ input.amount }
+      customer:
+        id: ${ input.customer_id }
+        tier: ${ default(input.customer_tier, "standard") }
+  response:
+    mapping:
+      level: ${ raw.risk.level }
+      score: ${ raw.risk.score }
+```
+
+---
+
+### extension
+
+引擎擴充點，允許第三方開發者定義自訂 backend 類型。引擎會將請求轉發給對應 handler，由 handler 負責執行並回傳結果。
+
+```yaml
+backend:
+  type: extension
+  handler: string # MUST — handler 名稱
+  config: {} # MAY
+```
+
+---
+
+## 生命週期（Lifecycle）
+
+定義 tool 的初始化與銷毀行為。適用於需要 OAuth 登入、連線池建立等前置作業的場景。
+
+```yaml
+lifecycle:
+  init: # MAY — 首次使用前執行
+    backend:
+      type: exec
+      command: "node ./tools/auth/login.js"
+      env:
+        CLIENT_ID: ${ secret.OAUTH_CLIENT_ID }
+        CLIENT_SECRET: ${ secret.OAUTH_CLIENT_SECRET }
+    # init 的 output 會注入至主 backend 的 context.lifecycle.init
+  destroy: # MAY — workflow instance 結束時執行
+    backend:
+      type: exec
+      command: "node ./tools/auth/logout.js"
+```
+
+### 執行時機
+
+| 階段      | 觸發條件                                                |
+| --------- | ------------------------------------------------------- |
+| `init`    | 該 tool 在 workflow instance 中**首次被呼叫前**（lazy） |
+| `destroy` | workflow instance 結束時（不論成功或失敗）              |
+
+### 求值上下文
+
+`init` / `destroy` 不隸屬於任何 step，`${ }` 僅允許引用 `secret` / `env` / `project` / `artifacts._workspace_path`，不可引用 `input` / `steps` / `prev` / `vars` / `loop` / `event` / `session`。完整表格見 `04-expressions.md`。
+
+`init` 失敗 → 依賴此 tool 的所有後續 step 進入 FAILED，`error.type == "lifecycle_init_failed"`。
+
+### init output 存取
+
+init 的 output 會被快取，後續同 instance 內所有該 tool 的呼叫都能透過 `context.lifecycle.init` 存取：
+
+```yaml
+# init 取得 OAuth token
+lifecycle:
+  init:
+    backend:
+      type: exec
+      mode: raw
+      command: "curl"
+      args:
+        [
+          "-s",
+          "-X",
+          "POST",
+          "https://auth.example.com/token",
+          "-d",
+          "grant_type=client_credentials",
+          "-d",
+          "client_id=${ secret.CLIENT_ID }",
+          "-d",
+          "client_secret=${ secret.CLIENT_SECRET }",
+        ]
+      stdout:
+        format: json
+
+# 主 backend 使用 init 取得的 token
+backend:
+  type: http
+  url: "https://api.example.com/orders"
+  headers:
+    Authorization: "Bearer ${ context.lifecycle.init.access_token }"
+```
+
+---
+
+## 串流輸出（Streaming）
+
+exec backend 支援持續性輸出，適用於長時間執行且需要中間結果回報的 tool。
+
+```yaml
+backend:
+  type: exec
+  command: "python ./tools/batch_process.py"
+  stdin:
+    format: json
+  stream:
+    enabled: true # MUST
+    format: jsonl | delimited | grpc # MAY, 預設 jsonl；grpc 目前暫不支援
+    # jsonl: 每行一個 JSON object
+    # delimited: 使用 begin/end 標記分隔
+    # grpc: 保留格式，目前暫不支援
+    begin: "---BEGIN---" # MAY — 僅 delimited 格式
+    end: "---END---" # MAY — 僅 delimited 格式
+```
+
+### 串流行為
+
+- 引擎對每段解析出的資料發出 `tool.stream` 事件，可被 workflow 的 event handler 接收
+- tool 結束後（exit），最後一段輸出作為 step 的 `output`
+- `grpc` 為保留值，現階段不可使用
+- 串流中的每段資料結構：
+
+```json
+{
+  "sequence": 1,
+  "data": { ... },
+  "final": false
+}
+```
+
+### jsonl 範例
+
+程式每處理完一筆就輸出一行 JSON：
+
+```python
+import sys, json
+
+items = json.loads(sys.stdin.read())["items"]
+for item in items:
+    result = process(item)
+    print(json.dumps({"item_id": item["id"], "status": "done"}))
+    sys.stdout.flush()
+
+# 最後一行作為最終 output
+print(json.dumps({"total": len(items), "status": "completed"}))
+```
+
+---
+
+## Callback 協議
+
+Tool 在執行中可能需要 caller（workflow 或 agent）回覆資料後再繼續 —— 常見於人工審批、需要外部系統注入驗證碼等場景。caller 端以 `type: task` step 的 `callback:` 區塊提供 handler（見 `05b-function.md` 的「Caller 端：callback 區塊」）。Tool 端以 backend 協議發出 callback 請求、等待引擎回覆。
+
+### exec（protocol 模式）
+
+tool 以 stdout 寫出 JSON line，每行一則訊息，訊息間以換行分隔。
+
+tool → 引擎（發出 callback 請求）：
+
+```json
+{"type": "callback", "name": "<callback_name>", "input": { ... }}
+```
+
+引擎 → tool（以 stdin 寫入回覆；成功）：
+
+```json
+{"type": "callback_result", "name": "<callback_name>", "output": { ... }}
+```
+
+引擎 → tool（回覆；失敗）：
+
+```json
+{"type": "callback_result", "name": "<callback_name>", "error": {"type": "string", "message": "string"}}
+```
+
+最終結果仍以原本的 protocol 回應格式（`{"success":..., "output":..., "error":...}`）收尾。Tool 可在一次執行中多次發出 callback，`name` 區分不同類型。
+
+### exec（raw 模式）
+
+raw 模式**不支援** callback。若需要，請改以 `mode: protocol` 或 `stream: { enabled: true, format: jsonl }`（見下）並手動處理協議訊息。
+
+### exec（stream 模式）
+
+`stream.format: jsonl` 下，tool 以相同的 `{"type":"callback", ...}` JSON line 混入串流輸出；引擎辨識到 `type == "callback"` 的訊息時不視為 `tool.stream` 事件，改走 callback handler 路徑，回覆透過 stdin 注入。
+
+### http
+
+HTTP backend 以 SSE（`Content-Type: text/event-stream`）或 chunked transfer 串流發出 callback。訊息體為 JSON，格式同 exec：
+
+```
+event: callback
+data: {"name": "<callback_name>", "input": { ... }}
+```
+
+引擎透過 HTTP 回調 URL（tool 於初次 response 以 `Location` header 或訊息 payload 中提供）寫入 callback result，格式：
+
+```json
+{"name": "<callback_name>", "output": { ... }}
+```
+
+HTTP backend 的 callback 要求 tool 維持同一條連線並區分最終 response 與中間 callback 訊息，實作細節由 handler 自行處理。
+
+### extension
+
+extension handler 自行定義 callback 傳輸方式；引擎只保證以同一份 `{name, input}` / `{name, output|error}` 結構與 caller 的 `callback:` 區塊對接。
+
+### 與 function callback 的對稱性
+
+`type: task` 呼叫 tool 與呼叫 function 共用同一 `callback:` 語法（見 `05b-function.md`）。Caller handler 以 `type: return` 結束並以 `output` 回傳的資料，即為 tool 端 `callback_result.output` 的內容。Handler FAILED → 以 `callback_result.error` 回傳，tool 可自行決定是否中止。
+
+---
+
+## 在 Workflow 中使用
+
+Tool definition 透過 `type: task` step 呼叫（`action` 對應 `metadata.name`）：
+
+```yaml
+# Tool Definition
+apiVersion: tool/v5
+kind: Tool
+metadata:
+  name: order.load
+  version: 1
+input_schema:
+  type: object
+  properties:
+    order_id: { type: string }
+  required: [order_id]
+backend:
+  type: exec
+  command: "node ./tools/order/load.js"
+  stdin:
+    format: json
+  stdout:
+    format: json
+
+---
+# Workflow Step（使用端）
+- id: load_order
+  type: task
+  action: order.load # 參照 tool definition name
+  input:
+    order_id: ${ input.order_id }
+```
+
+---
+
+## 在 Agent 中使用
+
+Tool definition 也可作為 agent 的 tool（自動轉為 function call schema）：
+
+```yaml
+# Agent Definition 的 tools
+tools:
+  - order.load
+  - order.update
+```
+
+LLM 看到的 function call：name = `order.load`，parameters = `input_schema`，description = `metadata.description`。
+
+---
+
+## 完整範例
+
+### HTTP Tool with Compensation
+
+```yaml
+apiVersion: tool/v5
+kind: Tool
+
+metadata:
+  name: payment.create
+  version: 2
+  description: "建立付款請求"
+
+input_schema:
+  type: object
+  properties:
+    order_id:
+      type: string
+    amount:
+      type: number
+    currency:
+      type: string
+      default: "TWD"
+  required: [order_id, amount]
+
+output_schema:
+  type: object
+  properties:
+    payment_id:
+      type: string
+    status:
+      type: string
+
+compensate:
+  action: payment.refund
+  input:
+    payment_id: ${ output.payment_id }
+
+lifecycle:
+  init:
+    backend:
+      type: exec
+      mode: raw
+      command: "node"
+      args: ["./tools/payment/get_token.js"]
+      env:
+        CLIENT_ID: ${ secret.PAYMENT_CLIENT_ID }
+        CLIENT_SECRET: ${ secret.PAYMENT_CLIENT_SECRET }
+      stdout:
+        format: json
+
+backend:
+  type: http
+  url: "https://api.payment.example.com/v1/charges"
+  method: POST
+  headers:
+    Authorization: "Bearer ${ context.lifecycle.init.access_token }"
+  timeout: 10s
+  retry_on_status: [429, 502, 503]
+```
+
+### Raw Exec Tool — 包裝 Go Binary
+
+```yaml
+apiVersion: tool/v5
+kind: Tool
+
+metadata:
+  name: risk.evaluate
+  version: 1
+  description: "評估訂單風險等級"
+
+input_schema:
+  type: object
+  properties:
+    order_id: { type: string }
+    amount: { type: number }
+    customer_id: { type: string }
+  required: [order_id, amount]
+
+output_schema:
+  type: object
+  properties:
+    level: { type: string, enum: [low, medium, high] }
+    score: { type: number }
+    reasons: { type: array, items: { type: string } }
+
+backend:
+  type: exec
+  command: "./bin/risk-evaluator"
+  args:
+    - "--order-id=${ input.order_id }"
+    - "--amount=${ string(input.amount) }"
+    - "--customer=${ default(input.customer_id, 'anonymous') }"
+    - "--format=json"
+  stdout:
+    format: json
+```
+
+### Raw Exec Tool — 包裝 Shell 管線
+
+```yaml
+apiVersion: tool/v5
+kind: Tool
+
+metadata:
+  name: data.aggregate
+  version: 1
+  description: "彙總 CSV 資料"
+
+input_schema:
+  type: object
+  properties:
+    file: { type: string }
+    column: { type: integer }
+  required: [file, column]
+
+output_schema:
+  type: object
+  properties:
+    sum: { type: number }
+    count: { type: integer }
+    avg: { type: number }
+
+backend:
+  type: exec
+  command: "sh"
+  args:
+    - "-c"
+    - |
+      awk -F',' -v col=$COL '
+        NR>1 { sum+=$col; count++ }
+        END { printf "{\"sum\":%.2f,\"count\":%d,\"avg\":%.2f}", sum, count, (count>0 ? sum/count : 0) }
+      ' "$FILE"
+  env:
+    FILE: ${ input.file }
+    COL: ${ string(input.column) }
+  stdout:
+    format: json
+  exit_code:
+    success: [0]
+```
