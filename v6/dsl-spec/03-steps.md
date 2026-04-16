@@ -115,6 +115,8 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 - 同名變數會被後續 `assign` 覆寫
 - `vars` map 中 key MUST 為簡單識別字（`^[a-z_][a-z0-9_]*$`）；含 `.` / `/` / 其他 path separator 或 namespace prefix（如 `steps.foo`、`input.bar`）→ 載入失敗，`error.type: "invalid_var_name"`
 - `_` 起始的 key 保留給引擎擴充；使用者 assign 以 `_` 開頭 → 載入失敗，`error.type: "invalid_var_name"`（與上同一錯誤碼，`details.reason: "reserved_prefix"`）
+- key 不得與全域 namespace 同名（保留字清單：`input` / `steps` / `prev` / `vars` / `loop` / `event` / `env` / `secret` / `error` / `callback` / `context` / `project` / `artifacts`）；違反 → 載入失敗，`error.type: "invalid_var_name"`、`details.reason: "reserved_namespace"`
+  - 原因：雖然 `assign` 寫入 `vars.<key>`、與頂層 namespace 不同，但使用者易混淆（讀 `vars.input` 與讀 `input` 語意不同），故載入期即禁止
 
 **Output**：`steps.<id>.output` 為本次 assign 的增量 map（僅含本 step 寫入的 key → value；不含既有 `vars`）。例：
 
@@ -284,6 +286,13 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 `scope` 控制事件傳播範圍：`workflow`（僅當前 instance）、`project`（同 project）、`global`（跨 project）。
 
 事件透過 event bus 路由，可觸發其他 workflow 的 `event` trigger（建立新 instance）或恢復其他 instance 的 `wait` step。無匹配接收者時事件被丟棄，不產生錯誤。
+
+#### data 大小限制
+
+- `data` 序列化後 MUST ≤ `engine.event_bus_max_data_bytes`（預設 1 MB，見 `runtime-spec/08-persistence.md`）
+- 驗證時機：**emit step 進入 RUNNING、CEL 求值後、排入 event bus / delayed_events 前**；超限 → step FAILED，`error.type == "event_too_large"`、`error.details.size` 保留實際 bytes
+- `delay > 0` 時：驗證仍於排入 delayed_events 前執行；已入 queue 的 event 保證在 deadline 到達時符合大小限制（不會在投遞瞬間失敗）
+- 若 emit 本身被 `catch` 捕捉或於 `workflow.config.catch` 中執行，大小限制仍適用（不因位置豁免）
 
 ---
 

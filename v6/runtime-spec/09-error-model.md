@@ -112,6 +112,7 @@ ErrorObject {
 | `invalid_retry_config` | `retry.max_attempts` 字面值或 CEL 結果 < 1 或非整數 |
 | `registry.invalid_lifecycle_backend` | tool `lifecycle.init.backend.type` 為 `extension` 或非 `exec` / `http` |
 | `registry.invalid_action_version` | `builtin.*` action 帶 `@version` 宣告（builtin 不支援版本） |
+| `registry.invalid_version` | `metadata.version` 非正整數 |
 ### Workflow / Trigger
 
 | code | 觸發 |

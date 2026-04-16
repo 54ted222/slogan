@@ -45,10 +45,18 @@ apiVersion: <kind>/v6
 kind: <Kind>
 metadata:
   name: string               # MUST — 唯一識別名稱
-  version: integer            # MUST — 版本號，正整數，單調遞增
+  version: integer            # MUST — 版本號，正整數
   description: string         # MAY — 人類可讀說明
   labels: map<string, string> # MAY — 分類用鍵值對
 ```
+
+### version 規則
+
+- `version` MUST 為正整數（≥ 1）；0 / 負值 / 浮點 / 字串 → 載入失敗，`registry.invalid_version`
+- **允許跳號**（如 v1 → v3）；engine 僅要求 `(name, version)` 全域唯一（見 `05-task-registry.md`）
+- v6 不採 semver；無 major/minor/patch 區分。欲表達「破壞性變更」請：(1) bump 整數 version，(2) 於 `metadata.labels.breaking_change` 標記 `"true"` 供 CI 掃描
+- **同 `(name, version)` 的 definition 內容不可變更**：一旦載入後再載入同 version 但內容不同的 definition → `registry.duplicate_action` 並拒絕後載入者（即 immutable semantics；需修改請 bump version）
+- 已建立的 instance 透過 action_pin 鎖定版本（見 `05-task-registry.md`）；definition 新版上架不影響既有 instance
 
 ### labels 傳遞規則
 

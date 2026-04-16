@@ -129,12 +129,21 @@ Workflow 級設定，所有欄位皆為可選。
 
 | 欄位 | 型別 | 說明 |
 |------|------|------|
-| `timeout` | duration | workflow instance 的最長執行時間 |
+| `timeout` | duration \| CEL→duration string | workflow instance 的最長執行時間；支援 CEL，於 `PENDING → RUNNING` 前求值一次並持久化（見下） |
 | `max_step_executions` | integer | step 執行次數上限（防止無限迴圈） |
 | `cancellation_policy` | enum | `graceful`（預設）/ `hard`；見 `runtime-spec/02-instance-lifecycle.md` |
 | `cancel_grace_period` | duration | graceful 模式的寬限期，預設 30s |
 | `catch` | catch 陣列 | workflow 級錯誤處理（含 timeout） |
 | `secrets` | string 陣列 | 依賴的 secret 名稱列表；載入期驗證所有名稱存在於當前 project scope，缺失 → 載入失敗 `registry.missing_secret`；運行時不額外檢查（CEL 引用未宣告的 secret 仍可解析，但建議開發者盡量宣告以便 CI/CD 檢查） |
+
+#### config.timeout / cancel_grace_period 的 CEL 求值
+
+- 兩欄位皆支援 CEL（如 `timeout: ${ input.max_duration }`）；載入期僅做語法檢查，不求值
+- 求值時機：`PENDING → RUNNING` transition 前，與其他 instance-level 欄位（`cancellation_policy`）同一批次
+- 求值 namespace **限** `input` / `env` / `secret` / `project`（instance 尚未執行任何 step，無 `steps` / `vars` / `prev` / `loop`）；引用受限 namespace → instance 直接 FAILED，`error.type == "expression_error.identifier_not_found"`
+- 求值結果 MUST 為符合 Duration 格式的 string；否則 instance FAILED，`error.type == "invalid_duration_format"`
+- 結果寫入 instance checkpoint（`timeout_resolved_ms` 欄位）；engine restart 後不重求值，沿用 checkpoint 值
+- Function instance 的 `config.timeout` 求值時機相同（建立 function instance 前）；namespace 為子 instance 的 `input` 與 inherited `secret` / `project`
 
 ```yaml
 config:

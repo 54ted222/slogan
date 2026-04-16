@@ -323,6 +323,12 @@ artifacts.order_file.exists
 
 `has(path)` 對 map field / namespace path 檢查「欄位存在且非 null」；路徑途中任一層為 null → 回 `false`，**不拋異常**（與 CEL 標準 `has()` 對齊，但對 null 寬容處理）：
 
+**對 `secret` namespace 的特例**：
+
+- `has(secret.X)` 僅檢查 key 是否存在於當前 project scope 的 SecretAccessor，**不觸發解密**；不產生 log / trace 副作用
+- 跨 project 且目標 secret 未標記 `shared: true` → `has(secret["other/X"])` **靜默回 false**（不拋 `expression_error`；維持防禦式查詢的習慣用法）；訪問受權限制的 secret 其存在性本身即屬敏感資訊，故以「不存在」呈現
+- `has(secret)` 整體回 `true`（SecretAccessor 本身恆存在，代表 namespace 可用）
+
 ```
 # steps.x 已 SUCCEEDED，output: { amount: 100 }
 has(steps.x.output)         # true
