@@ -119,6 +119,49 @@ Event trigger 建立 instance 的去重記錄（見 `07-event-bus.md` 的 Idempo
 - GC：背景 job 以 `expires_at < now()` 清理；`expires_at` 不支援 API 延長
 - Manual trigger 的 `Idempotency-Key` 查找以 `(workflow_name, workflow_version, idempotency_key)` 為 key，**邏輯上**可與此表共用儲存（將 `event_id` 欄位一般化為 `dedup_key`）；實作 MAY 分表以避免語意混淆
 
+### outbox
+
+「checkpoint 持久化先於 bus 投遞」的中介表；engine loop 於 checkpoint transaction 內 INSERT 事件，背景 publisher 於 DB commit 後讀取並投遞至 Event Bus：
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `outbox_id` | bigserial / uuid | 主鍵；publisher 以此排序投遞 |
+| `event_id` | uuid | 對應 `Event.id`（訂閱端以此去重） |
+| `event_type` | string | 同 Event |
+| `scope` | enum | `workflow` / `project` / `global` / `internal` |
+| `delivery` | enum | `broadcast` / `unicast` |
+| `target` | string \| null | unicast 時的 instance_id |
+| `data` | jsonb | |
+| `source_instance` | uuid | 同 `Event.source.instance_id` |
+| `source_step_id` | string \| null | |
+| `source_sequence` | int64 | |
+| `trace_id` | string | |
+| `committed_at` | timestamp | DB commit 完成時間（publisher 可用以等待 durability ACK；見 Checkpoint Durability 章節） |
+| `published_at` | timestamp \| null | publisher 投遞成功時間；NULL 代表尚未投遞 |
+| `attempts` | int | 投遞嘗試次數；超過實作上限（建議 5）→ 進 `bus.dead_letter` 並保留此 row 供 audit |
+| `last_error` | jsonb \| null | 最後一次投遞失敗的 error |
+
+- Publisher 以 `WHERE published_at IS NULL ORDER BY outbox_id ASC` 取得待投遞；投遞成功 UPDATE `published_at = now()`
+- 已投遞的 row MAY 由背景 job 於 `published_at < now() - <retention>`（建議 24h）後清理
+- 同一 `event_id` 不會被 INSERT 兩次（engine loop 於 emit 求值階段分配唯一 id）；publisher retry 以 `event_id` 對 bus 去重
+- Delayed event（`emit.delay > 0`）**不**經 outbox；直接寫入 `delayed_events`（見上表），到期由搶取機制投遞至 bus
+
+### bus_redelivery_log
+
+Dead letter 重投遞的 audit trail（見 `07-event-bus.md` Dead Letter 重投遞規則）：
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `log_id` | bigserial / uuid | 主鍵 |
+| `original_event_id` | uuid | 被重投遞的原 `event.id` |
+| `new_event_id` | uuid | 重投遞產生的新 `event.id` |
+| `redelivered_at` | timestamp | 重投遞時刻 |
+| `operator` | string | 觸發重投遞的 ops 操作者 identity（API token / user id） |
+| `reason` | string \| null | 人類可讀備註（MAY） |
+
+- 不做自動清理（audit 用途）；實作 MAY 依保存期政策歸檔
+- 寫入時機：重投遞 API 於產生新 event 並入 outbox 的同一 transaction 內 INSERT
+
 ### resource_pool
 
 每個 (tool_name, version) 在每個 instance 的 lifecycle init 結果與 destroy 狀態：
@@ -199,7 +242,8 @@ Outbox publisher 若因 DB 重啟 / 網路延遲導致 ACK 晚於 commit：
 | `wait_subscriptions` | MUST | 該 step 若為 wait，新增或刪除 subscription |
 | `delayed_events` | MUST | 該 step 若為 emit with delay，INSERT |
 | `resource_pool`（init output） | MAY（異步寫） | init 完成後寫入；不阻塞 step transition |
-| Outbox（待投遞至 Event Bus 的即時事件） | MUST INSERT | commit 後由背景 publisher 投遞 |
+| `outbox`（待投遞至 Event Bus 的即時事件） | MUST INSERT | commit 後由背景 publisher 投遞；schema 見上 |
+| `trigger_dedup` | MUST INSERT | Event trigger 建立 instance 前、instance INSERT 前 |
 
 **Cascading 規則**：
 
