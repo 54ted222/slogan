@@ -627,7 +627,19 @@ lifecycle:
 
 ### init output 存取
 
-init 的 output 會被快取，後續同 instance 內所有該 tool 的呼叫都能透過 `context.lifecycle.init` 存取：
+init 的 output 會被快取，後續同 instance 內所有該 tool 的呼叫都能透過 `context.lifecycle.init` 存取。**三種 backend 模式皆可引用**：
+
+| Backend 模式 | context.lifecycle.init 可用位置 |
+|-------------|--------------------------------|
+| protocol（exec / http） | stdin JSON 的 `context.lifecycle.init` 欄位；CEL 求值（`args` / `env` / `headers` / `url` / `request.body`）可用 `${ context.lifecycle.init.* }` |
+| raw（exec） | CEL 求值位置皆可（`args` / `env` / `stdin.template` / `stdout.mapping`）；**stdin 的 JSON / text 內容本身不自動注入**，需透過 CEL 明示引用 |
+| extension | extension handler 收到的 `ExtensionRequest` 含 `context` map，路徑同 protocol |
+
+Lazy 觸發規則（所有模式）：
+
+- 首次任一 step 呼叫此 tool 時 → engine 先執行 lifecycle.init → cache `init.output` → 再呼叫本 step 的 backend
+- 即使該 step 呼叫的是 raw 模式且未引用 `context.lifecycle.init`，若 tool definition 有 `lifecycle.init`，init 仍**被觸發**（lifecycle 依 tool 而非 backend mode 而定；避免同 tool 不同引用方式造成狀態不一致）
+- init 失敗 → 該 step FAILED，`error.type == "lifecycle_init_failed"`；後續同 tool 的其他 step 亦 FAILED（cache sentinel）
 
 ```yaml
 # init 取得 OAuth token

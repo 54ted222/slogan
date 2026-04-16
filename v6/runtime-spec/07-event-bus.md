@@ -40,6 +40,18 @@ Event {
 - `source.sequence` 由 engine 在 emit 時分配（從 instance 的 vars 或專用計數器讀取 + 1）；持久化於 instance state，重啟後不重複
 - 跨 instance 排序無保證；bus 消費者依 `(source.instance_id, source.sequence)` 做同源全序，依 `timestamp` 做觀測性展示
 
+### source 於特殊上下文的歸屬
+
+| 發生位置 | `source.instance_id` | `source.step_id` |
+|---------|----------------------|------------------|
+| Workflow / Function 一般 step（`emit`） | 所在 instance | emit step 自身 id |
+| Callback handler 內的 `emit`（caller 側 `type: task` 的 `callback:`） | **caller workflow instance**（非 function instance） | 呼叫該 tool/function 的 task step id（handler 本身非正式 step） |
+| Saga compensate 觸發的 tool 若 emit | 所在 saga instance | 原 origin step 的 id（compensate step 本身不暴露 id） |
+| Tool stream / tool.callback internal 事件 | 呼叫 tool 的 instance | 呼叫 tool 的 task step id |
+| Trigger 建立 instance（內部 `instance.created`） | 新建立的 instance | `null`（無觸發 step） |
+
+此規則確保事件追蹤鏈能以 `(instance_id, step_id)` 精準定位業務來源，不因跨 context（callback / compensate）而模糊化。`source.sequence` 於 callback / compensate 期間仍由 caller instance 的計數器分配（共用單一序列）。
+
 ---
 
 ## Scope 與訂閱範圍

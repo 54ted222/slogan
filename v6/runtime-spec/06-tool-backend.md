@@ -87,7 +87,7 @@ stdin 保持開啟；後續行為 `callback_result` 訊息。
 | `type` | 處置 |
 |--------|------|
 | `callback` | 解析 `{call_id, name, input}` → 呼叫 `callback_handler.handle()`（背景 task）→ 完成後寫 `callback_result` 至 stdin |
-| `stream`   | 解析 `{sequence, data, final}` → 發 `tool.stream` 事件至 Event Bus |
+| `stream`   | 解析 `{sequence, data, final}` → 發 `tool.stream` 事件至 Event Bus（驗證規則見下「Stream 訊息驗證」） |
 | `result`   | 解析 `{success, output, error}` → 構造 ToolResult；driver 關閉 stdin 並等 process exit |
 | 其他 / 空 | 寫 stderr log；不視為錯誤直接丟棄 |
 
@@ -107,6 +107,15 @@ stdin 保持開啟；後續行為 `callback_result` 訊息。
 - Driver MUST 將 `call_id` 對應表持久化（key: `(instance_id, step_id, call_id)`），避免 process 中途崩潰時 callback 結果遺失。
 - 收到 `result` 後，driver 等待 process exit；若 process 在 `result` 後 5s 內未退出 → SIGTERM；再等 5s → SIGKILL。
 - Process exit 但未收到 `result` → ToolResult `{success: false, error: {type: "incomplete_protocol"}}`；exit code 寫入 `error.code`。
+
+#### Stream 訊息驗證
+
+- `sequence` MUST 為非負整數；驗證值的**單調遞增**（每筆 > 前筆）；違反 → 協議錯誤 `incomplete_protocol`，SIGTERM kill tool
+- `data` 為任意 JSON 型別；單筆 `data` 序列化後 size 受 `engine.event_bus_max_data_bytes`（預設 1 MB）限制；超過 → 協議錯誤
+- `final` MUST 明確存在且為 boolean；缺失或非 boolean → 協議錯誤
+- **終結規則**：收到 `final: true` 之後，若再收到任何 `stream` 訊息 → 協議錯誤
+- `final: true` 不等同 `result`：tool 仍可在 `final: true` 後發 `callback`；但 MUST 最終以單一 `result` 訊息收尾
+- Stream 訊息的 `sequence` 與 Event Bus 的 `source.sequence` 為**獨立計數**；tool.stream 事件的 `source.sequence` 由 engine 依 event bus 規則分配，不等同 stream message 的 sequence 值（後者保留於 `tool.stream.data.stream_sequence` 方便使用者串接）
 
 ### Raw 模式
 
