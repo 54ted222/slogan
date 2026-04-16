@@ -176,12 +176,36 @@ else:
 1. 解析 url / method / headers / request.body
 2. CEL 求值 ${ } 欄位（含 secret 注入）
 3. 發送 HTTP；遵守 timeout（預設 30s，可由 backend 覆寫）
-4. retry_on_status：列表內的 HTTP code 觸發 retry（搭配 step.retry）
-5. error_on_status：列表內的 HTTP code 直接 FAILED
-6. 解析 response：若 response.mapping 存在 → 對 raw response body 套 CEL；否則 raw 即 output
+4. 依 HTTP status code 分類決策（見下表）
+5. 解析 response body → raw → （可選）response.mapping → output
 ```
 
-raw 為 JSON-decoded body（content-type 為 JSON 時）或 string body（其他）。
+#### 狀態碼分類決策
+
+| 條件（依序判定，首個匹配生效） | 決策 |
+|-------------------------------|------|
+| status 同時列於 `error_on_status` 與 `retry_on_status` | **`error_on_status` 優先**（直接 FAILED，不重試） |
+| status ∈ `error_on_status` | step FAILED，`error.type == "http_error"`、`error.code == "<status>"`（未進 retry 流程） |
+| status ∈ `retry_on_status` 且 `step.retry` 已設且尚有 attempts | 由 step.retry 重排一次 attempt；每次 attempt 的 backoff 依 step.retry 計算 |
+| status ∈ `retry_on_status` 但 step 無 `retry` 或 attempts 耗盡 | step FAILED，`error.type == "http_error"`、`error.details.exhausted == true` |
+| status 2xx（200-299） | 成功，進入 response parse |
+| status 其他（含 3xx） | 視為成功：依 response 解析；3xx 不自動 follow redirect（由 HTTP client library 的預設決定，建議關閉自動 follow 以免 secret 洩漏至非預期 endpoint） |
+
+- 兩列表不可互相包含相同 status 以外的情境；載入期 SHOULD 警告重疊（非錯誤）
+- `retry_on_status` 僅決定「是否具備可重試資格」，實際是否重試仍看 step.retry 配額
+
+#### Response body 解析
+
+```
+Content-Type 以 application/json 為主（含 +json suffix 如 application/ld+json）：
+  → 嘗試 json_decode → 成功則 raw = decoded value
+  → 失敗（body 為 JSON 但語法錯）→ step FAILED，error.type == "http_body_malformed_json"、error.details.preview 保留前 1 KB
+其他 Content-Type：
+  → raw = string body（以 Content-Type 宣告的 charset 或預設 UTF-8 解碼）
+  → 解碼失敗 → error.type == "http_body_decode_failed"
+```
+
+`response.mapping` 若存在則對 raw 套 CEL 得最終 output；失敗 → `expression_error.mapping`。
 
 ### Callback 模式（caller 宣告 callback:）
 

@@ -83,7 +83,7 @@ def resolve(action_name: str) -> Action:
 當 step 未指定 `@version` 時，引擎依以下順序決定版本（每一步找到即回傳）：
 
 1. **Instance action pin**：若 caller_instance 已為該 `canonical` 名稱鎖定版本（見下），直接使用該版本
-2. **Project default**：action 所屬 project 的 `projects/<name>/config.yaml` 中 `action_defaults[canonical] = <version>`（若有）
+2. **Project default**：action 所屬 project 的 `project.yaml` 中 `defaults.action_versions.<canonical>: <version>`（若有）
 3. **Global default**：引擎 config 的 `registry.default_version_policy`：`highest`（預設）/ `lowest` / `require_explicit`（後者直接 raise `registry.version_not_specified`）
 
 ### Instance 建立時的 action pin

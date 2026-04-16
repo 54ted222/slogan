@@ -77,7 +77,9 @@ ErrorObject {
 | `spawn_failed.working_dir` | `working_dir` 不存在或無權限 |
 | `incomplete_protocol` | tool 未發出 result 即結束 |
 | `exit_code` | exit code 不在 success 列表 |
-| `http_error` | HTTP 4xx/5xx 在 error_on_status 列表 |
+| `http_error` | HTTP 4xx/5xx 在 error_on_status 列表、或 retry_on_status 耗盡 attempts |
+| `http_body_malformed_json` | Content-Type 為 JSON 但 body 語法錯誤 |
+| `http_body_decode_failed` | body 以宣告 charset 解碼失敗 |
 | `connection_error` | 網路 / TLS 連線失敗 |
 | `schema_violation` | input/output 不符 JSON Schema |
 | `backend_crashed` | tool process / extension 在 RUNNING 中崩潰 |

@@ -173,6 +173,27 @@ secret.STRIPE_SECRET
 
 與 protocol mode stdin JSON 的 `context` 結構欄位一致；tool 開發者可以 CEL 取同一資料集、也可於 stdin JSON 中直接讀。
 
+### project
+
+當前 workflow / tool / function 所屬 project 的 metadata（read-only）。根目錄下無 project 的 definition 亦可存取，此時 `project` 為預留的 null-object（所有欄位為空字串 / 空 map）。
+
+| 路徑 | 型別 | 說明 |
+|------|------|------|
+| `project.name` | string | project `metadata.name`（kebab-case）；根目錄 definition 為 `""` |
+| `project.path` | string | 從根目錄起的 project 路徑；巢狀如 `"order/domestic"`；根目錄 definition 為 `""` |
+| `project.labels` | map<string, string> | 合併後的 `defaults.labels`（含父 project 繼承與自身覆寫，見 `06-project-and-secret.md`） |
+| `project.owner` | string | `metadata.owner`（若 project 宣告）；否則 `""` |
+
+CEL 範例：
+
+```
+project.name                           # "order"
+project.labels.domain                  # "order"
+has(project.labels.team)               # true
+```
+
+適用：所有 CEL 求值位置（workflow step、tool backend、callback handler、lifecycle init / destroy）；屬「載入期常量」語意，instance 內不變動。
+
 ### artifacts
 
 Artifact 的 workspace 路徑與中繼資料。所有 steps 可用。
@@ -260,6 +281,24 @@ artifacts.order_file.exists
 | `has(path)` | bool | 欄位是否存在（見下方語意） |
 | `timestamp(string)` | timestamp | 解析 RFC 3339 字串為 timestamp |
 | `duration(string)` | duration | 解析 `5m` 等 duration string |
+| `s.extractMatches(regex)` | list<string> | 正則匹配；見下 |
+
+#### extractMatches 語意
+
+`s.extractMatches(regex)`：以 `regex`（RE2 語法）對字串 `s` 做 **首次** 匹配（非 global）：
+
+- 無匹配 → `[]`
+- 有匹配 → list，index 0 為完整匹配字串；index 1..N 依序為 capture group（未匹配的 optional group 為 `""`）
+- regex 本身語法錯誤 → `expression_error.type_error`
+- 需要 global / 多次匹配請連續切分或使用 builtin tool 處理
+
+範例：
+
+```
+"Order #42 total: $99".extractMatches("Order #(\\d+)")       # ["Order #42", "42"]
+"Order #42 total: $99".extractMatches("total: \\$(\\d+)")   # ["total: $99", "99"]
+"".extractMatches("foo")                                         # []
+```
 
 ### Timestamp / Duration 型別
 

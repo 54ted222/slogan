@@ -81,13 +81,14 @@ retry:
 - `action: order.load@2` — 明確指定 version 2；找不到 → `registry.action_not_found`
 - `action: order/order.load@2` — project 前綴 + version
 
-**版本解析優先權**（高到低）：
+**版本解析優先權**（高到低，對應 `runtime-spec/05-task-registry.md` 的 `resolve_version`）：
 
 1. Step 明確 `@<version>`
-2. Project `project.yaml` 的 `defaults.action_versions.<action_name>: <version>`
-3. Registry 中該 action 的最大 version（`latest`）
+2. Instance action pin（首次解析時記錄；見 `runtime-spec/05-task-registry.md`）
+3. Project `project.yaml` 的 `defaults.action_versions.<canonical_name>: <version>`
+4. 全域 `registry.default_version_policy`（預設 `highest` — 取 registry 中最大 version；可設為 `lowest` / `require_explicit`）
 
-`latest` 回退可能在 version 升級時默默改變行為；production workflow SHOULD 明確寫 `@<version>` 或以 project defaults 釘選。
+`highest` 回退可能在 version 升級時改變行為；一旦 instance 首次解析即透過 pin 凍結（見步驟 2），同 instance 內後續 step 不會漂移。Production workflow 仍建議明確寫 `@<version>` 或以 `defaults.action_versions` 釘選，以避免新 instance 受新版本影響。
 
 Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 

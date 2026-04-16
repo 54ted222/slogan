@@ -23,7 +23,7 @@
 
 `now()` 與 `uuid()` 的副作用（replay 讀回）詳見 `08-persistence.md` 的「Replay」章節。
 
-`s.extractMatches(regex)` 為引擎擴充：回傳完整匹配組的字串陣列，無匹配回 `[]`。
+`s.extractMatches(regex)` 為引擎擴充：對 `s` 以 RE2 語法做首次匹配；無匹配回 `[]`，有匹配回 `[全文, group1, group2, ...]`（optional group 未捕獲時為 `""`）。完整語意見 `dsl-spec/04-expressions.md` 的「extractMatches」。
 
 ---
 

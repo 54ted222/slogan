@@ -24,7 +24,17 @@ defaults:                       # MAY — project 層級預設
   labels:                       # 自動套用至 project 下所有 definition
     domain: order
     team: order-team
+  action_versions:              # MAY — 同 project 內 step 未帶 @version 時的預設版本
+    order.load: 3               # canonical name（含 project 前綴展開後的完整名）
+    payment.process: 2
 ```
+
+### defaults.action_versions
+
+- Map 的 key 為 action 的 canonical name（若為跨 project 引用，使用完整 `<owning_project>/<body>`；同 project 內亦可省略前綴，載入期自動補齊）
+- value 為 integer，MUST 對應 registry 中實際存在的 version；載入時不存在 → `registry.action_not_found`
+- 僅影響本 project 下的 workflow / function / tool 作為呼叫端時的解析；不影響其他 project 內的同名 action 呼叫
+- 優先權見 `03-steps.md` 的「版本解析優先權」
 
 ### defaults.labels 合併規則
 
