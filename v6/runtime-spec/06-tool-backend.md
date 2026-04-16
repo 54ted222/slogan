@@ -359,6 +359,17 @@ Content-Type: application/json
 
 URL 應含一次性 token（query string 或 path），驗證來源；engine 在 SSE 連線結束後撤銷該 URL。
 
+#### SSE 連線中斷與重連
+
+SSE 連線具狀態（持有 `X-Callback-URL` token 與 in-flight call_id 表）；本次呼叫的**一次連線生命週期對應一次 tool attempt**：
+
+- **Partial SSE message**：engine 以 line-based 累積（`data:` 行至空行為止才組成一則 event）；若連線在 event 結束前中斷（無終止空行），該 partial event 以**丟棄**處理（不構成 `incomplete_protocol` 立即失敗；engine 繼續判定下一步）
+- **連線中斷（mid-stream）**：engine **不**自動重連同一 attempt 的 SSE；本次 attempt 終結為 `incomplete_protocol`（見步驟 5）；重試由 step-level `retry` 決定，下一 attempt 以新 HTTP request 重新建立 SSE（含新的 `X-Callback-URL` token）
+- **X-Callback-URL token 的 TTL**：連線存續期間有效；連線結束（正常 `result` 或中斷）後 engine 立即撤銷 token；過期 token 的 POST → HTTP 410 Gone、`error.reason: "callback_url_expired"`
+- **跨 attempt 的 call_id 隔離**：call_id dedup 表 key 已含 `attempt`（見 NDJSON 模式同規則）；前一 attempt 的 call_id POST 抵達新 attempt → HTTP 404 / 老 URL 已撤銷；不會誤配
+- **同一 attempt 內 tool 對 `X-Callback-URL` 的重複 POST**（例：tool 以 at-least-once 方式投遞 callback result）：driver 以 `call_id` 為 key 冪等處理；第二次 POST 若 engine 已處理第一次 → 直接回 200 OK + 原始 response body；tool 可安全重試
+- **engine POST 至 tool 的 `X-Callback-URL` 以外的失敗處理**：若 tool 以 callback mode 但未按規範暴露 `X-Callback-URL` header → step FAILED，`error.type: "incomplete_protocol"`、`details.reason: "missing_callback_url"`
+
 ### 認證 / TLS
 
 - TLS 由 HTTP client 預設處理；引擎 SHOULD 拒絕 plain http 至非 loopback 且非 secret-allowlisted 主機。

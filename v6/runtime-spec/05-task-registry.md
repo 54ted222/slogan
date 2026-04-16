@@ -96,6 +96,26 @@ def resolve(action_name: str) -> Action:
 
 此規則與既有「workflow / function definition 版本鎖定」（見 `02-instance-lifecycle.md`）**分層一致**：workflow 自身版本在 instance 建立時鎖定；其呼叫的 action 在首次解析時鎖定。
 
+### Hot reload 下的定義一致性
+
+Registry 於 engine 運行期支援「熱載入新版本」（新 version 加入、既有 version **不可覆寫內容**）。配合 instance `action_pins` 的保護：
+
+1. **Definition hash**：載入時 engine MUST 對每個 action 的規範化 YAML（移除 comment / 空白、key 排序）計算 SHA256，存入 registry 的 `Action.definition_hash`
+2. **既有版本不可變**：若 hot reload 時同 `(canonical, version)` 出現但 `definition_hash` 不同 → `registry.version_content_mismatch`（拒絕載入）；使用者必須分配新 version 號。此規則防「instance 基於 version 2 執行到一半、DevOps 修改 version 2 內容」造成語意漂移
+3. **版本刪除處置**：若熱載入時某 `(canonical, version)` 從 registry 消失且有 instance pin 指向此版本：
+   - 該 instance 若未來執行該 action 的 step（含 compensate） → step FAILED，`error.type == "action_pin_version_not_found"`、`error.details = { action: canonical, pinned_version: N, available_versions: [...] }`
+   - 該 step 可由 catch 接住；使用者可決定是否升級 pin（需以新 instance 重新啟動）或標記為最終失敗
+   - 未引用該 action 的 step 不受影響（正常繼續）
+4. **Compensate 的遞迴 pin**：當原 step 首次 resolve 並 pin 時，若其 tool definition 含 `compensate.action`（無 `@version`），engine 一併 resolve 並 pin `(compensate_canonical, version)` 至同一 `action_pins` 結構，key 以 `"<origin_canonical>::compensate"` 區分，例：
+   ```
+   action_pins: {
+     "order/payment": 2,
+     "order/payment::compensate": { action: "order/payment.refund", version: 2 }
+   }
+   ```
+   Compensate 執行時以 pin 內版本為準；若 compensate action 自身已 `@version` 顯式 → 不寫入 pin（版本已確定）
+5. **Replay 驗證**：replay 既有 instance 時重新比對 `definition_hash`；若當前 registry 中相同版本之 hash 與 pin 時的 hash 不符（僅可能於規則 2 被違反時發生）→ `workflow_version_deleted.hash_mismatch`，replay 失敗
+
 - `is_snake(s)`：`^[a-z][a-z0-9_]*$`
 - `is_kebab(s)`：`^[a-z][a-z0-9-]*$`
 

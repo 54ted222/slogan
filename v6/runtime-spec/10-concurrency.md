@@ -109,6 +109,22 @@ def start_async_foreach(step):
 - `concurrency` 預設為 `len(branches)`（全並行）
 - `branches[]` 結構固定，不需 items 求值
 
+### Concurrency slot 釋放時機（含 catch / compensate）
+
+並行迭代（foreach iteration / parallel branch）的 concurrency slot **在迭代達到終態後才釋放**；「終態」定義為以下全部完成：
+
+1. 該迭代的**最後一個 step** 終結（SUCCEEDED / FAILED / SKIPPED）
+2. 若該 step FAILED 且迭代內有 `catch` handler，**catch 全部 step 亦達終態**
+3. 若迭代本身位於 saga 內而進入 compensating，**該迭代對應的 compensate sequence 亦終態**
+
+含義：`failure_policy: continue` / `ignore` 下，FAILED 迭代進入 catch 時 **concurrency slot 尚未釋放**；scheduler 不會啟動下一個 pending 迭代，直到本迭代的 catch 完成。此設計：
+
+- 確保 catch handler 於穩定 concurrency 語意下執行（不會與新啟動迭代搶資源）
+- 保留「先完成者先釋放 slot」的 happens-after 順序；使用者可於 catch 內假設本迭代的 `steps.*` 已定型
+- `fail_fast` 下同樣適用：FAILED 迭代的 catch 完成後才進 foreach / parallel 的終結；其他 in-flight 迭代繼續至終態或被 cancel（見「取消 in-flight iteration」）
+
+若 catch handler 本身執行時間很長，使用者應以 step-level `timeout` 或 tool-level `timeout` 控制；不建議將昂貴的補償邏輯放在 foreach / parallel 的 catch 內（改以 saga 結構表達更清晰）。
+
 ---
 
 ## Cancel propagation

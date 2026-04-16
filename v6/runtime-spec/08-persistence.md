@@ -141,6 +141,26 @@ COMMIT
 
 事件投遞（外部 bus）發生在 commit 之後；使用 outbox pattern 確保「持久化先於投遞」。
 
+### Checkpoint Durability 要求
+
+Outbox publisher **MUST 僅於 checkpoint transaction 的 durability ACK 到達後**才投遞事件：
+
+| Deployment | Durability ACK 定義 |
+|-----------|--------------------|
+| 單機 SQLite / PostgreSQL | `fsync` 完成（WAL + data file） |
+| PostgreSQL 主從（同步複寫） | 主確認 + 至少一個同步 replica 確認；由 `synchronous_commit` 決定 |
+| PostgreSQL 多主 / Aurora | 依該平台對「commit 成功」的語意（通常 quorum write） |
+| 雲端 managed DB（Cloud SQL / RDS） | API 2xx return == durability ACK |
+| 嵌入式 / in-memory（僅測試） | 視為即時 durable（僅供測試；生產不允許） |
+
+此規則保證：訂閱 `step.completed` / `instance.completed` / 其他 internal event 的消費者（另一 engine 進程、另一 instance 的 wait）讀到事件時，**對應 checkpoint 已可被任意副本讀取**，不會發生「事件先到、checkpoint 未可見」的 race。
+
+Outbox publisher 若因 DB 重啟 / 網路延遲導致 ACK 晚於 commit：
+
+- publisher 沿用 outbox 表內 `committed = true, published = false` 的紀錄重投（冪等，訂閱端以 `event.id` dedup）
+- Commit 成功但 ACK 未到達（例如 DB 故障切換）→ publisher 重啟後 **仍可讀取 outbox row**（commit 已確認）；投遞恢復
+- 故 engine loop 的「發 `step.completed` 事件」以「INSERT outbox + DB commit」為邊界；實際 bus publish 由背景 publisher 接手
+
 ### Checkpoint Transaction 邊界
 
 單一 transaction 內 MUST 包含（依 step transition 實際涉及者）：

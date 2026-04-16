@@ -133,6 +133,8 @@ ErrorObject {
 | `registry.invalid_signal_target` | `wait.signals[].step` 指向不存在、非 async 或不可達作用域的 step（載入期）；或 hot reload 後目標 step 消失時，既有 subscription 以 `error.type == "invalid_signal_target"` 令 wait step FAILED（運行期） |
 | `registry.missing_callback_handler` | caller（workflow / function）的 `type: task` step 的 `callback:` map 缺漏 function 宣告的 callback handler；或含有 function 未宣告的 callback 名（`details.reason: "unknown_callback_name"`）；caller 載入期拒絕 |
 | `registry.invalid_env_key` | tool `backend.env` 使用 `SLOGAN_*` 保留前綴 key（`details.reason: "reserved_prefix"`）；或 key 不符合 env var 命名規則（`^[A-Za-z_][A-Za-z0-9_]*$`） |
+| `registry.version_content_mismatch` | hot reload 時同 `(canonical, version)` 已存在但 `definition_hash` 不同；既有 version 不可覆寫，須分配新 version 號 |
+| `action_pin_version_not_found` | instance 的 `action_pins` 指向的版本已從 registry 刪除，step 嘗試解析該 action 時失敗；`error.details` 含 `pinned_version` 與 `available_versions` |
 ### Workflow / Trigger
 
 | code | 觸發 |
