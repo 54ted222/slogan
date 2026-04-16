@@ -370,6 +370,13 @@ default(input.items, []).size()
 
 `has(path)` 對 map field / namespace path 檢查「欄位存在且非 null」；路徑途中任一層為 null → 回 `false`，**不拋異常**（與 CEL 標準 `has()` 對齊，但對 null 寬容處理）：
 
+**對 SKIPPED step 的語意**：
+
+- SKIPPED step 仍在 `steps.*` namespace；`has(steps.foo) == true`（StepRef 存在）
+- SKIPPED 的 output 為 `null`；`has(steps.foo.output) == false`（null 視為不存在）
+- `has(steps.foo.output.field) == false`（短路，不拋 `expression_error.identifier_not_found`）
+- `has(steps.foo.status) == true`，`steps.foo.status == "SKIPPED"` 可用於分流
+
 **對 `secret` namespace 的特例**：
 
 - `has(secret.X)` 僅檢查 key 是否存在於當前 project scope 的 SecretAccessor，**不觸發解密**；不產生 log / trace 副作用

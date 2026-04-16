@@ -260,3 +260,10 @@ v6 不支援原地「降版」；回滾透過**發佈新版本**完成：
 | `CANCELLED` workflow instance | 7 天 |
 | Sub-instance（function instance） | 隨父 instance 一同清除 |
 | `tool.stream` 中間訊息 | 不持久化（即時投遞至訂閱者後丟棄） |
+
+### Retention 覆寫規則
+
+- Project / engine config 可設定預設保存期倍率或絕對值（`project.yaml` 的 `retention_policy: {succeeded: 30d, failed: 90d}`）
+- **Runtime API 不支援延長單一 instance 的 retention**：`retention_until` 於 instance 建立時即依該 version 的 project 設定決定並寫入 checkpoint；後續不可變更
+- 需要長期保留（如 audit trail）：請於 workflow 內以 `type: task` 呼叫專用 tool（如 `audit.archive`）將關鍵資料匯出至外部系統（S3 / 資料倉儲）；engine 本身不作為長期歸檔
+- GC 行為：背景 job 依 `retention_until <= now()` 硬刪除；無「軟刪除」階段；對已刪除的 instance_id 做 API 查詢 → `404 instance_not_found`（不區分「從未存在」與「已回收」）

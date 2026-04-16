@@ -271,8 +271,16 @@ else:
 |-------------------------------|------|
 | status 同時列於 `error_on_status` 與 `retry_on_status` | **`error_on_status` 優先**（直接 FAILED，不重試） |
 | status ∈ `error_on_status` | step FAILED，`error.type == "http_error"`、`error.code == "<status>"`（未進 retry 流程） |
-| status ∈ `retry_on_status` 且 `step.retry` 已設且尚有 attempts | 由 step.retry 重排一次 attempt；每次 attempt 的 backoff 依 step.retry 計算 |
+| status ∈ `retry_on_status` 且 `step.retry` 已設且尚有 attempts | 由 step.retry 重排一次 attempt；每次 attempt 的 backoff 依 step.retry 計算（見下） |
 | status ∈ `retry_on_status` 但 step 無 `retry` 或 attempts 耗盡 | step FAILED，`error.type == "http_error"`、`error.details.exhausted == true` |
+
+**backoff 疊加規則**：
+
+- HTTP backend 的 `retry_on_status` 僅決定「本次 HTTP 呼叫的失敗**是否具有重試資格**」；不增加額外的 backoff
+- 實際重試由 **step-level retry** 接手：整個 tool 呼叫視為 step 的一次 attempt；HTTP 收到 503 後 → step 的本次 attempt 標記 FAILED → step.retry 按 `delay` / `backoff` 排程下次 attempt
+- HTTP 內建**不**有自己的指數退避；若 API 需要「重試前先等」，請在 step.retry 設 `delay` 與 `backoff: exponential`
+- Attempt 計數統一由 step-level 遞增；HTTP 層失敗與 exec 層失敗共用同一 attempt 號碼（避免「HTTP 重試 3 次 + step 重試 3 次 = 9 次實際呼叫」的疊加混亂）
+- `Retry-After` header：引擎 MAY 於 HTTP 503/429 時讀取 `Retry-After`（秒數或日期），若 > step.retry 的下次 delay → **取較大者**；`Retry-After` 值會被裁切至 `retry.max_delay` 上限
 | status 2xx（200-299） | 成功，進入 response parse |
 | status 其他（含 3xx） | 視為成功：依 response 解析；3xx 不自動 follow redirect（由 HTTP client library 的預設決定，建議關閉自動 follow 以免 secret 洩漏至非預期 endpoint） |
 

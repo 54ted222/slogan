@@ -117,6 +117,18 @@ Event {
 
 Ops 監控 SHOULD 對 `bus.dead_letter` 做告警；實作 MAY 提供「重新投遞 dead letter」API。
 
+### Dead Letter 重投遞規則
+
+若實作提供重投遞 API（如 `POST /dead-letters/<id>/redeliver`）：
+
+- 重投遞 MUST 產生**新的 `event.id`**（以新 UUID v4），不沿用原 `original_event.id`
+- 重投遞事件的 `data` / `type` / `scope` 可與原事件相同；但 `event.id` 不同，因此：
+  - 不與已投遞至訂閱者的去重表衝突（原 event.id 可能已記錄）
+  - 訂閱者視為新事件處理，業務層若需冪等需自行在 `data` 攜帶 correlation key
+- `source.instance_id` 若對應的 source instance **已清理**（超過 retention）→ 重投遞 API 回傳 `409 source_instance_gone`，拒絕重投（避免 orphan 事件）
+- 重投遞事件的 `source` 保留原值（便於追蹤）；`timestamp` 為重投遞時刻（非原時刻）
+- 重投遞歷次寫入 `bus.redelivery_log` 表（`original_event_id`、`new_event_id`、`redelivered_at`、`operator`）供 audit
+
 ---
 
 ## Wait subscription
