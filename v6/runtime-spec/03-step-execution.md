@@ -236,15 +236,21 @@ step `retry` 在 step 達 FAILED 時介入：
 ```
 attempts ← 1
 while step FAILED and attempts < max_attempts:
-    sleep(delay × backoff_factor^(attempts-1) if backoff == exponential else delay)
+    sleep_duration ←
+        min(delay × 2^(attempts-1), max_delay)  if backoff == exponential
+        delay                                    if backoff == fixed
+    next_attempt_at ← now() + sleep_duration
+    寫 checkpoint（含 attempts、next_attempt_at）
+    sleep_until(next_attempt_at)   # 可被 engine 重啟中斷，重啟後依 next_attempt_at 繼續等
     attempts += 1
     重新進入「3. checkpoint A」（覆寫舊 RUNNING checkpoint）
     執行 → 取得新 outcome
 若仍 FAILED → 進入 catch
 ```
 
-- delay 與 backoff 在每次 attempt 開始前求值（支援 CEL）。
-- attempt 計數寫入 checkpoint，engine 重啟可正確還原。
+- `delay` / `max_delay` 支援 CEL，每次 attempt 前求值；MUST 回傳 duration string（如 `"30s"`）。非 duration → step FAILED (`expression_error.type_error`)。
+- `backoff: exponential` 的乘數固定為 2；無上限時實務上會指數爆炸，故 `max_delay` 預設 `5m`（使用者可覆寫）。
+- attempt 計數與 `next_attempt_at` 都寫入 checkpoint，engine 重啟可正確還原 — 不重新從 0 計時。
 
 ---
 

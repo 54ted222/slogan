@@ -430,3 +430,22 @@ runtime-spec/09-error-model.md 提到 config.catch「建議僅允許 emit/fail/r
 **選項 A**：config.catch 繼承 workflow.config.timeout 剩餘值；若 workflow 已 timeout 則 config.catch 有固定 30s 額外寬限
 **選項 B**：config.catch 無 timeout；由實作以短 default（如 60s）限制
 **選項 C**：config.catch 內失敗視為「double failure」，instance 標記 FAILED 且 error.details.catch_error 記錄
+
+---
+
+## R. v6 第四輪審閱（2026-04-16，待決策）
+
+第四輪新發現 5 項，4 項已直接修正（retry.delay 型別驗證、max_attempts 語意、exponential backoff max_delay 上限、project defaults.labels 合併規則）。剩餘：
+
+### R1. Secret AES-256-GCM key 來源與輪替
+
+目前 `06-project-and-secret.md` 列出 `encryption.algorithm: aes-256-gcm` 及 `iv` / `salt`，但未定義：
+
+- Master key 從哪派生？是否使用 KDF (PBKDF2 / scrypt / argon2)？iteration 次數？
+- Key 儲存位置：環境變數 / OS keychain / KMS？
+- 輪替流程：舊密文如何識別所用金鑰版本？re-encrypt 時舊金鑰保留多久？
+- 多 engine 進程是否共享同一 master key？
+
+**選項 A**：v6 規格定義最小實作（`SLOGAN_MASTER_KEY` env var + PBKDF2-HMAC-SHA256 + 100k iterations + salt 存於 secret 檔），輪替由 CLI 工具 `slogan secret rotate` 處理
+**選項 B**：v6 僅定義「加密後的 YAML 可安全入 Git」此保證，key 管理延後至獨立 security-spec
+**選項 C**：支援可插拔 KMS（AWS KMS / HashiCorp Vault / 本機檔案），以 `encryption.key_provider` 欄位選擇

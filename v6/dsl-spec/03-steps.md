@@ -47,10 +47,16 @@
 
 ```yaml
 retry:
-  max_attempts: 3 # 總嘗試次數（含首次），預設 1
+  max_attempts: 3 # 總嘗試次數（含首次），預設 1 — `1` 即「不重試」
   delay: 2s # 重試間隔，預設 1s
   backoff: exponential # fixed | exponential，預設 fixed
+  max_delay: 5m # MAY — backoff 後 sleep 的上限，預設 5m（僅 exponential 生效）
 ```
+
+- `delay` 支援 CEL 表達式；求值結果 MUST 為 duration string（如 `"30s"`）。非法型別（float / number / 其他 string）→ step FAILED，`error.type == "expression_error.type_error"`
+- `backoff: exponential` 時第 N 次重試的實際 sleep = `min(delay × 2^(N-1), max_delay)`；factor 固定為 2
+- `backoff: fixed` 時每次 sleep = `delay`，忽略 `max_delay`
+- retry 的 sleep MUST 持久化（記錄 `next_attempt_at` 至 checkpoint）；engine 重啟後 MUST 依剩餘時間重排，不重新從 0 開始
 
 ---
 

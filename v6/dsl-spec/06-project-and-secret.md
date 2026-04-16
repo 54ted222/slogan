@@ -26,6 +26,12 @@ defaults:                       # MAY — project 層級預設
     team: order-team
 ```
 
+### defaults.labels 合併規則
+
+- Project defaults.labels 先展開，definition 自身 `metadata.labels` **覆寫同名 key**（leaf-wins）
+- 巢狀 project：由根 project 向葉 project 逐層合併；葉 project defaults 覆寫父 project 同名 key；最終 definition labels 覆寫合併後的 defaults
+- 合併為 shallow merge（label value 為 string，無 deep merge 情境）
+
 ### 資料夾結構
 
 資料夾中 MUST 包含 `project.yaml` 才被視為 project：
