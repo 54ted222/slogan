@@ -302,7 +302,7 @@ ErrorObject for saga_failed = {
 |------|------|------|
 | `emit` | ✅ | 通知、發失敗事件 |
 | `fail` | ✅ | 重寫 / 包裝錯誤訊息後保持 FAILED |
-| `return` | ✅ | 將 FAILED 轉為 SUCCEEDED（謹慎）；對 function 需符合其 `output_schema`（見 `dsl-spec/05b-function.md`） |
+| `return` | ✅ | 將 FAILED 轉為 SUCCEEDED（謹慎）；output 求值後 MUST 通過 instance 的 `output_schema`（workflow / function 同規則，見下） |
 | `assign` | ✅ | 更新 vars（僅觀測用；instance 即將終結） |
 | `if` / `switch` | ✅ | 分支控制（body 內仍受此白名單約束） |
 | `task` | ❌ | 禁止；catch 不得發起新的 tool / function 呼叫 |
@@ -313,7 +313,15 @@ ErrorObject for saga_failed = {
 
 若 YAML 中 config.catch 含任一禁止 type → 載入失敗，`registry.invalid_catch_step`（新增錯誤碼）。Step 級 `catch`（task / wait 等）仍保留**全部** step types 可用性，不受此限制。
 
-Function 的 `config.catch` 的 `return` 若求值成功且通過 `output_schema` 驗證 → function instance SUCCEEDED，父 task step 收到成功 output；若 `output_schema` 驗證失敗 → function 仍 FAILED（`error.type == "output_schema_violation"`）、父 step 以 FAILED 呈現，先前由 catch 準備的 output 不保留於 function instance。
+**`config.catch` 內 `type: return` 的終態規則**（workflow / function 共用）：
+
+1. `return.output` CEL 求值；求值失敗 → instance 仍 FAILED，`error.type == "expression_error"`；先前的原 error 保留於 `error.cause`
+2. 對 instance 的 `output_schema`（若有）驗證：
+   - 驗證通過 → instance SUCCEEDED，output 為 return 求值結果；原 error 被吞沒（不進 execution_log 的終態 error；但 catch 執行過程仍於 log 保留）
+   - 驗證失敗 → instance **仍 FAILED**，`error.type == "output_schema_violation"`（此為新錯誤；原 catch-觸發 error 保留於 `error.cause`，形成 `cause` 鏈）；候選 output 不寫入 `instances.output`
+3. 若 instance 無 `output_schema` 宣告 → 跳過步驟 2；return 的 output 直接成為 instance output（SUCCEEDED）
+4. 對 function instance：SUCCEEDED 時父 task step 收到成功 output；FAILED 時父 step 以 FAILED 呈現，可被父層 catch 捕捉
+5. 對 workflow instance：SUCCEEDED 時走完整 instance 終結流程（lifecycle destroy / retention）；FAILED 時同
 
 ---
 

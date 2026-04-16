@@ -68,7 +68,7 @@ Function 支援與 Workflow `config` 同名同語意的子集：
 |------|------|
 | `timeout` | function instance 的最長執行時間；duration 或 CEL；求值時機與規則見 [02-workflow.md](02-workflow.md#configtimeout--cancel_grace_period-的-cel-求值)；namespace 限 `input` / `env` / `secret` / `project`（建立 function instance 前一次性求值並持久化） |
 | `max_step_executions` | 類同 workflow；整個 function instance 執行期間的 step 執行次數上限 |
-| `catch` | 類同 `workflow.config.catch`；於 function instance 即將 FAILED 時執行；白名單與 workflow 一致（見 [09-error-model.md](../runtime-spec/09-error-model.md#workflow-級-catch)）。若 catch 透過 `type: return` 消化錯誤，function 仍受 `output_schema` 驗證 |
+| `catch` | 類同 `workflow.config.catch`；於 function instance 即將 FAILED 時執行；白名單與 workflow 一致（見 [09-error-model.md 的「Workflow / Function 級 catch」](../runtime-spec/09-error-model.md#workflow--function-級-catch)）。若 catch 透過 `type: return` 消化錯誤，function 仍受 `output_schema` 驗證 |
 | `secrets` | 類同 workflow；載入期驗證名稱存在於當前 project scope |
 
 Function **不支援** Workflow 獨有的 `cancellation_policy` / `cancel_grace_period`：
