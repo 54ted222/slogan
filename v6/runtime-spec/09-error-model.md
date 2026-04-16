@@ -118,6 +118,9 @@ ErrorObject {
 | `registry.invalid_label_value` | `metadata.labels.<key>` value 非 string 或含換行 / 超長 |
 | `registry.invalid_metadata` | `metadata.description` 超過 1024 chars 或其他 metadata 欄位違反基本限制 |
 | `registry.invalid_event_name` | `emit.event` / `wait.signals.event` / `trigger.event` 名稱格式錯或使用保留前綴 |
+| `registry.invalid_workflow_definition` | Workflow `steps[]` 為空或其他結構性錯誤 |
+| `registry.invalid_function_definition` | Function `steps[]` 為空或其他結構性錯誤 |
+| `registry.extension_handler_not_found` | tool `backend.type: extension` 的 handler 未註冊於 engine extension registry |
 ### Workflow / Trigger
 
 | code | 觸發 |

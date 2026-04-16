@@ -15,7 +15,7 @@
 | `input_schema` | object | MAY | 輸入 JSON Schema |
 | `output_schema` | object | MAY | 輸出 JSON Schema |
 | `config` | object | MAY | workflow 級設定 |
-| `steps` | array | MUST | 主要步驟序列 |
+| `steps` | array | MUST | 主要步驟序列（非空；載入期拒絕空陣列） |
 
 ---
 
@@ -51,6 +51,15 @@ triggers:
 | `scope` | string | MAY | 僅匹配指定 scope 的事件；`project`（預設）/`global`；`workflow` 明確**拒絕**並於載入期回報 `registry.invalid_trigger_scope` |
 | `when` | CEL expression | MAY | 過濾條件，回傳 boolean |
 | `input_mapping` | map | MAY | 事件資料到 workflow input 的映射 |
+
+#### 多 trigger 同時匹配
+
+若同一事件（相同 `event.id`）同時匹配**同一 workflow** 的多個 event trigger（不同 `when` / `scope` / `input_mapping`）：
+
+- 引擎**僅建立一個 instance**；選用 `triggers[]` 陣列中**索引最小**的那個 trigger 的 `input_mapping` 與 `scope` 規則執行
+- 未被選中的 trigger 不執行；不發出警告（由使用者自行避免冗餘 trigger）
+- 此選擇寫入 `instance.triggered_by_trigger_index`（便於追蹤）
+- 跨**不同 workflow** 的 trigger 匹配（即使同 event）→ 各自獨立建立 instance（見現有「at-least-once」與去重規則）；同一事件在不同 workflow 之間不去重
 
 #### Trigger 處理順序
 

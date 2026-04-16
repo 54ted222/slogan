@@ -126,3 +126,22 @@
 | `emit` / `wait` | Event Bus |
 | `idempotent` / `retry` / `catch` / `saga` | Step Executor + Engine Loop |
 | `kind: Secret` 解密 | Resource Pool |
+
+---
+
+## Engine Config
+
+Engine 的各項 `engine.*_limit` / `engine.*_policy` 設定（散見於其他章節，如 `engine.max_function_call_depth`、`engine.tool_stdout_raw_limit`、`engine.event_bus_max_data_bytes`）由下列來源決定，**由高至低**優先級覆蓋：
+
+| 來源 | 優先級 | 範例 |
+|------|--------|------|
+| CLI flag | 1（最高） | `slogan engine --max-function-call-depth=256` |
+| 環境變數 | 2 | `SLOGAN_MAX_FUNCTION_CALL_DEPTH=256`（命名規則：`SLOGAN_` 前綴 + 欄位名 UPPER_SNAKE） |
+| Engine config file | 3 | `/etc/slogan/engine.yaml` 的 `engine.max_function_call_depth: 256` |
+| 內建預設值 | 4（最低） | 各章節標註的 `預設 N`（如 128） |
+
+- 同一欄位於多來源存在 → 高優先級完全覆寫（不合併）
+- 數值解析錯誤（如環境變數為非數字字串）→ engine 啟動失敗，log error；不回退至低優先級
+- Config file 路徑預設 `/etc/slogan/engine.yaml`，可由 `--config` 或 `SLOGAN_CONFIG` 覆寫
+- 啟動時 engine MUST 於 log 輸出有效配置表（含每欄位最終值與來源），便於 debug
+- Runtime 不支援動態重載；修改後需重啟 engine

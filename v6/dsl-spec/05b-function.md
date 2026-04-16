@@ -48,7 +48,7 @@ callback:                       # MAY — 宣告 function 對外發出的具名 
     input_schema: object        # MAY — 傳給 caller handler 的資料 schema
     output_schema: object       # MAY — caller handler 回傳的資料 schema
 
-steps:                          # MUST — 步驟序列
+steps:                          # MUST — 步驟序列（非空；載入期拒絕空陣列）
   - ...
 ```
 

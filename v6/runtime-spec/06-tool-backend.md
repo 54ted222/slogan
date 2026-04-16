@@ -309,6 +309,20 @@ URL 應含一次性 token（query string 或 path），驗證來源；engine 在
 
 extension handler 必須是 in-process（Go plugin、Python entry point、WASM module 等）；out-of-process 由其自行包裝為 exec / http backend。
 
+### Extension Registry
+
+Extension handler 透過 **engine 啟動期註冊**的方式登記；v6 不支援執行期動態載入：
+
+- 實作 MUST 在 engine 啟動前（或首個 instance 建立前）完成所有 handler 註冊
+- 註冊方式由實作決定（常見：
+  - Go 以 `engine.RegisterExtension("<handler_name>", handlerFn)` 編譯期綁定
+  - Python 以 entry point (`slogan.extensions` group) 於 engine 啟動時掃描
+  - 靜態設定檔列出 `handler_name → plugin_path` 由 engine 載入）
+- `handler_name` 格式：`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$`（dotted snake_case）；保留前綴 `slogan.*` 歸 engine 核心使用
+- 同一 `handler_name` 多次註冊 → engine 啟動失敗（fail-fast；不允許覆寫）
+- 載入 tool definition 時，若 `backend.type: extension` 的 `backend.handler` 在 registry 中找不到 → 載入期拒絕，`registry.extension_handler_not_found`
+- Extension handler 無版本管理（v6 簡化）；同 engine build 下所有 instance 共用同一 handler 實例
+
 ---
 
 ## Lifecycle
