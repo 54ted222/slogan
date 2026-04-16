@@ -50,7 +50,17 @@ def resolve(action_name: str) -> Action:
     else:
         body = action_name
 
-    # 2. action body MUST 為 snake_case + dotted
+    # 2. 切出 @version（若有）
+    if "@" in body:
+        body, version_str = body.rsplit("@", 1)
+        try:
+            version = int(version_str)
+        except ValueError:
+            raise InvalidActionName(action_name)
+    else:
+        version = None  # 由版本解析優先權決定
+
+    # 3. action body MUST 為 snake_case + dotted
     first = body.split(".", 1)[0]
     if not is_snake(first):
         raise InvalidActionName(action_name)
@@ -58,9 +68,13 @@ def resolve(action_name: str) -> Action:
         if not is_snake(seg):
             raise InvalidActionName(action_name)
 
-    # 3. 以完整 action_name 查表
-    if action_name in registry.actions:
-        return registry.actions[action_name]
+    # 4. 組合最終 key 查表
+    canonical = f"{prefix}/{body}" if "/" in action_name else body
+    if version is None:
+        version = resolve_version(canonical)  # project default 或 latest
+    key = (canonical, version)
+    if key in registry.actions:
+        return registry.actions[key]
     raise NotFound("action", action_name)
 ```
 

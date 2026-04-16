@@ -243,6 +243,19 @@ def replay(instance_id, until: timestamp | step_id | None):
 
 Replay 不重新呼叫外部 tool；用於 audit、debug、CEL 升級驗證。
 
+### Non-deterministic 函式記錄
+
+`now()` / `uuid()` 的結果寫入 execution_log，key 為：
+
+```
+(instance_id, step_path, attempt, call_index)
+```
+
+- `attempt`：每次 retry attempt 獨立；**retry 重新求值會產生新值**（`now()` 更新、`uuid()` 重新生成）
+- `call_index`：同一 expression 內多次呼叫（如 `${ uuid() + "-" + uuid() }`）的序號
+- Replay 時按 key 讀回對應值；若某 attempt 在 log 中不存在（例如未被持久化的 attempt）則回報 `replay_missing_entry`
+- 實務建議：`now()` / `uuid()` 在 catch handler 內使用時視為新 attempt 的一部分；handler 內重新求值取得新值
+
 ---
 
 ## 觀測指標

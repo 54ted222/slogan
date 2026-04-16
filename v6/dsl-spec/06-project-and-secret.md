@@ -127,6 +127,19 @@ input:
   api_key: ${ secret.PAYMENT_API_KEY }
 ```
 
+### 跨 project 隔離規則
+
+Secret 依宣告位置自動歸屬於所在 project；CEL 對 `secret.X` 的解析：
+
+| 場景 | 行為 |
+|------|------|
+| Workflow / Tool 位於 project 內 | 只能讀取**同 project**的 secret；引用其他 project 的 key → `expression_error.identifier_not_found` |
+| Workflow 於根目錄（無 project） | 可讀「根目錄 secrets/」下的 key |
+| 跨 project 共用 secret | 需明確以 `${ secret["<project>/<KEY>"] }` 存取，且該 secret MUST 標記 `metadata.shared: true`（未標記則仍視為不可見） |
+
+- 引擎載入期對每個 definition 記錄其歸屬 project，並為 `secret` namespace 建立 project-scoped SecretAccessor
+- 日誌／trace redaction 對所有 project 的 secret 一致適用
+
 ### env — 環境變數
 
 非敏感設定透過 `env` namespace 存取（來自 OS 環境變數或 `.env` 檔）：

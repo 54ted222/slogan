@@ -65,6 +65,27 @@ Event {
 - **延遲**：`emit.delay > 0` 時事件先入延遲 queue；deadline 到才實際投遞。
 - **死訊**：訂閱者持續處理失敗（如連續超過 `max_redelivery`，建議 5 次）→ 進入 dead-letter；引擎發 `bus.dead_letter` internal 事件可被 ops 監控。
 
+#### bus.dead_letter 事件結構
+
+```
+{
+  type: "bus.dead_letter",
+  scope: "internal",
+  data: {
+    original_event: Event,          # 完整原事件物件
+    subscription_id: string | null, # 觸發死訊的 subscription（若有）
+    target_instance_id: string | null,
+    failure_reason: string,          # "handler_timeout" / "instance_not_found" / "invoke_failed" / ...
+    last_error: ErrorObject | null,  # 最後一次投遞失敗的 error
+    attempts: int,                   # 已嘗試投遞次數
+    first_attempted_at: ISO8601,
+    last_attempted_at: ISO8601,
+  }
+}
+```
+
+Ops 監控 SHOULD 對 `bus.dead_letter` 做告警；實作 MAY 提供「重新投遞 dead letter」API。
+
 ---
 
 ## Wait subscription

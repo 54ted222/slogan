@@ -67,13 +67,27 @@ retry:
 ```yaml
 - id: load_order
   type: task
-  action: order.load # MUST — tool definition 的 name
+  action: order.load # MUST — tool definition 的 name；可附帶 @<version>
   input: # MAY — 傳給 tool 的輸入
     order_id: ${ input.order_id }
   retry: { ... }
   timeout: 30s
   catch: [...]
 ```
+
+### action 的版本語法
+
+- `action: order.load` — 不指定版本，引擎按「版本解析優先權」決定
+- `action: order.load@2` — 明確指定 version 2；找不到 → `registry.action_not_found`
+- `action: order/order.load@2` — project 前綴 + version
+
+**版本解析優先權**（高到低）：
+
+1. Step 明確 `@<version>`
+2. Project `project.yaml` 的 `defaults.action_versions.<action_name>: <version>`
+3. Registry 中該 action 的最大 version（`latest`）
+
+`latest` 回退可能在 version 升級時默默改變行為；production workflow SHOULD 明確寫 `@<version>` 或以 project defaults 釘選。
 
 Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
@@ -460,6 +474,15 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
   - 外層 saga 觸發補償時，內層 saga 若已成功，只執行外層補償層邏輯；若內層 saga 已處於 compensating，外層等待內層補償結束再繼續外層補償鏈
   - 排序規則：內層整體視為一個時間點（進入 SUCCEEDED 的時戳）參與外層的降序補償
 - 無 `compensate` 的 step（Tool 未定義且 step 未覆寫）跳過
+
+#### Saga 內的 `type: emit` 語意
+
+`emit` 發出事件是 **不可撤銷的 side effect**：
+
+- 已投遞至 Event Bus 的事件即使 saga 進入補償，也不會被「收回」
+- 引擎不提供 emit 的 compensate 鉤子；使用者若需「撤銷通知」，應由補償邏輯**額外發一個撤銷事件**（如 `order.rolled_back`），下游消費者自行以 event type 或 correlation id 區分
+- Saga 補償完成後可在 `catch` 區塊內以 `type: emit` 發送 rollback 事件（見 99-examples.md 範例 4）
+- `emit.delay > 0` 的延遲事件：若 saga 在 delay deadline 前進入補償，已在 delayed_events 表中但未投遞的事件**會被刪除**（與 instance cancel 相同機制），不會投遞
 
 #### 補償失敗處理
 
