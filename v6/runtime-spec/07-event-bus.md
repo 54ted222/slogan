@@ -27,14 +27,18 @@ Event {
     instance_id: string,
     project:     string,
     step_id:     string | null,
+    sequence:    int64,      # 單調遞增序列號，per source.instance_id；保證同源全序
   },
   data:       any,           # 業務 payload；internal 事件可為 null
-  timestamp:  ISO8601,
+  timestamp:  ISO8601,       # μs 精度（RFC 3339 Nano）；僅作觀測，排序用 sequence
   delivery:   "broadcast" | "unicast",   # broadcast: 所有訂閱者；unicast: 指定接收者
   target:     string | null, # unicast 時的 instance_id
-  trace_id:   string,        # 跨 instance 追蹤
+  trace_id:   string,        # 跨 instance 追蹤；見「trace_id 傳播」
 }
 ```
+
+- `source.sequence` 由 engine 在 emit 時分配（從 instance 的 vars 或專用計數器讀取 + 1）；持久化於 instance state，重啟後不重複
+- 跨 instance 排序無保證；bus 消費者依 `(source.instance_id, source.sequence)` 做同源全序，依 `timestamp` 做觀測性展示
 
 ---
 
@@ -57,7 +61,7 @@ Event {
 
 - **At-least-once**：每個訂閱者至少收到一次該事件；可能因網路或 engine 進程重啟而重複。
 - **訂閱者責任**：以 `event.id` 做去重（trigger / wait subscription 維護「已處理 event id」表，TTL = 訂閱 deadline）。
-- **順序**：同 `(scope, source.instance_id)` 內以 timestamp 升序投遞；跨 source 不保證。
+- **順序**：同 `source.instance_id` 內以 `source.sequence` 升序投遞；跨 source 不保證。實作 bus（NATS/Kafka/Redis）MAY 依 key=source.instance_id 做 partition 以維持同源順序。
 - **延遲**：`emit.delay > 0` 時事件先入延遲 queue；deadline 到才實際投遞。
 - **死訊**：訂閱者持續處理失敗（如連續超過 `max_redelivery`，建議 5 次）→ 進入 dead-letter；引擎發 `bus.dead_letter` internal 事件可被 ops 監控。
 
@@ -86,6 +90,13 @@ WaitSubscription {
 ```
 
 訂閱寫入 Instance Store 的 wait_subscriptions 表（持久化），同步於 Event Bus 的訂閱者註冊（in-memory）。
+
+**Subscription 清理規則**：
+
+- 匹配喚醒後：subscription 立即刪除（any_of 模式喚醒時同時刪除同 wait step 的其他 subscriptions）
+- Instance 終結（SUCCEEDED / FAILED / CANCELLED）：關聯的 wait_subscriptions 在 instance checkpoint transaction 內同步刪除，避免孤立訂閱
+- Deadline 過期：由背景 GC job 掃描並刪除（實作 SHOULD 每分鐘掃一次；deadline 觸發 wait.timeout 時也順便刪）
+- 事件投遞至已不存在的 instance（因 GC race）：bus 記錄 warning 並丟棄，不發 `event.matched`
 
 匹配流程：
 
@@ -189,6 +200,23 @@ emit 的順序保證：
 | `tool.stream` | Backend Driver | Engine Loop / 訂閱 wait | 串流投遞 |
 | `engine.lease_expired` | Lease Manager | Engine Loop | 觸發 instance 接管 |
 | `bus.dead_letter` | Event Bus | Ops 監控 | 訊息無法投遞 |
+
+---
+
+## trace_id 傳播
+
+所有 instance 與 event 皆帶 `trace_id`，以維持跨元件追蹤鏈：
+
+| 產生/繼承時機 | trace_id 來源 |
+|----------------|----------------|
+| Manual trigger | API caller 提供 W3C traceparent header → 解析其 trace-id；無則生成 UUID v4 |
+| Event trigger | 繼承來源 event 的 `trace_id`（若無則新生） |
+| Function instance / sub-instance | 繼承父 instance 的 `trace_id` |
+| `emit` 產生的 event | 繼承當前 instance 的 `trace_id` |
+| Internal event（step.completed 等） | 繼承當前 instance 的 `trace_id` |
+| Tool backend HTTP 請求 | engine MAY 注入 `traceparent` header（基於 instance.trace_id + 新 span_id） |
+
+確保單一觸發到所有衍生 instance / event 共享同一 `trace_id`，observability 系統可以其串接完整執行鏈。
 
 ---
 

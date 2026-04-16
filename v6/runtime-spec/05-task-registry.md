@@ -82,8 +82,20 @@ def resolve(action_name: str) -> Action:
    - 同名不同版本：MAY 並存；引用時必須帶 version 或預設取 `version` 最大者（建議由 project 配置）
 3. Lifecycle：
    - tool `lifecycle.init` / `destroy` 中的 backend 也透過 registry 驗證引用（其 backend 不可呼叫其他 tool，僅可 spawn process / http）
+4. Function 依賴圖：
+   - 對所有 Function 構造「function A 呼叫 function B」的有向圖（掃 `type: task` step 的 action）
+   - 執行 Tarjan SCC 偵測強連通元件；發現循環（含自呼叫）→ `registry.dependency_cycle`，error.details 列出循環路徑
+   - 允許使用者顯式標示 `recursion_allowed: true` 於 Function metadata 以跳過該 function 的循環檢查（v6 預設關閉）
 
 驗證失敗導致 engine 拒絕啟動或拒絕載入該 project。
+
+## 遞迴深度限制
+
+即便通過載入驗證（`recursion_allowed: true`），運行時仍有深度上限：
+
+- 每個 Function instance 維護 `call_depth`（從父 instance 繼承 +1；根 workflow instance 為 0）
+- 預設上限 128；超過 → function instance FAILED，`error.type: "max_recursion_depth_exceeded"`
+- 上限可由 `engine.max_function_call_depth` 覆寫（見 `10-concurrency.md` 的限制表）
 
 ---
 

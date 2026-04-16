@@ -449,3 +449,28 @@ runtime-spec/09-error-model.md 提到 config.catch「建議僅允許 emit/fail/r
 **選項 A**：v6 規格定義最小實作（`SLOGAN_MASTER_KEY` env var + PBKDF2-HMAC-SHA256 + 100k iterations + salt 存於 secret 檔），輪替由 CLI 工具 `slogan secret rotate` 處理
 **選項 B**：v6 僅定義「加密後的 YAML 可安全入 Git」此保證，key 管理延後至獨立 security-spec
 **選項 C**：支援可插拔 KMS（AWS KMS / HashiCorp Vault / 本機檔案），以 `encryption.key_provider` 欄位選擇
+
+---
+
+## S. v6 第五輪審閱（2026-04-16，待決策）
+
+第五輪新發現 5 項，4 項已直接修正（Event sequence 欄位保證同源全序、wait subscription 於 instance 終結時同步刪除、function 循環依賴偵測 + 遞迴深度上限、trace_id 傳播規則）。剩餘：
+
+### S1. Extension backend SPI 具體簽名
+
+目前 `06-tool-backend.md` 只說 extension 是 in-process handler（Go plugin / Python entry / WASM），但：
+
+- 未定義 handler 介面簽名
+- 未定義註冊機制（discovery）
+- 未定義版本相容性協商
+
+**選項 A**：v6 定義最小 Go handler SPI（其他語言延後）：
+```go
+type ExtensionHandler interface {
+    Invoke(ctx context.Context, req *ExtensionRequest) (*ExtensionResponse, error)
+    InvokeStream(ctx context.Context, req *ExtensionRequest, ch chan<- *StreamEvent) error
+}
+func Register(name string, handler ExtensionHandler)
+```
+**選項 B**：v6 僅保留 `extension` 為佔位，具體 SPI 延後至獨立 `extension-spec/`
+**選項 C**：跨語言 SPI 以 WASM component model 統一，避免 Go plugin ABI 問題

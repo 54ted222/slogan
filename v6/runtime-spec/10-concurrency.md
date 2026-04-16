@@ -207,6 +207,7 @@ tool 在發出 callback 後立即發 result（未等 callback_result）的情況
 | `engine.event_bus_buffer_size` | 內部事件 buffer |
 | `engine.callback_in_flight_per_step` | 單 step 同時等待中的 callback 上限 |
 | `engine.cpu_worker_pool_size` | CPU-bound 下放（CEL 求值 / 大 JSON 處理）的 worker thread 數量 |
+| `engine.max_function_call_depth` | Function 遞迴深度上限（預設 128） |
 
 超過上限時：
 - foreach concurrency 被 cap 到 max；不報錯

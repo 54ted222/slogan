@@ -85,6 +85,8 @@ ErrorObject {
 | `registry.invalid_action_name` | 命名混用 `-` / `_` 等不合規 |
 | `registry.duplicate_action` | 重複註冊 |
 | `registry.name_conflict` | 同類型同名衝突 |
+| `registry.dependency_cycle` | Function 間循環依賴（載入期偵測） |
+| `max_recursion_depth_exceeded` | 運行時 function 遞迴深度超限 |
 ### Workflow / Trigger
 
 | code | 觸發 |

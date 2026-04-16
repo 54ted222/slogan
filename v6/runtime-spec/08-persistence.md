@@ -173,7 +173,7 @@ RETURNING ...
 | `FAILED` workflow | 30 天 | 同上 |
 | `CANCELLED` workflow | 7 天 | 同上 |
 | Sub-instance | 跟父走 | |
-| `wait_subscriptions` | deadline + 1h | |
+| `wait_subscriptions` | instance 終結時立即刪除；未終結但已超過 deadline 者依 GC job 刪除 | |
 | `delayed_events` | 投遞後立即 | |
 | `execution_log` | 跟所屬 instance 走 | |
 | `resource_pool` | instance 結束時 |
