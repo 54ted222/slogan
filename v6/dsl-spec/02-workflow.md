@@ -104,6 +104,15 @@ triggers:
 
 驗證器 MUST 使用嚴格模式（未定義欄位視為違反 `additionalProperties: false`，除非 schema 顯式允許）。
 
+### JSON Schema `default` 套用規則
+
+- 驗證器 MUST 在驗證 **之前** 以遞迴方式套用 `default`：若 input 缺少某欄位（key 不存在）**且** schema 對該欄位宣告 `default`，則補入 default 值
+- `null` 被視為**顯式值**，不觸發 default 套用（即 `{"x": null}` 不會被補為 default；若 schema 要求 non-null，驗證失敗）
+- Default 套用於整個巢狀結構：例如 schema `{type: object, properties: {cfg: {type: object, properties: {retries: {type: integer, default: 3}}, default: {}}}}`，input `{}` 套用後為 `{cfg: {retries: 3}}`
+- 套用順序：先於當前層級套用 default 補齊，再遞迴對 children 套用
+- 套用後的 input **即為 instance 的最終 input**（寫入 `instances.input`；後續 CEL 讀 `input.cfg.retries` 取得 `3`）
+- Tool `input_schema` 套用 default 的規則相同；套用在「task step 進入 RUNNING、CEL 求值後、backend 驗證前」。CEL 求 null 視為顯式值，不套 default
+
 ### 驗證層級分工
 
 Schema 驗證分三個獨立層級，各司其職、不互相代勞：

@@ -96,6 +96,16 @@ steps.load_order.status             # "SUCCEEDED" | "FAILED" | "SKIPPED" | null
   input: { amount: ${ default(prev.output, {amount: 0}).amount } }
 ```
 
+### 值語意（value semantics）
+
+所有 namespace 中的資料（`input` / `steps` / `vars` / `loop.item` / `event.data` / ...）在 CEL 求值時遵循**值語意（deep copy by value）**，非引用：
+
+- CEL 讀取 `input.items[0].price` → 取的是當下 snapshot 的拷貝；後續 `input` 若因實作細節變動（不應發生，但並行場景中可能），已取得的值不受影響
+- `assign vars.items: ${ input.product_list }` → `vars.items` 為 `input.product_list` 的 deep copy；後續對 `vars.items[0].price = 99` 不影響 `input.product_list`（事實上 assign 只能整體覆寫 `vars.items`，沒有部分更新語法；此處僅示意值獨立）
+- foreach 並行迭代中，`loop.item` 為各迭代**獨立**的值拷貝；對 `loop.item` 的讀取不會競爭
+- 深層結構寫入 `vars.foo.bar.baz` 的語法不存在（`assign` 只支援頂層 key 替換）；若需更新深層請先 `assign vars.foo: ${ merge(vars.foo, {bar: {baz: new}}) }`（目前 v6 無內建 `merge`，需透過 CEL 手動組 map）
+- 實作上 engine MAY 以 copy-on-read 或 structural sharing 優化，但對使用者呈現的語意恆為 deep copy
+
 ### vars
 
 由 `assign` step 設定的變數。

@@ -36,6 +36,13 @@ metadata:
 input_schema: object            # MAY — 輸入 JSON Schema
 output_schema: object           # MAY — 輸出 JSON Schema
 
+# 缺省語意：
+# - input_schema 缺省 → function instance 建立時不對 input 驗證（任意結構皆接受）；
+#   僅 engine 級別的 size limit（instance input ≤ 16 MB，見 08-persistence.md）仍適用
+# - output_schema 缺省 → `type: return` 的 output 不驗證；
+#   僅 size limit（instance output ≤ 16 MB）與一般 JSON 可序列化性適用
+# - callback.*_schema 缺省 → 對應方向不驗證；見 callback 小節
+
 callback:                       # MAY — 宣告 function 對外發出的具名 callback
   some_name:
     input_schema: object        # MAY — 傳給 caller handler 的資料 schema

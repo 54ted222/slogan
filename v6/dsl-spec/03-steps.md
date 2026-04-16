@@ -236,6 +236,23 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 - `when` 於各迭代獨立求值；同一 step id 可能在某些迭代 SKIPPED、某些迭代 SUCCEEDED。
 - Output 陣列的位置即使對應迭代 SKIPPED / FAILED / `ignore`（見 `failure_policy`），**MUST 以 `null` 占位**以維持 index 對齊（foreach output 長度恆等於 items / count）；SKIPPED 與 FAILED 在陣列中不可區分，需檢查 `steps.<foreach_id>.output[i] == null` 並搭配 `error.failed_indices` 辨識。
 
+### 嵌套作用域的跨層存取規則
+
+Step 所在位置的 `steps.*` 可讀範圍遵循「可見已完成的祖先作用域」規則：
+
+| 存取方向 | 是否可讀 |
+|---------|---------|
+| 本迭代 / branch 內已 SUCCEEDED 的 step | ✅ |
+| 外層（祖父、曾祖父等）已 SUCCEEDED 的 step（含包裹本迭代的 foreach / parallel / saga / if / switch 之**前**的 steps） | ✅ |
+| 包裹本迭代的 foreach / parallel step **自身**（尚未終結） | ❌（未完成；讀取 `steps.<outer_id>.output` 為 `expression_error.identifier_not_found`） |
+| **同層兄弟分支**（parallel 內其他 branch、foreach 其他迭代） | ❌ |
+| 內層巢狀 step（foreach / parallel / saga / if / switch 的 body 內部 step） | ❌（不暴露至外層 namespace） |
+| 已終結兄弟 branch / 迭代（理論上可能，但為避免 race 與混亂 → 統一禁止） | ❌ |
+
+具體來說，在二層 foreach 的**內層**迭代內，`steps.<outer_step_id>` 可讀（其為外層 foreach **之前**已完成的 step，不含外層 foreach 自身），但不可讀同層其他外層迭代的 `steps`。外層 foreach 自己的 output 陣列在外層 foreach 結束後的 step 才可見。
+
+此規則確保 step output 的可見性與「執行順序」嚴格對應，避免並行分支間暴露未 commit 的中間狀態。
+
 ---
 
 ## parallel
