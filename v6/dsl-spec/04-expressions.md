@@ -108,7 +108,15 @@ steps.load_order.status             # "SUCCEEDED" | "FAILED" | "SKIPPED" | null
 
 ### vars
 
-由 `assign` step 設定的變數。
+Instance 級變數空間；僅 `type: assign` 可寫入。
+
+- 建立 instance 時初始為 **空 map `{}`**（非 null）；`has(vars) == true`、`vars.size() == 0`、`has(vars.anything) == false`
+- 未寫入的 key 讀取：`vars.foo` → `expression_error.identifier_not_found`；使用 `has(vars.foo)` 或 `default(vars.foo, <fallback>)` 防禦
+- 子 function instance **不繼承**父 vars；函式呼叫邊界即為 vars 邊界
+- 寫入語意見 `dsl-spec/03-steps.md` 的 `type: assign`；並行寫入規則見 `runtime-spec/10-concurrency.md`
+- v6 不支援 `vars_schema` 驗證（使用者自行保證型別）；相關功能延後至未來版本
+
+範例：
 
 ```
 vars.payment_input

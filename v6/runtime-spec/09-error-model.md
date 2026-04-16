@@ -121,6 +121,8 @@ ErrorObject {
 | `registry.invalid_workflow_definition` | Workflow `steps[]` 為空或其他結構性錯誤 |
 | `registry.invalid_function_definition` | Function `steps[]` 為空或其他結構性錯誤 |
 | `registry.extension_handler_not_found` | tool `backend.type: extension` 的 handler 未註冊於 engine extension registry |
+| `invalid_fail_config` | `type: fail` 的 `message` 為空或 `code` 格式違反規則 |
+| `registry.duplicate_manual_trigger` | 同一 workflow 的 `triggers[]` 宣告多個 `type: manual` |
 ### Workflow / Trigger
 
 | code | 觸發 |

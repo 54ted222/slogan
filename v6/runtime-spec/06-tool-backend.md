@@ -178,6 +178,11 @@ else:
   - Engine MUST 在 tool spawn **前**確保 `working_dir` 存在（若引用 artifact path，則確保對應 artifact 目錄已建立）
   - `working_dir` 求值結果 MUST 在 workspace 下（canonical 化後以 workspace_path 為前綴）；escape 外部 → ToolResult `{success: false, error: {type: "spawn_failed.working_dir"}}`
 - `shell`：明確指定時用該 shell 執行 `command`；未指定時直接 `exec()` `command + args`，不經 shell（避免 quoting 問題）。
+  - 接受值：**絕對路徑**（如 `/bin/bash`、`/usr/bin/env zsh`）或**檔名**（`sh`、`bash`、`zsh`、`dash`、`ash`、`busybox`）
+  - 檔名會透過 `PATH` 查找；找不到 → ToolResult `{success: false, error: {type: "spawn_failed.not_found"}}`
+  - 以 shell 執行時：engine 實際 exec 為 `<shell> -c <command>`；`args` 附加於 command 字串後（engine 自動 shell-escape 每個 arg）
+  - 不支援非 POSIX shell（如 `fish` / `nushell` / `powershell`）作為自動 `-c` 模式；若需要請以明確路徑 + 自訂 args 包裝
+  - 未指定 `shell` 但 `command` 含 shell 語法（`|` / `>` / `&&`）→ engine 不解析，視為字面參數；如需管線請顯式 `shell: sh` + `command: "..."`
 
 ### Env 變數
 
