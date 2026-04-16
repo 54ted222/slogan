@@ -106,6 +106,7 @@ ErrorObject {
 | `registry.dependency_cycle` | Function 間循環依賴（載入期偵測） |
 | `registry.missing_secret` | workflow.config.secrets 宣告的 secret 不存在於 project scope |
 | `workflow_version_deleted` | instance 綁定的 workflow version 被強制刪除 |
+| `workflow_version_deleted.hash_mismatch` | replay 時對應 `(canonical, version)` 於 registry 的 `definition_hash` 與 instance pin 時的 hash 不符（表明 version 內容被違規覆寫）；見 `05-task-registry.md` hot reload 規則 |
 | `definition_in_use` | 嘗試刪除仍有 active instance 引用的 definition version |
 | `max_recursion_depth_exceeded` | 運行時 function 遞迴深度超限 |
 | `schema_incomplete` | Function callback 只宣告 input_schema 或 output_schema 之一 |

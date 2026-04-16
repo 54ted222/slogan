@@ -66,14 +66,21 @@
 
 | 欄位 | 型別 | 說明 |
 |------|------|------|
-| `event_id` | uuid | |
+| `event_id` | uuid | 原事件 `event.id`；投遞時**原樣**送出以維持訂閱端去重語意（不重新生成） |
 | `event_type` | string | |
 | `scope` | enum | |
 | `data` | jsonb | |
 | `due_at` | timestamp | |
-| `source_instance` | uuid | |
+| `source_instance` | uuid | 同 `Event.source.instance_id` |
+| `source_step_id` | string \| null | 同 `Event.source.step_id`（emit 所屬 step；無則 null） |
+| `source_sequence` | int64 | 同 `Event.source.sequence`；於 emit step 寫入 delayed_events 時一併分配並持久化，避免投遞時重新編號導致同源順序破壞 |
+| `trace_id` | string | 繼承自 emit 所在 instance；投遞時保留以維持跨 instance 追蹤鏈（見 `07-event-bus.md` trace_id 傳播） |
+| `delivery` | enum | `broadcast` / `unicast`；使用者 emit 恆為 broadcast，internal 延遲事件可為 unicast |
+| `target` | string \| null | unicast 目標 instance_id；broadcast 時為 null |
 | `claimed_by` | string \| null | 搶取該 event 的 engine_id；null 表示可被搶取 |
 | `claimed_until` | timestamp \| null | claim 的 TTL；過期視為未 claim |
+
+投遞時 publisher 以上述欄位還原 `Event` 物件；`timestamp` 採投遞時刻（非原 emit 時刻，與 `07-event-bus.md` 行為一致）。`event_id` / `source.*` / `trace_id` 保留原值，確保訂閱端去重與 trace 關聯正確。
 
 多 engine 搶取 SQL 模式：
 
@@ -92,6 +99,25 @@ RETURNING *;
 ```
 
 投遞成功後 DELETE；投遞失敗則清空 `claimed_by`（下次 retry）。避免時鐘漂移造成重複投遞。
+
+### trigger_dedup
+
+Event trigger 建立 instance 的去重記錄（見 `07-event-bus.md` 的 Idempotency 章節）：
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `workflow_name` | string | 被觸發的 workflow `metadata.name`（含 project 前綴） |
+| `workflow_version` | int | 被觸發的 workflow version |
+| `event_id` | uuid | 原事件 `event.id` |
+| `instance_id` | uuid \| null | 成功建立的 instance id；供觀測 / 重投遞時回查（manual trigger idempotency 亦寫入此表以 `event_id = idempotency_key` 形式統一） |
+| `trigger_index` | int | 被選中的 `triggers[]` 索引；多 trigger 同時匹配時用於追蹤（見 `dsl-spec/02-workflow.md`） |
+| `created_at` | timestamp | INSERT 時刻 |
+| `expires_at` | timestamp | 由 engine config `registry.trigger_dedup_ttl`（預設 24h）決定 |
+
+- 主鍵：`(workflow_name, workflow_version, event_id)`；INSERT 衝突 → 視為重複事件（丟棄、ack bus）
+- INSERT 必須發生在 `input_mapping` 求值**前**（詳見 `dsl-spec/02-workflow.md` Trigger 處理順序）；確保未通過 `when` 的 trigger 不占用 dedup slot
+- GC：背景 job 以 `expires_at < now()` 清理；`expires_at` 不支援 API 延長
+- Manual trigger 的 `Idempotency-Key` 查找以 `(workflow_name, workflow_version, idempotency_key)` 為 key，**邏輯上**可與此表共用儲存（將 `event_id` 欄位一般化為 `dedup_key`）；實作 MAY 分表以避免語意混淆
 
 ### resource_pool
 
@@ -193,11 +219,12 @@ UPDATE instances
 SET    lease_owner = $engine_id, lease_expires_at = now() + 30s
 WHERE  id = $instance_id
   AND  (lease_owner IS NULL OR lease_expires_at < now() OR lease_owner = $engine_id)
-RETURNING id, lease_owner, lease_expires_at;
+RETURNING id, lease_owner, lease_expires_at, cancel_requested, cancel_reason, state, substate;
 ```
 
 - 更新成功（`RETURNING` 有結果）的 engine 進程持有 lease；其他進程回 0 rows，視為搶取失敗
 - PENDING instance 剛建立時 `lease_owner IS NULL`，第一個執行 UPDATE 成功的 engine 取得 lease
+- `RETURNING cancel_requested, cancel_reason` 用途：lease 首次搶取與每次 renew 皆於同一 UPDATE 中讀回這兩欄位，避免「搶到 lease 後才發現已被 cancel」需額外 query 的 race。若 `cancel_requested = true` → engine 直接進入 CANCELLED 流程，不執行原計劃的 step transition（與 `10-concurrency.md` Lease vs cancel 章節一致）
 - 每次 checkpoint 於同一 transaction 內延展 lease；lease 延展與 state 變動原子化
 - Engine 進程 crash → lease 自然過期（不需額外釋放動作）；其他 engine 進程在下次 polling / `instance.created` 事件到達時搶到
 

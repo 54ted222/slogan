@@ -106,14 +106,18 @@ Registry 於 engine 運行期支援「熱載入新版本」（新 version 加入
    - 該 instance 若未來執行該 action 的 step（含 compensate） → step FAILED，`error.type == "action_pin_version_not_found"`、`error.details = { action: canonical, pinned_version: N, available_versions: [...] }`
    - 該 step 可由 catch 接住；使用者可決定是否升級 pin（需以新 instance 重新啟動）或標記為最終失敗
    - 未引用該 action 的 step 不受影響（正常繼續）
-4. **Compensate 的遞迴 pin**：當原 step 首次 resolve 並 pin 時，若其 tool definition 含 `compensate.action`（無 `@version`），engine 一併 resolve 並 pin `(compensate_canonical, version)` 至同一 `action_pins` 結構，key 以 `"<origin_canonical>::compensate"` 區分，例：
-   ```
-   action_pins: {
-     "order/payment": 2,
-     "order/payment::compensate": { action: "order/payment.refund", version: 2 }
+4. **Compensate 的遞迴 pin**：當原 step 首次 resolve 並 pin 時，若其 tool definition 含 `compensate.action`（無 `@version`），engine 一併 resolve 並 pin `(compensate_canonical, version)` 至同一 `action_pins` 結構。為保 JSON schema 一致，**所有 pin 的 value 統一為 object 形式** `{canonical: string, version: int}`；key 為 lookup 名（原 step pin 以 canonical name 本身為 key，compensate pin 以 `"<origin_canonical>::compensate"` 區分）：
+   ```json
+   {
+     "action_pins": {
+       "order/payment": { "canonical": "order/payment", "version": 2 },
+       "order/payment::compensate": { "canonical": "order/payment.refund", "version": 2 }
+     }
    }
    ```
-   Compensate 執行時以 pin 內版本為準；若 compensate action 自身已 `@version` 顯式 → 不寫入 pin（版本已確定）
+   - 一般 pin 的 `canonical` 恆等於 key；compensate pin 的 `canonical` 為補償 action 的實際名稱（可能與 origin 不同）
+   - 歷史資料相容：engine 於讀取 `action_pins` 時 MAY 容忍純 integer value（視為 `{canonical: <key>, version: <int>}`）以便向前讀取早期 checkpoint；寫入一律採 object 形式
+   - Compensate 執行時以 pin 內 `canonical` + `version` 為準；若 compensate action 自身已 `@version` 顯式 → 不寫入 pin（版本已確定）
 5. **Replay 驗證**：replay 既有 instance 時重新比對 `definition_hash`；若當前 registry 中相同版本之 hash 與 pin 時的 hash 不符（僅可能於規則 2 被違反時發生）→ `workflow_version_deleted.hash_mismatch`，replay 失敗
 
 - `is_snake(s)`：`^[a-z][a-z0-9_]*$`
