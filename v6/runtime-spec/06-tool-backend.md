@@ -151,7 +151,10 @@ stdin 保持開啟；後續行為 `callback_result` 訊息。
   - driver 發 SIGTERM 至 tool，等 5s 未退出則 SIGKILL；不得繼續等待後續訊息
   - 原因：超長行可能是 `type: result` 訊息，丟棄後 tool 端認為成功但 driver 無法判定終態，造成掛起
 - Tool 在收到 `callback_result` 前可繼續輸出 `stream` / 發更多 `callback`。
-- Driver MUST 將 `call_id` 對應表持久化（key: `(instance_id, step_id, call_id)`），避免 process 中途崩潰時 callback 結果遺失。
+- Driver MUST 將 `call_id` 對應表持久化（key: `(instance_id, step_id, attempt, call_id)`，含 attempt 以避免 retry 跨 attempt 誤配），避免 process 中途崩潰時 callback 結果遺失。
+  - **重複 call_id**：同一 (instance_id, step_id, attempt) 內 tool 發出多筆相同 `call_id` 的 `callback` 訊息 → 以**首筆為準**，第二筆之後以協議錯誤 `incomplete_protocol` 處理（SIGTERM kill tool），避免 handler 被重複呼叫破壞 idempotent 語意
+  - **未匹配 call_id**：tool POST `callback_result` 至 `X-Callback-URL`（protocol 模式於 stream 回寫；HTTP callback 模式於外部 endpoint）但 `call_id` 不在持久化表中 → driver 回 HTTP 404 / 於 stdin 寫 `{"type":"error","reason":"unknown_call_id","call_id":...}`，tool 不得掛起等待；step 本身不因此 FAILED（避免 tool bug 影響業務結果），僅記錄 `tool.protocol_anomaly` observability 事件
+  - **進程重啟後的 call_id 表**：driver 重啟時以 `(instance_id, step_id, attempt)` 重建該表；若 attempt 已推進，舊 attempt 的 call_id POST 視同未匹配
 - 收到 `result` 後，driver 等待 process exit；若 process 在 `result` 後 5s 內未退出 → SIGTERM；再等 5s → SIGKILL。
 - Process exit 但未收到 `result` → ToolResult `{success: false, error: {type: "incomplete_protocol"}}`；exit code 寫入 `error.code`。
 
@@ -289,7 +292,8 @@ else:
 - Attempt 計數統一由 step-level 遞增；HTTP 層失敗與 exec 層失敗共用同一 attempt 號碼（避免「HTTP 重試 3 次 + step 重試 3 次 = 9 次實際呼叫」的疊加混亂）
 - `Retry-After` header：引擎 MAY 於 HTTP 503/429 時讀取 `Retry-After`（秒數或日期），若 > step.retry 的下次 delay → **取較大者**；`Retry-After` 值會被裁切至 `retry.max_delay` 上限
 | status 2xx（200-299） | 成功，進入 response parse |
-| status 其他（含 3xx） | 視為成功：依 response 解析；3xx 不自動 follow redirect（由 HTTP client library 的預設決定，建議關閉自動 follow 以免 secret 洩漏至非預期 endpoint） |
+| status 3xx（300-399） | **不 follow redirect**：引擎 MUST 於 HTTP client 初始化時顯式關閉自動 redirect（Go `CheckRedirect: ErrUseLastResponse` / Python `allow_redirects=False` / Node `redirect: 'manual'` 等）；若底層 library 不支援關閉，engine MUST 以 wrapper 攔截 3xx 並改走以下失敗路徑。除非 status 被 `error_on_status` / `retry_on_status` 明示處理，3xx 預設 → step FAILED，`error.type == "http_redirect_blocked"`、`error.details.location = Location header`、`error.code = "<status>"`；此設計避免注入於 URL / Authorization header 的 secret 洩漏至非預期 endpoint |
+| status 其他（4xx / 5xx） | 依 response 解析；若不在 `error_on_status` / `retry_on_status` 列表則仍視為成功 body（由 response.mapping 解讀） |
 
 - 兩列表不可互相包含相同 status 以外的情境；載入期 SHOULD 警告重疊（非錯誤）
 - `retry_on_status` 僅決定「是否具備可重試資格」，實際是否重試仍看 step.retry 配額

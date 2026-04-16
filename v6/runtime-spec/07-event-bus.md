@@ -310,6 +310,7 @@ emit 的順序保證：
 | `instance.completed` | Engine Loop | Engine Loop / 父 instance | 子 instance 終結通知 |
 | `instance.failed` | Engine Loop | 同上 | |
 | `instance.cancelled` | Engine Loop / API | 同上 | |
+| `instance.cancel` | 外部 API / 父 instance / Engine Loop | Lease 持有 Engine Loop | 唯一控制型 internal event（unicast，見 scope: internal 路由）；通知 lease 持有者讀取 `instance.cancel_requested` 並進入 CANCELLED 流程 |
 | `step.completed` | Engine Loop | Engine Loop | 推進下一步 / 喚醒 wait signals 中的 step 訊號 |
 | `step.async_started` | Engine Loop | Engine Loop | foreach/parallel async 模式 |
 | `event.matched` | Event Bus | Engine Loop | 喚醒 wait step |
@@ -337,6 +338,7 @@ emit 的順序保證：
 | `instance.completed` | `{instance_id, kind, output_summary (前 4 KB), duration_ms}` |
 | `instance.failed` | `{instance_id, kind, error: <完整 ErrorObject>, duration_ms, owner}` |
 | `instance.cancelled` | `{instance_id, kind, reason, by_parent (bool)}` |
+| `instance.cancel` | `{target_instance_id, reason, requested_by ("api" \| "parent" \| "timeout" \| "ops"), requested_at}` — unicast 至目標 instance 的 lease 持有者；不由 ops 常態訂閱 |
 | `step.completed` | `{instance_id, step_id, step_path, status, attempt, duration_ms}`（不含 output，讀 checkpoint） |
 | `step.async_started` | `{instance_id, step_id, step_path, total_iterations (foreach 才有)}` |
 | `trigger.rejected` | `{workflow_name, trigger_index, event_id, failure_reason, violation_path?}` |

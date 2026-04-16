@@ -61,6 +61,16 @@ retry:
 - retry 的 sleep MUST 持久化（記錄 `next_attempt_at` 至 checkpoint）；engine 重啟後 MUST 依剩餘時間重排，不重新從 0 開始
 - `max_attempts: 1` 與**未宣告 `retry`** 語意等價（皆為「不重試」）；實作 MAY 對兩者不做區分
 
+**retry 狀態機與 CEL 求值時序**（避免 checkpoint / CEL 求值順序含混）：
+
+1. 前一 attempt FAILED 且符合 retry 條件 → engine 先持久化該 attempt 的終態（attempt=N FAILED 寫入 steps 表）
+2. 讀取 `retry.max_attempts` / `delay` / `backoff` / `max_delay`：在**同一批次**內求值；求值上下文為當前 step 的 input / vars / steps 等（與 attempt=N+1 的 `input_snapshot` 共用 snapshot，即 input 不因 vars 改動而改變）
+3. 任一欄位 CEL 求值失敗 → step 終態直接確認為 FAILED（`error.type == "expression_error.*"` 或 `invalid_retry_config`），**不遞增 attempt**、不進入 sleep；後續不再 retry
+4. 求值成功 → 計算 `sleep_duration`、`next_attempt_at = now() + sleep_duration` → 寫入 checkpoint（attempt=N+1 WAITING、`scheduled_at = next_attempt_at`）
+5. Checkpoint commit 後 engine 在 `next_attempt_at` 到達時進入 attempt=N+1 的 RUNNING；重啟時沿用 checkpoint 的 `next_attempt_at`，不重新求值 `delay`
+
+此流程保證：attempt 計數與 checkpoint 持久化原子一致；CEL 求值異常不會讓 engine 在未持久化狀態下重試或卡死。
+
 ---
 
 ## task
