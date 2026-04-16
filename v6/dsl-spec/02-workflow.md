@@ -52,6 +52,24 @@ triggers:
 | `when` | CEL expression | MAY | 過濾條件，回傳 boolean |
 | `input_mapping` | map | MAY | 事件資料到 workflow input 的映射 |
 
+#### Trigger 處理順序
+
+每個匹配的事件通過以下固定順序處理（任一失敗即停止並進入對應失敗路徑）：
+
+```
+1. scope 過濾（event.scope 符合 trigger.scope）
+2. 去重檢查（trigger_dedup 表查 event.id）
+3. when CEL 求值（namespace: event / env / secret / project；不含 input — 此時尚未映射）
+4. input_mapping CEL 求值（namespace: event / env / secret / project；產出 input 候選值）
+5. workflow.input_schema 驗證（對 input 候選值）
+6. 建立 instance（寫入 action_pins / trace_id / labels snapshot / 等）
+7. 發 instance.created 事件
+```
+
+- 步驟 3、4 的 CEL namespace **不含** `input` —— input 在步驟 5 通過驗證後才成為 instance 的 input；`input_mapping` 中引用 `input.*` → `expression_error.identifier_not_found`
+- 同一 trigger 內多個 `input_mapping` key 間彼此獨立求值（不可互相引用；需要二階段組裝時請在 workflow 內以 `assign` 處理）
+- 步驟 6 若因 size limit 等其他原因失敗 → `workflow.instance_create_failed`；事件已 ack，進 dead letter
+
 #### input_mapping 失敗場景
 
 `input_mapping` 的 CEL 與後續 schema 驗證為 trigger 建立 instance 前的步驟；任一失敗皆**不建立 instance**，但錯誤碼與事件消費行為各異：
@@ -94,7 +112,7 @@ Schema 驗證分三個獨立層級，各司其職、不互相代勞：
 |------|-------------|----------|----------|
 | Workflow instance input | `workflow.input_schema` | trigger 建立 instance 前 | 拒絕建立 |
 | Workflow instance output | `workflow.output_schema` | 終結 `return` 前 | instance FAILED |
-| Function instance input / output | `function.input_schema` / `function.output_schema` | 同上（各自對 function instance） | 同上（在 function instance 層級失敗）|
+| Function instance input / output | `function.input_schema` / `function.output_schema` | input：function instance `PENDING → RUNNING` 前（與 workflow input 驗證同層級，由子 instance 自己執行，**不**由 caller task step 代驗）；output：子 instance `return` 前 | 子 instance FAILED，`error.type == "schema_violation"`；呼叫端 task step 以此 failure 呈現並可被 catch 捕捉。caller task step 的 `input:` map CEL 求值失敗 `expression_error` 於建立 function instance **前** 即返回，不進入 function 層驗證 |
 | Task step 的 tool input | 被呼叫的 Tool definition 的 `input_schema` | step 進入 RUNNING、CEL 求值後、呼叫 backend 前 | step FAILED，`error.type == "schema_violation"`、`error.details.direction == "input"` |
 | Task step 的 tool output | 被呼叫的 Tool definition 的 `output_schema` | backend 回傳、寫入 checkpoint 前 | step FAILED，`error.type == "schema_violation"`、`error.details.direction == "output"` |
 | Callback input / output | `callback.input_schema` / `callback.output_schema`（見 `05b-function.md`） | callback 傳入 caller 前 / handler return 後 | callback_result 以 `error.type == "schema_violation"` 回傳 |

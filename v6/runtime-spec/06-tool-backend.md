@@ -171,7 +171,13 @@ else:
 
 ### Env 變數
 
-最終 env = OS 環境 ⨁ project env ⨁ backend.env（後者覆寫前者）。
+最終 env = OS 環境 ⨁ project env ⨁ backend.env（後者覆寫前者，**shallow key-level merge**）。
+
+- **Merge 語意**：同 key 由後者覆寫、不同 key 皆保留；即若 backend.env 未宣告 `PATH` / `HOME`，process 仍繼承 OS 的值（不會被清空）
+- **系統必要變數**：若 backend.env 明確設 `PATH: "/custom/bin"` → process 只看到 `/custom/bin`（覆寫 OS PATH）；使用者若想「追加」請顯式拼接：`PATH: "${ env.PATH }:/custom/bin"`（需先在 engine 的 `env` namespace 中看到 `env.PATH`）
+- **清空特定變數**：設為空字串 `""` → process env 仍含該 key 但值為空；若需**完全刪除**該 key（如禁止子 process 繼承 `AWS_ACCESS_KEY_ID`），目前 v6 **不支援**；替代方案為不使用 OS 環境傳遞機密，改用 `secret.*`
+- **敏感變數攔截**：engine **不**預先過濾 OS env（不建議在系統環境傳機密）；若 operator 啟動 engine 時該環境變數已存在，tool process 會自然繼承；建議部署時以最小 env 啟動 engine
+- **預留 key**：engine 保留 `SLOGAN_*` 前綴；backend.env 使用 `SLOGAN_*` → 載入期警告（非錯誤），執行時仍注入以供 tool 讀取 engine 注入的 metadata
 
 `secret.*` 注入後在 process 環境中以明文存在；driver 啟動後**立即**從本身記憶體中清除其副本（best-effort），避免 dump core 時暴露。
 

@@ -540,8 +540,13 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 - 僅 SUCCEEDED 的 step 會執行其 compensate
 - 反向執行：以「step 進入 SUCCEEDED 的時間戳」降序補償
 - 序列內的 step 遵循「後成功者先補償」
+- **時間戳 tiebreak**：若兩 step 的 `ended_at` 毫秒精度相同（parallel branch 或批次 checkpoint 所致），依以下規則決定順序（皆為降序）：
+  1. `step_path` 字串（lexicographic 降序，例：`saga.0.parallel.branches.2.0` > `saga.0.parallel.branches.1.0`）
+  2. 若 `step_path` 相同（理論上不應發生） → 以 `started_at` 降序
+  3. 若仍相同 → 以 `(instance_id, step_id)` 字串降序（作為最終決定性來源）
+- 此 tiebreak 確保同一組 input 下，補償順序於不同 engine 實作間**完全決定性**，避免冪等性設計依賴實作細節
 - 若 saga 內含 `parallel` / `foreach`：
-  - 不同分支 / 不同迭代間**無全序保證**，補償可能並行進行
+  - 不同分支 / 不同迭代間**無全序保證**，補償可能並行進行（受 `concurrency` 限制）
   - 同一分支或同一迭代內部仍遵循時間戳降序
   - 分支間有隱含依賴時，補償順序由 tool 作者自行以 idempotent 設計處理；引擎不提供依賴宣告
 - **巢狀 saga**：內層 saga 視為外層的單一 step
@@ -595,3 +600,14 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 | `error.message` | 錯誤訊息                         |
 | `error.code`    | 錯誤碼 業務客製化                |
 | `error.step_id` | 發生錯誤的 step id               |
+
+### catch 消化失敗後的 step output
+
+當 step 層 `catch` **成功消化錯誤**（catch 內未 re-raise，最終 step 視為 SUCCEEDED），`steps.<id>.output` 的值規則：
+
+- catch 區塊最後一個 step 的 output 即為本 step 的 output（無視原始失敗 step 的 partial output）
+- 若 catch 最後 step 為 `type: emit` / `type: fail`（無 meaningful output）→ `steps.<id>.output == null`
+- 若 catch 內執行 `type: return` → 不寫入 `steps.<id>.output`（`return` 結束外層 instance，見「return 作用域」）
+- 若 catch 自身 FAILED（re-raise）→ 原 step 終態為 FAILED，`steps.<id>.output == null`、`steps.<id>.error` 為 catch 自身或 re-raised 錯誤
+
+此規則確保 `has(steps.<id>.output)` 與 `steps.<id>.status == "SUCCEEDED"` 的語意一致：output 存在 ⇔ step 成功（不論是否經 catch 消化）。

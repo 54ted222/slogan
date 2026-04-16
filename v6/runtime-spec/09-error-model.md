@@ -120,6 +120,7 @@ ErrorObject {
 | `workflow.input_schema_violation` | trigger 階段輸入驗證失敗 |
 | `trigger.when_eval_failed` | event trigger 的 `when` CEL 求值異常（視為過濾未通過） |
 | `trigger.input_mapping_error` | event trigger 的 `input_mapping` 中某欄位 CEL 求值異常 |
+| `workflow.instance_create_failed` | trigger 通過驗證但 instance 建立（寫入 store）失敗（size limit / persistence error 等） |
 | `output_schema_violation` | return 輸出驗證失敗 |
 | `input_too_large` | step input snapshot 超過 size limit |
 | `output_too_large` | step / instance output 超過 size limit |
