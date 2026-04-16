@@ -89,7 +89,7 @@
 | duration 欄位（`timeout` / `delay` / `duration` / `max_delay`）| CEL 求值後：若非 string → `expression_error.type_error`；若 string 但不符 Duration 格式（見 `dsl-spec/01-overview.md`）→ step FAILED，`error.type: "invalid_duration_format"` |
 | `compensate.input` (saga) | 補償觸發時，可引用原 step 的 `output` |
 | handler `output` (callback handler return) | handler return 時 |
-| Tool backend 的 `command` / `args` / `env` / `stdin.template` / `stdout.mapping` 等 | 每次 tool 呼叫前 |
+| Tool backend 的 `command` / `args` / `env` / `working_dir` / `stdin.template` / `stdout.mapping` / http `url` / http `headers` / http `request.body` / http `response.mapping` / tls.* | 每次 tool 呼叫前（於 step RUNNING checkpoint 寫入後、process spawn / HTTP 送出前）|
 | Lifecycle `init.backend` 內欄位 | init 觸發時，僅 secret/env/project/artifacts 可用 |
 
 ---

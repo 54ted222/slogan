@@ -183,6 +183,18 @@ TriggerSubscription {
 
 對 `manual` trigger：由 API / CLI 明確呼叫；不訂閱 Event Bus。input_schema 違反時 API **同步**回傳 4xx + `workflow.input_schema_violation`，呼叫端知錯；不建立 instance。
 
+#### Manual trigger idempotency
+
+API 觸發 workflow 時 MAY 帶 `Idempotency-Key` header（建議值：UUID 或業務唯一 key）：
+
+- Engine 以 `(workflow_name, workflow_version, idempotency_key)` 為複合鍵查找既有 instance
+- 命中（TTL 內，預設 24h）：回傳既有 instance（不建立新的），HTTP 200 + instance state；同 key 重複呼叫冪等
+- 未命中：建立新 instance，同時記錄 idempotency_key → instance_id 映射，TTL 24h
+
+**無 `Idempotency-Key` 時**：每次呼叫皆建立新 instance；呼叫端自行承擔重複風險（例如網路超時重試會產生多個 instance）
+
+實作 SHOULD 暴露 `manual_trigger_idempotency_ttl` config 覆寫 24h 預設。
+
 #### Trigger 效能與索引
 
 高事件吞吐場景（10K+ events/s × 數千 trigger subscription）不能對每事件 O(N) 全掃 CEL：

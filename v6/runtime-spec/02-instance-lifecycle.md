@@ -77,6 +77,19 @@ Function instance 由父 instance「擁有」；父 instance 若被取消，子 
 - **延遲事件清理**：cancel 同時 DELETE 該 instance 的所有未投遞 `delayed_events`（`WHERE source_instance = $id AND claimed_by IS NULL`）；已被其他 engine claim 中的 event 仍會投遞（避免破壞 claim 所有者的執行），但接收方若對應 wait 已不存在則丟棄。
 - 終結前同上。
 
+#### cancellation_policy
+
+於 `workflow.config.cancellation_policy`（或 timeout 情境）可配置：
+
+| 值 | 行為 |
+|----|------|
+| `graceful`（預設） | 發 cancel 訊號 → 等待 `cancel_grace_period`（預設 30s）→ 仍未終結者強制終結（exec SIGKILL、http connection force close、sub-instance hard cancel） |
+| `hard` | 不等寬限期；直接強制終結所有未終結子節點 |
+
+`cancel_grace_period` 可由 `workflow.config.cancel_grace_period` 覆寫（限 graceful 模式）。`hard` 模式下此欄位忽略。
+
+`cancellation_policy` 與 `cancel_grace_period` 的 CEL 求值在 workflow 載入時一次性完成（常量），不可使用 instance-time namespace。
+
 ---
 
 ## Step state（per-step）

@@ -136,6 +136,26 @@ COMMIT
 
 事件投遞（外部 bus）發生在 commit 之後；使用 outbox pattern 確保「持久化先於投遞」。
 
+### Checkpoint Transaction 邊界
+
+單一 transaction 內 MUST 包含（依 step transition 實際涉及者）：
+
+| 表 | 是否在 checkpoint transaction 內 | 備註 |
+|----|--------------------------------|------|
+| `instances` | MUST | state / substate / vars / lease_expires_at |
+| `steps` | MUST | 當前 step 的 state / output / error |
+| `execution_log` | MUST | `step.transition` 紀錄 |
+| `wait_subscriptions` | MUST | 該 step 若為 wait，新增或刪除 subscription |
+| `delayed_events` | MUST | 該 step 若為 emit with delay，INSERT |
+| `resource_pool`（init output） | MAY（異步寫） | init 完成後寫入；不阻塞 step transition |
+| Outbox（待投遞至 Event Bus 的即時事件） | MUST INSERT | commit 後由背景 publisher 投遞 |
+
+**Cascading 規則**：
+
+- Instance 終結（CANCELLED / FAILED / SUCCEEDED）的 transaction 內 MUST 同步 DELETE 該 instance 的所有未終結 `wait_subscriptions` 與 `delayed_events`（claimed_by IS NULL 者）
+- Isolation level SHOULD 為 `READ COMMITTED` 或以上；Lease UPDATE 本身以 atomic 條件 WHERE 達成互斥，不依賴 SERIALIZABLE
+- 跨 instance 的操作（如一個 instance 的 emit 喚醒另一 instance 的 wait）**不在同一 transaction**；投遞由 outbox publisher 異步完成，訂閱者以 `event.id` 去重
+
 ---
 
 ## Lease 機制

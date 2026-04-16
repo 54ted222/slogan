@@ -155,7 +155,9 @@ else:
 
 ### Working directory & shell
 
-- `working_dir`：預設為 engine 啟動的 cwd；建議實作為 instance 的 sandbox 子目錄。
+- `working_dir`：預設為 `artifacts._workspace_path`（即 `<engine.workspace_root>/<instance_id>`）；CEL 支援 `${ }`（如引用 `artifacts.<name>.path`）
+  - Engine MUST 在 tool spawn **前**確保 `working_dir` 存在（若引用 artifact path，則確保對應 artifact 目錄已建立）
+  - `working_dir` 求值結果 MUST 在 workspace 下（canonical 化後以 workspace_path 為前綴）；escape 外部 → ToolResult `{success: false, error: {type: "spawn_failed.working_dir"}}`
 - `shell`：明確指定時用該 shell 執行 `command`；未指定時直接 `exec()` `command + args`，不經 shell（避免 quoting 問題）。
 
 ### Env 變數

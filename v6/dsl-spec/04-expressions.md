@@ -174,6 +174,20 @@ artifacts.order_file.exists
 - Engine MUST 在 tool spawn 前檢查路徑 canonical 化後仍在 `<workspace_path>` 內（防 `../` escape）
 - Instance 終結時 engine MAY 根據 artifact 的 `retain` 設定刪除 workspace（見 artifact DSL，v6 保留為 implementation detail）
 
+**Artifact lifecycle（v6 最小實作）**：
+
+| 階段 | 行為 |
+|------|------|
+| Instance PENDING → RUNNING | Engine 建立 `<workspace_root>/<instance_id>/` 目錄（mode 0700） |
+| First tool 引用 `artifacts.<name>.path` | Engine 建立 `<workspace_path>/artifacts/<name>/` 子目錄（lazy） |
+| Step 執行中 | Tool 可讀寫 `artifacts.<name>.path` 下檔案；engine 不介入內容 |
+| `artifacts.<name>.exists` 求值 | 檢查該 artifact 目錄存在且至少含一個檔案（非空目錄視為 exists） |
+| Instance 終結 | 依 `retention_until` 時刻清理整個 `<instance_id>/` 目錄（跟隨 instance 保存期；見 `08-persistence.md`） |
+| Instance CANCELLED 或 FAILED | 保留至保存期（預設 30 天 FAILED / 7 天 CANCELLED），便於 debug |
+
+- Artifact 不跨 instance 共享；每 instance 獨立 workspace
+- 複雜 artifact（宣告式 artifact definition、retain policy、遠端 source）為未來版本功能（見 `FUTURE.md`），v6 僅支援 per-instance 隱式建立
+
 ---
 
 ## 標準函式
