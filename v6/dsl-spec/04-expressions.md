@@ -136,12 +136,27 @@ vars.is_pay_action
 
 事件資料。在 trigger `when`、wait `match`、wait 後續 steps 中可用。
 
+| 路徑 | 型別 | 說明 |
+|------|------|------|
+| `event.id` | string | 事件 UUID v4（訂閱端去重用） |
+| `event.type` | string | 事件類型（dotted snake_case） |
+| `event.data` | any | 業務 payload；結構由 emit 端決定 |
+| `event.scope` | string | `workflow` / `project` / `global` |
+| `event.timestamp` | timestamp | emit 時刻（RFC 3339 Nano） |
+| `event.source.instance_id` | string | 發出 emit 的 instance id |
+| `event.source.step_id` | string \| null | 發出 emit 的 step id（見 `runtime-spec/07-event-bus.md` 「source 於特殊上下文的歸屬」） |
+| `event.source.project` | string | 發出 instance 的 project name（根目錄為 `""`） |
+| `event.source.sequence` | int | 同源全序序號；同 instance 內的 emit 嚴格遞增 |
+| `event.trace_id` | string | 跨 instance 追蹤鏈 id |
+
 ```
-event.type
-event.data.order_id
-event.id
-event.timestamp
+event.type                              # "order.created"
+event.data.order_id                     # 業務欄位
+event.source.step_id                    # "emit_step_id"
+event.source.instance_id == context.instance_id   # 是否來自同一 instance
 ```
+
+**可變性**：`event.*` 在 match 求值期間為不可變 snapshot；CEL 不可寫。
 
 ### env
 
