@@ -10,7 +10,7 @@ Event Bus 是引擎與外部、引擎內部多 instance 間的非同步通訊匯
 
 - 業務事件：由 `emit` step 發送，可觸發 trigger 或喚醒 wait
 - 內部事件：`instance.created` / `step.completed` / `tool.stream` / `tool.callback` / `wait.timeout` 等
-- 控制事件：`instance.cancel` / `worker.lease_lost`
+- 控制事件：`instance.cancel` / `engine.lease_lost`
 
 實作可選：in-memory bus（單機）、基於 message queue（NATS / Kafka / Redis Streams）、基於資料庫 polling。本規格不限定，僅約束行為。
 
@@ -55,7 +55,7 @@ Event {
 
 ## 投遞語意
 
-- **At-least-once**：每個訂閱者至少收到一次該事件；可能因網路或 worker 重啟而重複。
+- **At-least-once**：每個訂閱者至少收到一次該事件；可能因網路或 engine 進程重啟而重複。
 - **訂閱者責任**：以 `event.id` 做去重（trigger / wait subscription 維護「已處理 event id」表，TTL = 訂閱 deadline）。
 - **順序**：同 `(scope, source.instance_id)` 內以 timestamp 升序投遞；跨 source 不保證。
 - **延遲**：`emit.delay > 0` 時事件先入延遲 queue；deadline 到才實際投遞。
@@ -181,14 +181,14 @@ emit 的順序保證：
 | `wait.timeout` | Engine Loop（timer） | Engine Loop | 觸發 wait step FAILED |
 | `tool.callback` | Backend Driver | Engine Loop | 路由至 caller handler |
 | `tool.stream` | Backend Driver | Engine Loop / 訂閱 wait | 串流投遞 |
-| `worker.lease_expired` | Lease Manager | Engine Loop | 觸發 instance 接管 |
+| `engine.lease_expired` | Lease Manager | Engine Loop | 觸發 instance 接管 |
 | `bus.dead_letter` | Event Bus | Ops 監控 | 訊息無法投遞 |
 
 ---
 
 ## 順序與一致性
 
-- **單 instance 內**：所有事件處理串行化（lease 保證）；step.completed 與其後的 step 啟動原子化。
+- **單 instance 內**：所有事件處理串行化（同進程：event loop 天然串行；跨進程：lease 保證）；step.completed 與其後的 step 啟動原子化。
 - **多 instance 之間**：完全 concurrent，無順序保證；instance.completed 的接收順序與發送順序可能不同。
 - **Trigger 競爭**：同一事件可能匹配多個 workflow 的 trigger；每個 trigger 各自建立 instance（不互斥）。
 
@@ -209,7 +209,7 @@ emit 的順序保證：
 ```
 1. 停止接受新 instance（trigger resolver 暫停）
 2. 等待當前 step 達 checkpoint 邊界
-3. 釋放 lease；其他 worker 接管或保留至下一次 reload
+3. 釋放 lease；其他 engine 進程接管或保留至下一次 reload
 4. 排空延遲 queue（已 due 的事件投遞完畢）
 5. 寫入 shutdown checkpoint 並關閉
 ```

@@ -4,16 +4,30 @@
 
 ---
 
+## 執行模型前提
+
+Engine 為 **類 Node.js 的單線程 event loop** 模型（見 `01-architecture.md`）：
+
+- 單一 engine 進程 = 單一事件迴圈 thread。該 thread 負責所有 instance 的事件分派與 step transition。
+- 所有 I/O 為 non-blocking async；主 loop 絕不阻塞在同步 I/O 或 CPU 密集計算上。
+- **同進程內沒有 thread-level 並行**：同時刻 engine 只在處理一個事件；instance 之間、step transition 之間由 event loop 天然串行。
+- **跨進程擴展**：多 engine 進程共享 Instance Store，透過 lease 分配 instance 擁有權。
+
+因此以下所謂「並行」皆指 **邏輯並行**（邏輯上多個 step 同時 RUNNING，實際是這些 step 各自在等外部事件；engine 只在事件到達時處理 transition），不是 thread-level 並行。
+
+---
+
 ## 並行的層級
 
-| 層級 | 並行單位 | scheduler |
-|------|----------|-----------|
-| Cross-instance | workflow / agent / function instance | Engine Loop（多 worker） |
-| Intra-instance, async-step | foreach iteration / parallel branch（背景） | Engine Loop（同 worker，event-driven） |
+| 層級 | 並行單位 | 實現方式 |
+|------|----------|----------|
+| Cross-process | 不同 engine 進程 | 多進程部署（OS 排程） |
+| Cross-instance, 同進程 | workflow / agent / function instance | 同一 event loop，event-driven 交錯 |
+| Intra-instance, async-step | foreach iteration / parallel branch（背景） | 同一 event loop，event-driven 交錯 |
 | Intra-instance, sync-step | foreach iteration / parallel branch（前景） | 同上 |
-| Per-step internal | tool process I/O | OS 排程 |
+| Per-step external I/O | tool process、HTTP client、sub-instance | OS 排程 + non-blocking I/O 回 callback 至 loop |
 
-同一 instance 任何時刻的「邏輯執行 thread」由 lease 保證唯一；多 step 同時 RUNNING 是因為這些 step 在等待外部事件（async / wait / sub-instance），engine 並未真的多執行緒處理同一 instance 的 step transition。
+同一 instance 任何時刻的「邏輯執行 thread」由 lease（跨進程）+ event loop（同進程）共同保證唯一；多 step 同時 RUNNING 是因為這些 step 在等待外部事件（async / wait / sub-instance），engine 並未真的多線程處理同一 instance 的 step transition。
 
 ---
 
@@ -139,15 +153,15 @@ step 接收 cancel：
 
 ### Lease vs cancel
 
-cancel 訊號到達某 instance 時，該 instance 可能由其他 worker 持有 lease。處置：
+cancel 訊號到達時，該 instance 可能由另一個 engine 進程持有 lease。處置：
 
 ```
 1. cancel 訊號寫入 instance.cancel_requested = true（不需要 lease）
-2. lease 持有者在每次 checkpoint 邊界檢查此 flag
+2. lease 持有進程在每次 checkpoint 邊界檢查此 flag
 3. 發現 cancel_requested → 進入 CANCELLED 流程
 ```
 
-最差情況下 lease TTL 內 cancel 不生效；可由實作提供 lease invalidation 加速。
+最差情況下 lease TTL 內 cancel 不生效；可由實作提供 lease invalidation 加速（例如透過 event bus 廣播 `instance.cancel` 給擁有者進程的 event loop，讓其在下一個事件分派 tick 處理）。
 
 ### Foreach 並行 iteration 的 vars 寫入
 
@@ -177,16 +191,17 @@ tool 在發出 callback 後立即發 result（未等 callback_result）的情況
 
 | 設定 | 作用 |
 |------|------|
-| `engine.max_inflight_instances` | 單 worker 同時處理的 instance 上限 |
+| `engine.max_inflight_instances` | 單一 engine 進程同時處理的 instance 上限 |
 | `engine.max_inflight_steps_per_instance` | foreach/parallel 全域 concurrency 上限（cap） |
 | `engine.tool_process_pool_size` | 同時 spawn 的 process 上限 |
 | `engine.http_pool_size` | http backend connection pool |
 | `engine.event_bus_buffer_size` | 內部事件 buffer |
 | `engine.callback_in_flight_per_step` | 單 step 同時等待中的 callback 上限 |
+| `engine.cpu_worker_pool_size` | CPU-bound 下放（CEL 求值 / 大 JSON 處理）的 worker thread 數量 |
 
 超過上限時：
 - foreach concurrency 被 cap 到 max；不報錯
-- inflight instance 上限：trigger 被延後（accept rate-limit）
+- inflight instance 上限：trigger 被延後（accept rate-limit）；或由其他 engine 進程接手
 - process pool 滿：tool spawn 排隊；無 timeout 直至 step.timeout 觸發
 
 ---
@@ -199,7 +214,7 @@ tool 在發出 callback 後立即發 result（未等 callback_result）的情況
 
 | 場景 | 防範 |
 |------|------|
-| 父 instance wait 子 instance、子 wait 父 | 父子 instance 同 worker；engine 在啟動子 instance 時不阻塞父 worker（async dispatch） |
+| 父 instance wait 子 instance、子 wait 父 | 父子 instance 同進程；engine 在啟動子 instance 時不阻塞 event loop（async dispatch） |
 | 多 callback 互相等待對方 result | 每 callback 各自獨立 timeout |
 | Saga 補償需要 wait 外部事件 | 補償 step 的 timeout 是必要；建議補償用 idempotent tool 而非 wait |
 

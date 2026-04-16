@@ -43,7 +43,10 @@
 
 ### Engine Loop
 - 主事件迴圈：消費 `instance.created` / `step.completed` / `event.matched` / `wait.timeout` / `tool.callback` 等事件。
-- 對每個 instance 維護 **單一 logical execution thread**：同時刻僅一個 step 處於 `RUNNING`（除非該 step 是 parallel/foreach/wait 等多分支類型；此時其子節點各自處於 RUNNING）。
+- **執行模型**：類 Node.js 的單線程 event loop。單一 engine 進程內只有一個事件迴圈 thread，處理所有 instance 的事件分派與 step transition。所有 I/O（tool process、HTTP、event bus、Instance Store）皆為 non-blocking；主 loop 絕不阻塞在同步 I/O 上。
+- **水平擴展**：啟動多個 engine 進程；跨進程透過 lease 分配 instance 擁有權（見 `02-instance-lifecycle.md`）。進程間不共享記憶體，Instance Store 為唯一共享狀態來源。
+- **CPU-bound 下放**：大型 JSON 處理、CEL 求值等若有阻塞疑慮，實作 MAY 使用 worker thread pool（Node.js worker / Rust rayon / Go goroutine pool 等）執行後 callback 回主 loop；主 loop 本身 MUST 保持 non-blocking。
+- 對每個 instance 維護 **單一 logical execution thread**：同時刻僅一個 step 處於 `RUNNING`（除非該 step 是 parallel/foreach/wait 等多分支類型；此時其子節點各自處於 RUNNING）。由於整個 engine 進程本身就是單線程，同進程內的 instance 之間也不會發生 thread-level 搶佔。
 - 不持有 step 的執行邏輯，只負責調度。執行語意委派給 Step Executor。
 
 ### Step Executor
@@ -92,7 +95,7 @@
 ## 跨元件 invariant
 
 - **Step Executor 永不直接寫 Instance Store**；它回傳 `StepOutcome`，由 Engine Loop 寫入。
-- **同一 instance 在同一時間僅由一個 Engine Loop worker 擁有**（lease 機制）；確保 step transition 的串行化。
+- **同一 instance 在同一時間僅由一個 engine 進程擁有**（lease 機制）；跨進程串行化、同進程內單線程 event loop 天然串行化。
 - **Event Bus 的訊息是 effect-only**：訊息內不夾帶引擎控制流；engine 從 Instance Store 拉取真正的執行狀態。
 - **Expression 求值結果不直接回寫 namespace**；step output 才是 namespace 的唯一寫入源。
 - **Lifecycle init / destroy 不算 step**：不出現在 `steps` namespace、不寫入 step output；其結果存入 Resource Pool。
@@ -103,10 +106,10 @@
 
 | 失效類型 | 預期行為 |
 |----------|----------|
-| Engine Loop crash | Lease 過期，他 worker 接管；從 Instance Store 的最新 checkpoint resume |
+| Engine Loop crash | Lease 過期，其他 engine 進程接管；從 Instance Store 的最新 checkpoint resume |
 | Backend tool process crash | Step FAILED，`error.type == "backend_crashed"`；可被 `retry` / `catch` 處理 |
 | Event Bus 投遞失敗 | 由 bus 實作重試；engine 視為事件未到達，繼續等待至 `timeout` |
-| Instance Store 不可寫 | Engine Loop 阻塞該 instance；定時重試；超過 SLO 則整個 worker 拒絕新 instance |
+| Instance Store 不可寫 | Engine Loop 該 instance 的 transition 延後（non-blocking 重試，不阻塞主 loop）；超過 SLO 則整個 engine 進程拒絕新 instance |
 | Tool callback 路徑 handler FAILED | callback_result.error 回 tool；tool 自行決定處置 |
 
 ---

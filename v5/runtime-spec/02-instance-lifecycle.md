@@ -117,9 +117,10 @@ WAITING ─► RUNNING ─► SUCCEEDED
 
 ## Lease 與單一擁有者
 
-- Engine Loop worker 透過 lease 擁有 instance：lease 內容為 `(worker_id, expires_at)`。
-- Lease TTL 預設 30s；worker MUST 在 step transition 之間定期 renew。
-- Lease 過期後，其他 worker 可在下一個 transition 點接管；接管時讀取最新 checkpoint，從中復原。
+- Engine 進程透過 lease 擁有 instance：lease 內容為 `(engine_id, expires_at)`。
+- Lease TTL 預設 30s；lease 持有進程 MUST 在 step transition 之間定期 renew。
+- Lease 過期後，其他 engine 進程可在下一個 transition 點接管；接管時讀取最新 checkpoint，從中復原。
+- 同一 engine 進程為單線程 event loop，進程內不需額外 lock。
 
 復原語意：
 

@@ -123,19 +123,19 @@ lease 透過樂觀鎖：
 
 ```
 UPDATE instances
-SET    lease_owner = $worker_id, lease_expires_at = now() + 30s
+SET    lease_owner = $engine_id, lease_expires_at = now() + 30s
 WHERE  id = $instance_id
-  AND  (lease_owner IS NULL OR lease_expires_at < now() OR lease_owner = $worker_id)
+  AND  (lease_owner IS NULL OR lease_expires_at < now() OR lease_owner = $engine_id)
 RETURNING ...
 ```
 
-只有更新成功的 worker 持有 lease。每次 checkpoint 順便延展 lease。Worker crash → lease 自然過期；其他 worker 在下次 polling 時搶到。
+只有更新成功的 engine 進程持有 lease。每次 checkpoint 順便延展 lease。Engine 進程 crash → lease 自然過期；其他 engine 進程在下次 polling 時搶到。
 
 ---
 
 ## 並發隔離
 
-- 同一 instance 的 step 寫入由 lease + 同 instance 的單一 worker 保證序列化。
+- 同一 instance 的 step 寫入由 lease（跨進程）+ 單線程 event loop（同進程）保證序列化。
 - 不同 instance 之間獨立。
 - `wait_subscriptions` 與 `event.matched` 路徑：subscription 寫入屬於 instance 的 transaction；事件投遞由 bus 推送；engine 收到 `event.matched` 時以 `(instance_id, step_id)` 取得 lease 後處理。
 
@@ -152,7 +152,7 @@ RETURNING ...
 
 `steps.signature` = hash(`{action_name, input_snapshot, attempt}`)；用於：
 
-- 若 step `idempotent: true` 且 retry 觸發前發現上一次 attempt 已 SUCCEEDED 但 lease 切換過 → 直接讀取 cached output（避免重跑）
+- 若 step `idempotent: true` 且 retry 觸發前發現上一次 attempt 已 SUCCEEDED 但 lease 切換至其他進程 → 直接讀取 cached output（避免重跑）
 - 若 `idempotent: false` → 每 attempt 重新執行，signature 僅作觀測
 
 ### Tool 級
@@ -210,7 +210,7 @@ Replay 不重新呼叫外部 tool；用於 audit、debug、CEL 升級驗證。
 
 - `instance_count{state, kind}`
 - `step_duration_ms{type, state}` histogram
-- `lease_acquisitions_total{worker_id}`
+- `lease_acquisitions_total{engine_id}`
 - `lease_lost_total{instance_kind}`
 - `event_bus_lag_seconds{type}`
 - `wait_subscriptions_count{state}`
