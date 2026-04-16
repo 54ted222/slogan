@@ -396,7 +396,7 @@ SSE 連線具狀態（持有 `X-Callback-URL` token 與 in-flight call_id 表）
 
 ```
 1. 載入 handler（extension registry）
-2. 構造 ExtensionRequest：{ tool_name, input, context, callback_endpoint? }
+2. 構造 ExtensionRequest：{ tool_name, input, config, context, callback_endpoint? }（`config` 對應 tool definition 的 `backend.config`；無則為空 map，與 exec protocol stdin JSON 的 `config` 欄位語意同源）
 3. 呼叫 handler.invoke(request)
 4. handler 回傳 ExtensionResponse 或 stream
 ```

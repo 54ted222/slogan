@@ -351,6 +351,11 @@ emit 的順序保證：
 | `instance.cancel` | `{target_instance_id, reason, requested_by ("api" \| "parent" \| "timeout" \| "ops"), requested_at}` — unicast 至目標 instance 的 lease 持有者；不由 ops 常態訂閱 |
 | `step.completed` | `{instance_id, step_id, step_path, status, attempt, duration_ms}`（不含 output，讀 checkpoint） |
 | `step.async_started` | `{instance_id, step_id, step_path, total_iterations (foreach 才有)}` |
+| `event.matched` | `{instance_id, step_id, subscription_id, event: <完整 Event 物件>}`（unicast 至目標 instance；engine 收後以 lease 取得擁有權後處理 wait 喚醒） |
+| `wait.timeout` | `{instance_id, step_id, subscription_id, deadline}`（timer 於 deadline 到期時觸發；unicast 至 wait 所在 instance） |
+| `tool.callback` | `{instance_id, step_id, call_id, name, input}`（unicast；driver 內部使用，不對外訂閱） |
+| `tool.stream` | `{instance_id, step_id, step_path, stream_sequence, data, final}`（broadcast internal；可被使用者 wait `tool.stream` 訂閱，見「內部事件訂閱限制」的例外） |
+| `engine.lease_expired` | `{instance_id, engine_id, expired_at}`（lease 過期通知；其他 engine 進程可搶取） |
 | `trigger.rejected` | `{workflow_name, trigger_index, event_id, failure_reason, violation_path?}` |
 | `bus.dead_letter` | 見上「bus.dead_letter 事件結構」 |
 
