@@ -270,6 +270,13 @@ artifacts.order_file.exists
 - Artifact 不跨 instance 共享；每 instance 獨立 workspace
 - 複雜 artifact（宣告式 artifact definition、retain policy、遠端 source）為未來版本功能（見 `FUTURE.md`），v6 僅支援 per-instance 隱式建立
 
+**Function instance 的 workspace**：
+
+- Function instance（由 `type: task` 呼叫 function 建立）擁有**獨立** workspace（以其自身 `instance_id` 為路徑前綴）；**不繼承**父 workflow / 父 function instance 的 artifact 目錄
+- 父子 instance 間若需共享檔案：顯式於 function `input` 傳遞**父 workspace 下某檔案的路徑字串**（或檔案內容本身），由 function 內部 tool 讀取該絕對路徑。此讀取路徑位於父 workspace 內，**不受** function 自身 workspace 的 `working_dir` canonical 檢查攔截（`working_dir` 檢查僅限制 tool 的 CWD，不限制 tool 讀寫的檔案路徑）
+- 或改以 `type: emit` + `type: wait` 以事件傳遞資料（適合小量 metadata；大量二進位資料仍建議以共享檔案系統路徑傳遞）
+- 父 instance 終結時，engine 依 retention 清理其自身 workspace；**子 function instance 的 workspace 獨立 retention**（跟子 instance 的終態走，不受父 instance 退場影響），但子 instance 本身「跟父走」的 retention 規則（見 `runtime-spec/08-persistence.md`）在父清理時一併清理子 instance 與其 workspace
+
 **並發與生命週期規則**：
 
 - 同一 step 執行中對 artifact 目錄的並發寫入（tool 自身產生的 I/O）engine 不仲裁；tool 自行負責檔案鎖。
