@@ -142,6 +142,8 @@ step 接收 cancel：
 
 `cancel_grace_period` 預設 30s；可由 workflow.config 或 system config 覆寫。
 
+**Saga 補償豁免 `cancel_grace_period`**：saga 一旦進入 `compensating`，其補償序列 MUST 執行至結束（不論 `cancel_grace_period` 是否到期），以避免半補償狀態；`cancel_grace_period` 不適用於 compensating 中的 saga step。其他並行分支仍受 grace period 約束，grace 到期後強制終結；但父 instance 不終結為 CANCELLED，直至最後一個 compensating saga 完成（SUCCEEDED 或 `compensation_failures` 計完）。若 compensate tool 本身需要上限，應以 tool 層 `timeout` 控制（而非 cancel grace）。
+
 ---
 
 ## Race condition 處置
@@ -165,12 +167,21 @@ step 接收 cancel：
 cancel 訊號到達時，該 instance 可能由另一個 engine 進程持有 lease。處置：
 
 ```
-1. cancel 訊號寫入 instance.cancel_requested = true（不需要 lease）
-2. lease 持有進程在每次 checkpoint 邊界檢查此 flag
-3. 發現 cancel_requested → 進入 CANCELLED 流程
+1. cancel 訊號以無鎖 UPDATE 寫入 instance.cancel_requested = true、cancel_reason = <reason>
+   （不需要 lease；見 `08-persistence.md` 的 instances schema）
+2. 同 transaction 內 INSERT 一筆 outbox internal event `instance.cancel`
+   （target: instance_id，scope: internal）以喚醒 lease 持有進程
+3. Lease 持有進程 MUST 於下列時機讀取 cancel_requested 並進入 CANCELLED 流程：
+   a. 每次 event loop dispatch 的起頭（收到 internal event `instance.cancel` 即觸發）
+   b. 每次 checkpoint commit 前的 re-read（作為保底，防 bus 投遞漏失）
+   c. Lease renew UPDATE 時，於 RETURNING 同時讀回 cancel_requested 欄位
+4. 發現 cancel_requested → 取消 in-flight step、進入 CANCELLED 流程
 ```
 
-最差情況下 lease TTL 內 cancel 不生效；可由實作提供 lease invalidation 加速（例如透過 event bus 廣播 `instance.cancel` 給擁有者進程的 event loop，讓其在下一個事件分派 tick 處理）。
+- 寫入 `cancel_requested = true` 的 transaction commit 後，該值對所有讀者（READ COMMITTED 以上）立即可見；lease 持有進程於下一次讀取必能觀測到
+- Lease 持有進程 crash（在 bus 訊號投遞前或讀取後）→ lease 過期後由其他 engine 接管；接管者於取得 lease 的 UPDATE 結果中即看到 `cancel_requested = true`，直接進入 CANCELLED 流程，不會遺失 cancel
+- 不依賴 SERIALIZABLE：cancel 是**單調設定**（false → true，不回寫 false），即使 READ COMMITTED 下多次讀到不同值（stale → fresh），最終仍會觀測到 true
+- 最差延遲：`min(bus 投遞延遲, checkpoint 間隔, lease TTL)`；實作建議 lease TTL ≤ 30s 以保證 cancel 最遲於該時限內生效
 
 ### Foreach 並行 iteration 的 vars 寫入
 

@@ -27,6 +27,8 @@
 | `trace_id` | string | 跨 instance 追蹤 |
 | `retention_until` | timestamp | 保存期截止 |
 | `action_pins` | jsonb | map `{canonical_action_name: version}`；首次解析該 action 時寫入，鎖定此 instance 後續同名解析（見 `05-task-registry.md`） |
+| `cancel_requested` | bool | 外部 cancel 訊號標記；由不持有 lease 的進程以無鎖 UPDATE 寫入，lease 持有進程於 event loop tick 檢查並進入 CANCELLED 流程（見 `10-concurrency.md`）。預設 `false`；寫入後不再回寫 `false`（終態本身已代表取消完成） |
+| `cancel_reason` | string \| null | cancel_requested 被置為 true 時隨附的 reason；供 observability 使用 |
 
 ### steps
 
@@ -57,7 +59,7 @@
 | `instance_id` / `step_id` | | |
 | `patterns` | jsonb | `[{event_type, scope?, match_expr?}]` 陣列 |
 | `any_of` | bool | signals 模式恆為 true |
-| `deadline` | timestamp | wait.timeout |
+| `deadline` | timestamp \| null | wait.timeout 對應 deadline；`null` 表示無限等待（對應 `wait.timeout` 缺省，見 `07-event-bus.md`）。GC job MUST 以 `deadline IS NOT NULL AND deadline < now()` 為掃描條件，避免誤刪無限等待的 subscription |
 | `created_at` | timestamp | |
 
 ### delayed_events
@@ -156,6 +158,7 @@ COMMIT
 **Cascading 規則**：
 
 - Instance 終結（CANCELLED / FAILED / SUCCEEDED）的 transaction 內 MUST 同步 DELETE 該 instance 的所有未終結 `wait_subscriptions` 與 `delayed_events`（claimed_by IS NULL 者）
+- `resource_pool` 的 rows **不在** 終結 transaction 內刪除；destroy hook 於 checkpoint commit 之後 best-effort 執行（見 `02-instance-lifecycle.md`），執行結束（成功或失敗）由 resource pool 背景 job DELETE 該 row。未成功 destroy 的 row MAY 保留於清理重試佇列，直至重試上限後刪除並記錄 `lifecycle.destroy_abandoned` observability 事件
 - Isolation level SHOULD 為 `READ COMMITTED` 或以上；Lease UPDATE 本身以 atomic 條件 WHERE 達成互斥，不依賴 SERIALIZABLE
 - 跨 instance 的操作（如一個 instance 的 emit 喚醒另一 instance 的 wait）**不在同一 transaction**；投遞由 outbox publisher 異步完成，訂閱者以 `event.id` 去重
 
@@ -177,6 +180,15 @@ RETURNING id, lease_owner, lease_expires_at;
 - PENDING instance 剛建立時 `lease_owner IS NULL`，第一個執行 UPDATE 成功的 engine 取得 lease
 - 每次 checkpoint 於同一 transaction 內延展 lease；lease 延展與 state 變動原子化
 - Engine 進程 crash → lease 自然過期（不需額外釋放動作）；其他 engine 進程在下次 polling / `instance.created` 事件到達時搶到
+
+### engine_id 規範
+
+`lease_owner` / `delayed_events.claimed_by` / `resource_pool.init_engine_id` 皆儲存 `engine_id` 字串，代表 engine 進程身分：
+
+- 格式：`^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$`，長度 ≤ 128 chars
+- 唯一性：engine 進程啟動時 MUST 產生**全域唯一**的 engine_id；推薦格式 `<hostname>-<pid>-<boot_uuid_short>`，其中 `boot_uuid_short` 為進程啟動時產生的 uuid v4 前 8 碼，避免同主機同 pid 重用導致 lease 誤認
+- 不得重用：進程重啟 MUST 產生新 engine_id，即使 pod name / hostname 相同（否則重啟後可能續用前 crash 進程遺留的 lease 而誤認為「同一持有者」）
+- 寫入此欄位的 SQL MUST 於 engine config 初始化時一次性決定並緩存，避免每次 UPDATE 重算
 - **絕不使用** SELECT 後 UPDATE 的兩步驟模式；MUST 以單一 atomic UPDATE ... WHERE 條件確保互斥
 
 ---
