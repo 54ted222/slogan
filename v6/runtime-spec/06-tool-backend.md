@@ -281,8 +281,16 @@ Engine crash → 新 engine 進程接管 instance 後對 cache 的處理：
 | 監測項 | 行為 |
 |--------|------|
 | Process spawn 失敗 | ToolResult `error.type` 依原因細分（見 `09-error-model.md`）：`spawn_failed.not_found` / `permission_denied` / `resource_exhausted` / `oom` / `working_dir`；error.code 保留 errno 數值 |
-| stdout 超過 size limit（建議 16MB） | 截斷尾部；保留前段；error 記錄 truncation |
-| Process 寫 stderr 速率過高（建議 > 10MB/s） | rate-limit log；其餘丟棄 |
-| HTTP body 超過 size limit | 同上 |
-| 未終止的 SSE 連線 | timeout 後 driver 主動關閉 |
+| stdout 累積超過 `engine.tool_stdout_raw_limit`（預設 64 MB） | 立即 SIGTERM（5s grace → SIGKILL）；ToolResult `{success: false, error.type: "stdout_too_large"}`；保留前 4 KB 為 error.details.preview。**不**嘗試解析殘留內容 |
+| 解析後的 output JSON 超過 `engine.max_step_output_bytes`（預設 16 MB） | step FAILED，`error.type: "output_too_large"`（與 persistence 規則一致） |
+| Process 寫 stderr 速率過高（預設 > 10 MB/s 且持續 ≥ 5s） | rate-limit log；其餘丟棄；不影響成功判定 |
+| HTTP body 超過 `engine.http_body_limit`（預設 16 MB） | 同 stdout：不解析、`error.type: "http_body_too_large"` |
+| 未終止的 SSE 連線 | `engine.sse_idle_timeout`（預設 60s）無訊息後 driver 主動關閉，視為 `incomplete_protocol` |
 | Process 留下殘餘 child（forked grandchild） | driver SHOULD 透過 process group 一併 kill |
+
+**stdout_raw vs output 的關係**：
+
+- `tool_stdout_raw_limit` 是「process 寫至 stdout 的原始 bytes 總量」上限（含 NDJSON framing、stream 訊息、log 行等），用於防止 tool 失控輸出撐爆 driver buffer
+- `max_step_output_bytes` 是「parsed JSON output 序列化後寫入 Instance Store 的 bytes」上限
+- 先觸發者先生效；raw limit 觸發 → tool 被 kill、step FAILED；output limit 觸發 → tool 正常退出但 step FAILED
+- 兩者皆可由 engine config 獨立覆寫；建議 `raw_limit ≥ 4 × output_bytes_limit`（保留 protocol overhead 與 stream 空間）

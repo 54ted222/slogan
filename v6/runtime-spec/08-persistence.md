@@ -26,6 +26,7 @@
 | `lease_owner` / `lease_expires_at` | string / timestamp | Lease |
 | `trace_id` | string | 跨 instance 追蹤 |
 | `retention_until` | timestamp | 保存期截止 |
+| `action_pins` | jsonb | map `{canonical_action_name: version}`；首次解析該 action 時寫入，鎖定此 instance 後續同名解析（見 `05-task-registry.md`） |
 
 ### steps
 

@@ -182,7 +182,8 @@ artifacts.order_file.exists
 | First tool 引用 `artifacts.<name>.path` | Engine 建立 `<workspace_path>/artifacts/<name>/` 子目錄（lazy） |
 | Step 執行中 | Tool 可讀寫 `artifacts.<name>.path` 下檔案；engine 不介入內容 |
 | `artifacts.<name>.exists` 求值 | 檢查該 artifact 目錄存在且至少含一個檔案（非空目錄視為 exists）— **snapshot 語意**：僅保證求值瞬間結果；不阻止後續刪除。若欲安全讀檔請直接在 tool 內打開檔案並處理 `ENOENT` |
-| Instance 進入終態（SUCCEEDED / FAILED / CANCELLED） | Engine 即刻對 `<instance_id>/` workspace 加**寫鎖**；此後所有 tool spawn 以唯讀 mount 形式掛入（`ro`），`catch` handler 仍可讀取 artifact 但**不得寫入** |
+| Workflow `config.catch` / step `catch` 執行中 | **寫鎖尚未加上**；catch handler 內的 task step 仍可讀寫 artifact（catch 為「仍在 RUNNING 的終結前處理」） |
+| Instance 真正進入終態（catch 消化或上拋完成後） | Engine 對 `<instance_id>/` workspace 加**寫鎖**；此後 lifecycle destroy hook / 背景清理以唯讀（`ro` mount）存取 artifact；destroy 若嘗試寫入 → 該 destroy 被視為失敗（記錄 `lifecycle.destroy_failed`，不影響終態） |
 | Instance 終結 | 依 `retention_until` 時刻清理整個 `<instance_id>/` 目錄（跟隨 instance 保存期；見 `08-persistence.md`） |
 | Instance CANCELLED 或 FAILED | 保留至保存期（預設 30 天 FAILED / 7 天 CANCELLED），便於 debug |
 

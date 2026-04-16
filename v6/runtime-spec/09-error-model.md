@@ -82,6 +82,8 @@ ErrorObject {
 | `schema_violation` | input/output 不符 JSON Schema |
 | `backend_crashed` | tool process / extension 在 RUNNING 中崩潰 |
 | `lifecycle_init_failed` | tool lifecycle init backend 失敗 |
+| `stdout_too_large` | tool 原始 stdout bytes 超過 `engine.tool_stdout_raw_limit` |
+| `http_body_too_large` | tool http backend 回應 body 超過 `engine.http_body_limit` |
 
 ### Registry / 載入
 
@@ -99,6 +101,8 @@ ErrorObject {
 | `schema_incomplete` | Function callback 只宣告 input_schema 或 output_schema 之一 |
 | `invalid_var_name` | `type: assign` 的 vars key 含 path separator 或保留前綴 |
 | `invalid_duration_format` | duration 字面值或 CEL 結果不符 `<N><s/m/h>` 格式 |
+| `registry.invalid_catch_step` | workflow.config.catch 含白名單外的 step type |
+| `registry.version_not_specified` | 全域 default_version_policy=require_explicit 下，action 未帶 @version |
 ### Workflow / Trigger
 
 | code | 觸發 |
@@ -253,7 +257,22 @@ ErrorObject for saga_failed = {
 - `type: fail` 重寫錯誤訊息（仍 FAILED）
 - `type: return` 將 FAILED 轉為 SUCCEEDED 並寫入 output（建議謹慎）
 
-`config.catch` 內只能用 `error.*` / `input` / `vars` / `steps` 等已凍結的 namespace；不可再執行 `wait` 等需要長時間 I/O 的 step（實作可拒絕；建議僅允許 emit/fail/return/assign）。
+`config.catch` 僅可 namespace `error.*` / `input` / `vars` / `steps` / `secret`（已凍結）。**允許的 step types**（白名單，載入驗證器 MUST 拒絕白名單外）：
+
+| type | 允許 | 說明 |
+|------|------|------|
+| `emit` | ✅ | 通知、發失敗事件 |
+| `fail` | ✅ | 重寫 / 包裝錯誤訊息後保持 FAILED |
+| `return` | ✅ | 將 FAILED 轉為 SUCCEEDED（謹慎） |
+| `assign` | ✅ | 更新 vars（僅觀測用；instance 即將終結） |
+| `if` / `switch` | ✅ | 分支控制（body 內仍受此白名單約束） |
+| `task` | ❌ | 禁止；catch 不得發起新的 tool / function 呼叫 |
+| `wait` | ❌ | 禁止；instance 即將終結，不得阻塞 |
+| `foreach` / `parallel` | ❌ | 禁止；同上 |
+| `saga` | ❌ | 禁止；config.catch 不展開補償 |
+| `callback` | ❌ | 僅 function 內部可用，不適用 workflow catch |
+
+若 YAML 中 config.catch 含任一禁止 type → 載入失敗，`registry.invalid_catch_step`（新增錯誤碼）。Step 級 `catch`（task / wait 等）仍保留**全部** step types 可用性，不受此限制。
 
 ---
 

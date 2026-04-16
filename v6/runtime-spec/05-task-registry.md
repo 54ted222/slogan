@@ -71,12 +71,30 @@ def resolve(action_name: str) -> Action:
     # 4. 組合最終 key 查表
     canonical = f"{prefix}/{body}" if "/" in action_name else body
     if version is None:
-        version = resolve_version(canonical)  # project default 或 latest
+        version = resolve_version(canonical, caller_instance)
     key = (canonical, version)
     if key in registry.actions:
         return registry.actions[key]
     raise NotFound("action", action_name)
 ```
+
+### `resolve_version` 演算法
+
+當 step 未指定 `@version` 時，引擎依以下順序決定版本（每一步找到即回傳）：
+
+1. **Instance action pin**：若 caller_instance 已為該 `canonical` 名稱鎖定版本（見下），直接使用該版本
+2. **Project default**：action 所屬 project 的 `projects/<name>/config.yaml` 中 `action_defaults[canonical] = <version>`（若有）
+3. **Global default**：引擎 config 的 `registry.default_version_policy`：`highest`（預設）/ `lowest` / `require_explicit`（後者直接 raise `registry.version_not_specified`）
+
+### Instance 建立時的 action pin
+
+為避免「step 執行時 registry 剛好熱載入新版本，同一 instance 前後 step 解析到不同版本」的漂移，instance **首次** 解析到某 `canonical` 的實際 version 時 MUST 將 `(canonical → version)` 記錄至 instance 的 `action_pins` map（持久化於 Instance Store 的 `instances.action_pins` 欄位）；該 instance 後續所有同名解析**沿用**此版本，即使 registry 已更新。
+
+- `action_pins` 不跨 instance 共享；子 function instance 獨立解析並持有自己的 pins
+- 顯式 `action: foo@3` 不寫入 pin（已是確定版本）；但會驗證 registry 中存在該 `(foo, 3)`；不存在 → `registry.action_not_found`
+- Replay 時引擎 MUST 依 `action_pins` 還原版本；若對應 `(canonical, version)` 在 registry 中已被刪除 → `workflow_version_deleted`（同既有語意）
+
+此規則與既有「workflow / function definition 版本鎖定」（見 `02-instance-lifecycle.md`）**分層一致**：workflow 自身版本在 instance 建立時鎖定；其呼叫的 action 在首次解析時鎖定。
 
 - `is_snake(s)`：`^[a-z][a-z0-9_]*$`
 - `is_kebab(s)`：`^[a-z][a-z0-9-]*$`

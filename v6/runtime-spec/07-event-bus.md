@@ -315,6 +315,30 @@ emit 的順序保證：
 - **Wait 投遞**：以 `(subscription_id, event.id)` 去重；同一事件不重複喚醒同一訂閱。
 - **emit 重試**：若 publish 失敗，引擎 retry；以 `event.id` 去重，bus 只接受第一次。
 
+### 去重紀錄的持久化
+
+所有去重 key MUST 持久化（而非僅 in-memory），避免 engine crash 後重複投遞：
+
+| 粒度 | 存放表 | TTL | crash 後行為 |
+|------|--------|-----|---------------|
+| Trigger 去重 | `trigger_dedup`（獨立表）key = `(workflow_name, workflow_version, event.id)` | 24h（可由 engine config 覆寫） | 重啟後沿用；同 event.id 不再建立 instance |
+| Wait 投遞去重 | 與 `wait_subscriptions` 同表的 `delivered_event_ids` 陣列欄位（或子表） | 跟 subscription deadline；deadline 到或 subscription 喚醒則整批刪除 | 重啟後沿用；事件重投遞不喚醒已處理 subscription |
+| emit 去重 | Bus 實作層內部（如 NATS dedupe window / Kafka key compaction） | 實作決定；建議 ≥ publish retry 上限的時窗 | Bus 層責任 |
+
+### 多訂閱者一事件的處理
+
+同一事件（同 `event.id`）可能同時匹配：
+1. 多個 workflow 的 trigger
+2. 多個 instance 的 wait subscription（如 project-scope broadcast）
+3. 自身的 trigger + 他 instance 的 wait
+
+規則：
+
+- 每個訂閱者 **獨立去重**；trigger 表與 wait 表互不共用去重記錄
+- 若 bus 以 `event.id` 做 sender-side dedup（emit 重試），只是抑制 publish，不影響接收端獨立去重
+- 一個訂閱者一次接收同一 event 若失敗（handler FAILED） → 不計入該訂閱者去重記錄（下次重試仍需處理）；僅**成功處理**後才寫入去重表
+- 去重寫入 MUST 與「訂閱者處理結果 commit」同一 transaction；避免「去重已寫但處理未 commit」導致事件永久遺失
+
 ---
 
 ## 關閉 / 排空
