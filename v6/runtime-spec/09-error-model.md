@@ -109,11 +109,15 @@ ErrorObject {
 | `registry.version_not_specified` | 全域 default_version_policy=require_explicit 下，action 未帶 @version |
 | `registry.secret_access_denied` | 跨 project 引用未標記 `metadata.shared: true` 的 secret |
 | `registry.invalid_trigger_scope` | event trigger 宣告 `scope: workflow`（不合法） |
+| `invalid_retry_config` | `retry.max_attempts` 字面值或 CEL 結果 < 1 或非整數 |
+| `registry.invalid_lifecycle_backend` | tool `lifecycle.init.backend.type` 為 `extension` 或非 `exec` / `http` |
 ### Workflow / Trigger
 
 | code | 觸發 |
 |------|------|
 | `workflow.input_schema_violation` | trigger 階段輸入驗證失敗 |
+| `trigger.when_eval_failed` | event trigger 的 `when` CEL 求值異常（視為過濾未通過） |
+| `trigger.input_mapping_error` | event trigger 的 `input_mapping` 中某欄位 CEL 求值異常 |
 | `output_schema_violation` | return 輸出驗證失敗 |
 | `input_too_large` | step input snapshot 超過 size limit |
 | `output_too_large` | step / instance output 超過 size limit |

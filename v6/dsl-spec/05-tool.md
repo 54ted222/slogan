@@ -46,6 +46,25 @@ backend:
 
 ---
 
+## Compensate 運作規則
+
+`compensate` 宣告於 tool definition 與 step 的映射如下（step 層級優先，見 `03-steps.md`）。**無論在 tool 或 step 層宣告，compensate 的 action MUST 指向 registry 中存在的 tool / function**；否則載入失敗 `registry.action_not_found`。
+
+### compensate.input 求值與驗證
+
+1. `input` 求值上下文與一般 step input 相同（`input` / `steps` / `vars` / `secret` / `artifacts` / `project` 等），**額外** 提供 `output` namespace，指向**原 step 的 output**（該 step MUST 為 SUCCEEDED，否則該 compensate 不會被執行，見步驟 4）
+2. CEL 求值後，引擎以 compensate action 的 `input_schema` 驗證（嚴格模式，與一般 task step 呼叫 tool 相同）
+3. 驗證失敗 → 該 compensate 視為失敗（計入 `compensation_failures`），`error.type == "schema_violation"`、`error.details.direction == "input"`、`error.details.compensate_origin_step == <origin>`；不中止其他 compensate
+4. 僅 SUCCEEDED 的 origin step 會觸發其 compensate；SKIPPED / FAILED 的 step 不補償
+5. CEL 不自動型別轉換；若 origin output 型別與 compensate input_schema 不符，請在 CEL 中顯式 `string(output.x)` / `int(output.x)`
+
+### compensate 本身的 retry 與 idempotent
+
+- compensate step 走 tool 的 `retry` 規則（若原 compensate tool 宣告 retry）；step 層 retry **不** 自動套用到 compensate
+- 建議 compensate tool 宣告 `idempotent: true`；引擎依此在 lease 切換時判斷是否重跑（見 `runtime-spec/03-step-execution.md` 的 saga 補償狀態機）
+
+---
+
 ## Backend Types
 
 ### exec
@@ -593,6 +612,18 @@ lifecycle:
 `init` / `destroy` 不隸屬於任何 step，`${ }` 僅允許引用 `secret` / `env` / `project` / `artifacts._workspace_path`，不可引用 `input` / `steps` / `prev` / `vars` / `loop` / `event`。完整表格見 `04-expressions.md`。
 
 `init` 失敗 → 依賴此 tool 的所有後續 step 進入 FAILED，`error.type == "lifecycle_init_failed"`。
+
+### init 循環依賴
+
+`lifecycle.init.backend` 的 `type: exec` / `http` **不** 經 task registry（直接 spawn process 或發 HTTP），因此 **不能** 呼叫其他 tool 或 function —— 不存在 init 互相依賴的情況。
+
+若 init backend 間接觸發其他 tool（例如 init 內呼叫 CLI 而該 CLI 又觸發本 engine 的 API 建立新 instance），視為外部系統行為、不在 engine 保護範圍內。建議做法：
+
+- Init backend SHOULD 為自足腳本（OAuth client credentials flow、讀本地 keychain 等）
+- 需要共用資料的多個 tool 應透過 `init output` 的共享 cache 傳遞，而非互相呼叫
+- Engine 在載入期 MUST 驗證 `lifecycle.init.backend.type` ∈ `{exec, http}`（不支援 `extension`，避免引入未知調用路徑）；違反 → `registry.invalid_lifecycle_backend`
+
+若未來擴充允許 init 呼叫其他 tool，屆時將引入 init-depth 限制與 SCC 檢查；v6 不開放此能力以根絕死鎖風險。
 
 ### init output 存取
 

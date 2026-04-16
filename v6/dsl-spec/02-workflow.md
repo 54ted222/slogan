@@ -52,6 +52,20 @@ triggers:
 | `when` | CEL expression | MAY | 過濾條件，回傳 boolean |
 | `input_mapping` | map | MAY | 事件資料到 workflow input 的映射 |
 
+#### input_mapping 失敗場景
+
+`input_mapping` 的 CEL 與後續 schema 驗證為 trigger 建立 instance 前的步驟；任一失敗皆**不建立 instance**，但錯誤碼與事件消費行為各異：
+
+| 失敗場景 | 錯誤碼 | 事件 ack 行為 |
+|---------|-------|---------------|
+| `when` CEL 求值異常 | `trigger.when_eval_failed` | 視為過濾未通過（ack 消費）；對 ops 發 `trigger.skipped` 觀測事件 |
+| `input_mapping` 中某 CEL 求值異常 | `trigger.input_mapping_error`、`error.details.field` 為失敗欄位 | 事件 ack 消費（避免 poison-pill 重放）；進 `bus.dead_letter`（`failure_reason: "trigger_input_mapping_error"`） |
+| 映射結果不符 `input_schema` | `workflow.input_schema_violation`（既有語意） | 同上（ack 消費 + dead letter） |
+
+- Trigger **無** `catch` 機制；上列失敗皆不建立 instance，無法被 workflow 層攔截。若需對映射失敗做告警，請訂閱 `bus.dead_letter` 事件
+- 實作 SHOULD 暴露 metric：`trigger_failed_total{workflow, failure_reason}`
+- 事件本身的 `event.id` 會寫入 trigger 去重表（見 `runtime-spec/07-event-bus.md`），避免同一事件反覆因映射失敗而觸發重試
+
 **scope 匹配規則**：
 
 - `scope: workflow` 的事件由發出者 instance 自身消費（透過 short-circuit 路徑），**不進入 trigger 匹配**，因此 trigger 不可宣告 `scope: workflow`
