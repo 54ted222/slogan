@@ -31,6 +31,7 @@ metadata:
   name: payment.process         # MUST — snake_case + dotted
   version: 1
   description: "處理付款流程"
+  recursion_allowed: false      # MAY, 預設 false — 允許本 Function 呼叫自身或進入循環依賴
 
 input_schema: object            # MAY — 輸入 JSON Schema
 output_schema: object           # MAY — 輸出 JSON Schema
@@ -75,6 +76,25 @@ Function 內部**不可**存取呼叫端的任何 namespace：
 | `input` | 透過 `input` 傳入 | — |
 | `steps` | — | 透過 `return` output |
 | `vars` | — | — |
+
+---
+
+## 遞迴呼叫（recursion_allowed）
+
+預設 Function 不可**直接或間接**呼叫自身；載入期 `Tarjan SCC` 偵測出循環 → `registry.dependency_cycle`（見 `runtime-spec/05-task-registry.md`）。
+
+若確有遞迴需要（如走訪樹狀結構），於 function `metadata` 顯式宣告：
+
+```yaml
+metadata:
+  name: tree.walk
+  version: 1
+  recursion_allowed: true
+```
+
+- `recursion_allowed: true` 僅 **取消載入期的循環檢查**；運行期仍受 `engine.max_function_call_depth`（預設 128）上限保護，超過 → function instance FAILED，`error.type == "max_recursion_depth_exceeded"`
+- 僅針對**宣告此 flag 的 function 自身**豁免；若循環經過未宣告 flag 的 function → 仍視為違規
+- 多個 Function 互為循環時，**參與循環的每一個 Function** 皆 MUST 設此 flag；否則載入失敗
 
 ---
 

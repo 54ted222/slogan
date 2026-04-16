@@ -111,7 +111,20 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 - 後續 steps 透過 `vars.<key>` 存取
 - 同名變數會被後續 `assign` 覆寫
 - `vars` map 中 key MUST 為簡單識別字（`^[a-z_][a-z0-9_]*$`）；含 `.` / `/` / 其他 path separator 或 namespace prefix（如 `steps.foo`、`input.bar`）→ 載入失敗，`error.type: "invalid_var_name"`
-- 保留字 `_workspace_path` 等以 `_` 起始的 key 由引擎使用者側禁止（避免與 artifacts 等 namespace 混淆）
+- `_` 起始的 key 保留給引擎擴充；使用者 assign 以 `_` 開頭 → 載入失敗，`error.type: "invalid_var_name"`（與上同一錯誤碼，`details.reason: "reserved_prefix"`）
+
+**Output**：`steps.<id>.output` 為本次 assign 的增量 map（僅含本 step 寫入的 key → value；不含既有 `vars`）。例：
+
+```yaml
+- id: set_totals
+  type: assign
+  vars:
+    subtotal: 100
+    tax: 8
+# steps.set_totals.output == { "subtotal": 100, "tax": 8 }
+```
+
+若 assign 的某 key CEL 求值失敗 → step FAILED，`error.type == "expression_error"`；`vars` 不發生任何變動（atomic write，見 `runtime-spec/03-step-execution.md`）。
 
 ---
 
@@ -396,13 +409,22 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 ```yaml
 - type: wait
-  duration: 5m
+  duration: 5m            # MUST — 字面 duration string 或 CEL 求 duration string
 ```
+
+規則：
+
+- `duration` 於 step 進入 RUNNING 前求值；若非 string 或不符 Duration 格式 → step FAILED（`error.type == "invalid_duration_format"`，不建立 subscription）
+- 求值結果 `0s` 或負值 → step FAILED，`error.type == "invalid_duration"`
+- 到期 deadline = `step RUNNING checkpoint commit 時刻 + duration 求值結果`；一次性決定並持久化（邏輯同 wait signals 的 deadline；見 `runtime-spec/07-event-bus.md`）
+- 期間不可被事件喚醒（無 signals）；僅 `instance.cancel` / workflow timeout 可中止
+- Output：`{ signal: "duration", duration_ms: <實際 sleep 毫秒> }`；正常結束時 `duration_ms` 恰為求值結果；被 cancel 中斷不產 output（step 終態為 CANCELLED / FAILED）
 
 ### 模式判斷規則
 
 - `signals` 與 `duration` 兩者 MUST 擇一，不可同時存在
 - `signals` MUST 為非空陣列
+- `duration` 不得與 `timeout` 欄位共存（duration 本身即為時限）；同時宣告 → 載入失敗，`error.type: "invalid_wait_config"`
 
 ---
 

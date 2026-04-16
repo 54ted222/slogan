@@ -199,13 +199,16 @@ vars 的 scope 是 instance-wide；子 instance 不繼承父 vars。
 
 #### Step 訊號匹配規則
 
-1. **Fast-path 判定**：讀取目標 step 狀態；若狀態屬於 `{SUCCEEDED, FAILED, SKIPPED}` **且** 所在 instance store 的 checkpoint `last_committed_at >= target_step.terminated_at` → 視為已持久化終態，直接讀 output 並 SUCCEEDED。
+1. **Fast-path 判定**：讀取目標 step 狀態；若狀態屬於 `{SUCCEEDED, FAILED, SKIPPED}` **且** 所在 instance store 的 checkpoint `last_committed_at >= target_step.terminated_at` → 視為已持久化終態，依下步驟 4 決定 wait 終態。
 2. **未終態或持久化未確認**：建立 `step.completed` 訂閱並進入阻塞。
 3. **事件到達時的 re-read**：
    - 讀取目標 step 最新 state；若 **仍非終態** → 視為事件早到（極少數並發情境），**維持訂閱繼續等待** 下一個 `step.completed`；不報錯（此事件 MAY 重覆投遞至同一 subscription，屬 at-least-once 的正常行為）。
-   - 若為終態 → 讀取 output 並 SUCCEEDED。
-4. **Output 規範化**：wait step 的 output 恆為 `{ data: <target.output> }`；若目標 step 無 output（例：SKIPPED、或 step 類型本就無 output 如 `emit`）→ `data = null`；若目標 FAILED → wait step 依然 SUCCEEDED，但 `data = null` 且新增 `error_cause: <target.error>` 讓使用者可自行判定（若 wait 本身應以目標 FAILED 傳播錯誤，使用者應檢查 `steps.<wait_id>.output.error_cause` 並以 `type: fail` 中止）。
-5. **目標 step 永不終態**（例：`async: true` 的 step 所在 instance 已 CANCELLED）：`step.completed` 不會到達，依賴 `wait.timeout` 兜底；deadline 到即 FAILED。
+   - 若為終態 → 依下步驟 4 決定 wait 終態。
+4. **依目標終態映射 wait step 終態**（與 `dsl-spec/03-steps.md`「Step 訊號的終態行為」表一致）：
+   - 目標 SUCCEEDED → wait SUCCEEDED，`output = { signal: "step", event: null, step: <target_id>, data: <target.output> }`
+   - 目標 FAILED → wait FAILED，`error.type == "async_step_failed"`、`error.step_id == <target_id>`、`error.cause == <target.error>`；可被 catch 捕捉
+   - 目標 SKIPPED → wait SKIPPED（不執行後續 step）
+5. **目標 step 永不終態**（例：`async: true` 的 step 所在 instance 已 CANCELLED）：`step.completed` 不會到達，依賴 `wait.timeout` 兜底；deadline 到即 FAILED（`error.type == "timeout"`）。
 
 ---
 

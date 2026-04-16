@@ -103,6 +103,8 @@ ErrorObject {
 | `schema_incomplete` | Function callback 只宣告 input_schema 或 output_schema 之一 |
 | `invalid_var_name` | `type: assign` 的 vars key 含 path separator 或保留前綴 |
 | `invalid_duration_format` | duration 字面值或 CEL 結果不符 `<N><s/m/h>` 格式 |
+| `invalid_duration` | duration 求值為 0 或負值 |
+| `invalid_wait_config` | wait step 同時宣告 `duration` 與 `timeout` |
 | `registry.invalid_catch_step` | workflow.config.catch 含白名單外的 step type |
 | `registry.version_not_specified` | 全域 default_version_policy=require_explicit 下，action 未帶 @version |
 | `registry.secret_access_denied` | 跨 project 引用未標記 `metadata.shared: true` 的 secret |
