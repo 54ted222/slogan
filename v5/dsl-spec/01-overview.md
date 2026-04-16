@@ -69,6 +69,23 @@ metadata:
 | Resources | `kebab-case` | `shared-resources` |
 | Project | `kebab-case` | `order` |
 | Secret | `snake_case` | `payment_secrets` |
+| MCP server | `kebab-case` | `github-mcp` |
+| Toolset | `kebab-case`（於 Resources `toolsets` map 中作為 key） | `order-processing` |
+
+### Task registry 解析規則
+
+`type: task` 的 `action`、agent / toolset 的 `tools` 字串項目，以及 wildcard（`<prefix>.*`）都透過 task registry 解析。解析依 **第一段（第一個 `.` 之前）** 的命名風格分流：
+
+| 第一段命名風格 | 判定為 | 範例 |
+|----------------|--------|------|
+| `snake_case` | Tool / Function / Agent / builtin 動作 | `order.load`、`agent.ask_human` |
+| `kebab-case` 且非保留字 | MCP server 的 tool | `github-mcp.get_issue`、`compliance-mcp.*` |
+| 字面值 `toolset` | Resources toolsets 的引用（展開至所指 toolset 的 tools + skills） | `toolset.order-processing` |
+
+- 保留字：`toolset`（未來 MAY 擴充）。
+- 名稱中 `-` 與 `_` 互斥：第一段若含 `-`，整段 MUST 為 kebab-case；若含 `_`，MUST 為 snake_case。混用 → 載入錯誤 `registry.invalid_action_name`。
+- Toolset 展開在**引用處**執行（非載入時逐層展開），循環偵測於載入期進行（`toolset.circular_include`）。
+- 同名衝突（例如存在 tool `foo.bar` 與 toolset `foo` 的 tool `bar`）→ 載入錯誤 `registry.name_conflict`。
 
 ---
 

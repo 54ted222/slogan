@@ -173,10 +173,16 @@ Workflow 透過 `type: agent` step 呼叫 agent definition。
 
 ### 執行上限的強制
 
-自訂 `steps` 並不免除 `config.max_iterations` / `config.max_tool_calls` 的上限：
+自訂 `steps` 並不免除 `config.max_iterations` / `config.max_tool_calls` 的上限。兩者是**獨立的執行期計數器**，不改寫 `foreach` 的 `count` 或其他 step 行為：
 
-- 引擎於執行期監控；若 `type: task` 對 `agent.llm_call` 的呼叫次數達 `max_iterations`，或總 tool call 執行次數達 `max_tool_calls`，自動中止 agent 並回報 `error.type == "max_iterations_exceeded"` 或 `"max_tool_calls_exceeded"`。
-- 使用 `foreach count: ${ config.max_iterations }` 只是方便；即使使用者寫入更大的 `count`，實際執行仍以 config 上限為準。
+| 計數器 | 增量事件 | 達上限時 |
+|--------|----------|----------|
+| `max_iterations` | `agent.llm_call` 被呼叫一次 +1（不論來自預設 loop 或自訂 steps） | agent step FAILED，`error.type == "max_iterations_exceeded"` |
+| `max_tool_calls` | `agent.exec_tool_calls` 的 `tool_calls[]` 長度累加，或自訂 steps 中每次 `type: task` 呼叫非 `agent.*` builtin 的 action +1 | agent step FAILED，`error.type == "max_tool_calls_exceeded"` |
+
+- 計數器在進入 agent step 時重置，不跨 step 累計。
+- 達上限後引擎在下次欲觸發該類事件前中止；已在執行中的 step 仍執行完畢。
+- `foreach count: ${ config.max_iterations }` 在自訂 steps 中僅作便利寫法；若使用者寫入更大的 `count`，foreach 本身仍會完整迭代，但若迴圈內呼叫 `agent.llm_call` 使計數器達上限，迴圈在下次迭代前被中止。
 
 ### 呼叫 agent 的另一種方式：task
 

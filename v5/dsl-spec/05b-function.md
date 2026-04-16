@@ -127,8 +127,10 @@ Function 中以 `type: callback` step 觸發 callback：
 | 進入 step | function instance 暫停，發出 callback 事件給 caller |
 | Handler 執行 | caller 執行對應 handler 的 steps（共享 caller 的 namespace） |
 | Handler `return` | function instance 恢復，handler output 成為此 step 的 output |
-| Handler FAILED | 此 step 進入 FAILED，可被 `catch` 捕捉 |
+| Handler FAILED | 此 step 進入 FAILED，`error` 反映 handler 內傳播至頂層的錯誤；可被 `catch` 捕捉 |
 | 超時 | step FAILED，`error.type == "timeout"` |
+
+`timeout` 涵蓋 handler 執行的**整體時長**（從發出 callback 事件算起至 handler 回傳 `return` 為止）。Handler 內各 step 的 `timeout` / `retry` 獨立計時，但不延長外層 callback 的 `timeout`；若 handler 內 step 失敗被其內部 `catch` 處理則不向外傳播，否則向上浮出到 handler 頂層 → 整個 callback step FAILED。Handler output 由引擎在 handler `return` 時依 callback 宣告的 `output_schema` 驗證；不符 → callback step FAILED，`error.type == "schema_violation"`。
 
 `name` 同時作為此 step 的識別子（不再宣告 `id`）。後續 step 以 `steps.<name>.output` 取得 handler 回傳值；若緊接的下一步，也可用 `prev.output`（`prev` 無需帶名稱）。
 
@@ -160,6 +162,32 @@ Handler 的求值與資料規則：
 | `input` / `steps` / `vars` | caller 自身的 namespace（handler 與 caller 共享） |
 
 Handler 必須以 `type: return` 結束並回傳符合 `output_schema` 的資料；該 output 將作為 function 端 `type: callback` step 的 output。
+
+#### 多個 callback 時的分流
+
+`callback:` 是 map，以 callback 名稱為 key，每個 key 對應獨立的 handler steps。不同 callback 名稱之間互相隔離，共用 caller 的 `input` / `steps` / `vars`：
+
+```yaml
+- type: task
+  action: order.flow_with_review       # function 宣告 callback: [review_risk, ask_amount]
+  input: { order_id: ${ input.order_id } }
+  callback:
+    review_risk:
+      - id: risk
+        type: task
+        action: risk.evaluate
+        input: { payment_id: ${ callback.input.payment_id } }
+      - type: return
+        output: { approved: ${ steps.risk.output.level != "high" } }
+    ask_amount:
+      - type: agent
+        agent: order.analyzer
+        input: { order_id: ${ callback.input.order_id } }
+      - type: return
+        output: { amount: ${ prev.output.suggested_amount } }
+```
+
+每個 handler 獨立執行；同一 task 內不同 callback 若並行觸發，引擎對 caller namespace 做 snapshot 以避免 race。
 
 ### 與 Tool callback 的對應
 

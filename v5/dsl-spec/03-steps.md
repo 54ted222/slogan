@@ -322,6 +322,16 @@ Output：
 `step` 為字串陣列時：等待**所有**指定 step 完成才恢復；output 為 map `{<step_id>: <output>, ...}`。
 `step` 為單一字串時：output 即該 step 的 output。
 
+所等待的 async step 終態決定 wait step 結果：
+
+| async step 終態 | wait step 行為 |
+|-----------------|----------------|
+| SUCCEEDED | wait SUCCEEDED，output 為該 step 的 output |
+| FAILED | wait FAILED，`error.type == "async_step_failed"`、`error.step_id` 為該 step 的 id；`error.cause` 為該 step 的原 error 物件；output 為 null（由 `catch` 存取 `error.*`） |
+| SKIPPED | wait SKIPPED |
+
+陣列模式下任一子 step FAILED → wait FAILED，`error.step_id` 為首個失敗者；其餘 step 仍執行至終態（不取消）。
+
 ### 模式判斷規則
 
 - `event`、`events`、`duration`、`step` 四者 MUST 擇一，不可同時存在
@@ -430,7 +440,24 @@ Output：
 - 若 saga 內含 `parallel` / `foreach`：
   - 不同分支 / 不同迭代間**無全序保證**，補償可能並行進行
   - 同一分支或同一迭代內部仍遵循時間戳降序
+  - 分支間有隱含依賴時，補償順序由 tool 作者自行以 idempotent 設計處理；引擎不提供依賴宣告
 - 無 `compensate` 的 step（Tool 未定義且 step 未覆寫）跳過
+
+#### 補償失敗處理
+
+個別 compensate action 失敗時，引擎 **繼續執行其他 compensate**（best-effort），不中止補償鏈：
+
+- 補償 step 應使用 `retry` 處理暫時錯誤；retry 用盡後仍失敗則記錄，但不阻斷其他補償。
+- 所有補償完成後（含失敗），進入 saga `catch`；`error.compensation_failures` 為失敗清單：
+
+  ```
+  error.compensation_failures: [
+    { step_id: "debit", error: { type, message, code } },
+    ...
+  ]
+  ```
+
+- 若 saga `catch` 為空，workflow 以 `error.type == "saga_failed"` 向上傳播。
 
 ---
 
