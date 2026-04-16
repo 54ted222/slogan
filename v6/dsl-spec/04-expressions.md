@@ -139,6 +139,23 @@ artifacts.order_file.path
 artifacts.order_file.exists
 ```
 
+**Workspace 目錄結構**（由 engine 管理，每個 instance 獨立）：
+
+```
+<engine.workspace_root>/
+  <instance_id>/
+    artifacts/
+      <artifact_name>/         # 每個 artifact 一個子目錄
+        <files>
+    _shared/                   # 跨 step 共享暫存；tool 可用 artifacts._workspace_path 寫入
+```
+
+- `artifacts._workspace_path` = `<engine.workspace_root>/<instance_id>`（絕對路徑）
+- `artifacts.<name>.path` = `<workspace_path>/artifacts/<name>`（絕對路徑）
+- 名稱合法字元：`^[a-z][a-z0-9_-]*$`；含 `/` / `..` / 其他特殊字元 → 載入驗證失敗
+- Engine MUST 在 tool spawn 前檢查路徑 canonical 化後仍在 `<workspace_path>` 內（防 `../` escape）
+- Instance 終結時 engine MAY 根據 artifact 的 `retain` 設定刪除 workspace（見 artifact DSL，v6 保留為 implementation detail）
+
 ---
 
 ## 標準函式

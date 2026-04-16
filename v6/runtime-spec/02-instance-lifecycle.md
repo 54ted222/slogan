@@ -74,6 +74,7 @@ Function instance 由父 instance「擁有」；父 instance 若被取消，子 
 - 觸發：父 instance cancellation、外部 API 顯式 cancel、workflow 級 timeout 在 `cancellation_policy: graceful` 下的軟取消。
 - 引擎發送 cancel 訊號至所有未終結子節點，等待至 `cancel_grace_period`（預設 30s）；超時則強制終結。
 - 已執行的 step 不回滾（除非整體在 saga 內，由 saga 補償）。
+- **延遲事件清理**：cancel 同時 DELETE 該 instance 的所有未投遞 `delayed_events`（`WHERE source_instance = $id AND claimed_by IS NULL`）；已被其他 engine claim 中的 event 仍會投遞（避免破壞 claim 所有者的執行），但接收方若對應 wait 已不存在則丟棄。
 - 終結前同上。
 
 ---

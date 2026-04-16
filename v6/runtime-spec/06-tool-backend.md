@@ -198,7 +198,22 @@ URL 應含一次性 token（query string 或 path），驗證來源；engine 在
 ### 認證 / TLS
 
 - TLS 由 HTTP client 預設處理；引擎 SHOULD 拒絕 plain http 至非 loopback 且非 secret-allowlisted 主機。
-- mTLS / client cert 由 backend.config 提供路徑；secret 引用解密後的 key 需在記憶體 holding。
+- mTLS 設定欄位（於 backend.tls.*）：
+
+  ```yaml
+  backend:
+    type: http
+    url: "https://mtls.example.com/api"
+    tls:
+      client_cert: ${ secret.CLIENT_CERT_PEM }   # PEM 字串
+      client_key:  ${ secret.CLIENT_KEY_PEM }    # PEM 字串
+      ca_bundle:   ${ secret.CA_BUNDLE_PEM }     # MAY — 自訂 CA 驗證
+      insecure_skip_verify: false                 # MAY, 預設 false
+  ```
+
+  - 解密後的 key PEM 於 HTTP client 建立時載入記憶體，client 釋放時清除
+  - TLS handshake 失敗 → step FAILED，error.type: `connection_error`，error.details.tls_reason 含驗證失敗原因（cert_expired / hostname_mismatch / unknown_ca 等）
+- **Bearer token expiry**：v6 不自動處理 OAuth2 refresh；有效期到期由 tool lifecycle.init 負責取得新 token，或以 HTTP 401 觸發 retry 並讓下次 init 重新取 token（搭配 `retry_on_status: [401]`）。完整 OAuth2 flow 延後至未來版本。
 
 ---
 

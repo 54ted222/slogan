@@ -54,6 +54,20 @@
 - `idempotent: true` 的 step：若 retry 觸發，driver 先嘗試讀取 instance store 的 cached output（key `(instance_id, step_id, attempt_signature)`）；命中則跳過實際呼叫。
 - 非 idempotent：每次 attempt 都實際呼叫；persistence 只記錄最後一次成功的 output。
 
+### idempotent + compensate 組合
+
+Tool 同時宣告 `idempotent: true` 與 `compensate` 時，職責分離：
+
+- 原 step 的 idempotency：以 `(instance_id, step_id, attempt_signature)` 去重
+- 補償 step 的 idempotency：獨立計算，key 為 `(instance_id, step_id, "compensate", compensate_attempt)`
+  - `compensate_attempt` 從 0 開始，retry 時自增；與原 step 的 attempt 不共用計數
+  - 補償 tool 應亦宣告 `idempotent: true`；否則引擎無法安全重試補償
+- Engine 重啟後依 `compensate_state` checkpoint 決定：
+  - `done` → 不重跑
+  - `started` 且 compensate tool idempotent → 重跑（可能觸發 cache hit）
+  - `started` 且非 idempotent → 標記該 compensate FAILED（`error.type: "lease_lost_unsafe_resume"`），計入 compensation_failures
+- 補償 step 的 output 僅用於 engine 觀測，不進入任何 `steps.*` namespace（使用者無法引用）
+
 ---
 
 ## type: assign

@@ -142,15 +142,19 @@ COMMIT
 
 lease 透過樂觀鎖：
 
-```
+```sql
 UPDATE instances
 SET    lease_owner = $engine_id, lease_expires_at = now() + 30s
 WHERE  id = $instance_id
   AND  (lease_owner IS NULL OR lease_expires_at < now() OR lease_owner = $engine_id)
-RETURNING ...
+RETURNING id, lease_owner, lease_expires_at;
 ```
 
-只有更新成功的 engine 進程持有 lease。每次 checkpoint 順便延展 lease。Engine 進程 crash → lease 自然過期；其他 engine 進程在下次 polling 時搶到。
+- 更新成功（`RETURNING` 有結果）的 engine 進程持有 lease；其他進程回 0 rows，視為搶取失敗
+- PENDING instance 剛建立時 `lease_owner IS NULL`，第一個執行 UPDATE 成功的 engine 取得 lease
+- 每次 checkpoint 於同一 transaction 內延展 lease；lease 延展與 state 變動原子化
+- Engine 進程 crash → lease 自然過期（不需額外釋放動作）；其他 engine 進程在下次 polling / `instance.created` 事件到達時搶到
+- **絕不使用** SELECT 後 UPDATE 的兩步驟模式；MUST 以單一 atomic UPDATE ... WHERE 條件確保互斥
 
 ---
 
