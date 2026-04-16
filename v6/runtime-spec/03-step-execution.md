@@ -75,7 +75,7 @@ Tool 同時宣告 `idempotent: true` 與 `compensate` 時，職責分離：
 
 - 原 step 的 idempotency：以 `(instance_id, step_id, attempt_signature)` 去重
 - 補償 step 的 idempotency：獨立計算，key 為 `(instance_id, step_id, "compensate", compensate_attempt)`
-  - `compensate_attempt` 從 0 開始，retry 時自增；與原 step 的 attempt 不共用計數
+  - `compensate_attempt` 首次 = 1，retry 時自增（與 origin step `attempt` 同慣例，見上「Attempt 與 signature」）；與原 step 的 attempt 不共用計數
   - 補償 tool 應亦宣告 `idempotent: true`；否則引擎無法安全重試補償
 - Engine 重啟後依 `compensate_state` checkpoint 決定：
   - `done` → 不重跑

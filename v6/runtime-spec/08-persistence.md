@@ -49,7 +49,10 @@
 | `error` | jsonb \| null | |
 | `started_at` / `ended_at` | timestamp | |
 | `signature` | string | 對 input + action 的 hash，用於 idempotent retry 比對 |
+| `scheduled_at` | timestamp \| null | 當 state=`WAITING`（retry backoff 情境）時的 `next_attempt_at`，engine 重啟後依此重排；其他 state 為 null |
 | `compensate_state` | enum \| null | saga 補償用：`pending` / `started` / `done` / `failed`（見 `03-step-execution.md` saga 補償狀態機） |
+| `compensate_attempt` | int \| null | 補償 action 的 attempt 計數（與 origin step 的 attempt 分開，見 `03-step-execution.md` idempotent + compensate 組合）；null 表示尚未進入補償 |
+| `call_id_dedup` | jsonb \| null | NDJSON / SSE callback 協議的 call_id 追蹤 map；進程重啟後以 `(instance_id, step_id, attempt)` 重建（見 `06-tool-backend.md` 未匹配 call_id 規則）；MAY 由實作改放獨立表 |
 
 主鍵：`(instance_id, step_id, attempt)`
 
