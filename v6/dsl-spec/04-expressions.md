@@ -147,6 +147,32 @@ secret.STRIPE_SECRET
 
 在 `catch` handler 中可用。透過 `error.type` 區分錯誤類型（如 `"timeout"`、`"step_error"`）。見 [03-steps](03-steps.md) 錯誤處理模型。
 
+### callback
+
+僅於 caller 的 `type: task` 之 `callback:` handler 內可用（以 `steps.<handler_id>.<...>` 等呼叫端 namespace 共存）。提供當前 callback 的輸入與識別資訊：
+
+| 路徑 | 型別 | 說明 |
+|------|------|------|
+| `callback.input` | any | function 端 `type: callback` step 傳入的 input |
+| `callback.name` | string | 觸發的 callback 名稱（同一 task 多種 callback 共用 handler 時可分流） |
+| `callback.call_id` | string | 本次 callback 的唯一 id（跨 handler attempt 一致） |
+
+於 function 端（`type: callback` step 外部的 function body）**不可見**；其 namespace 與使用端同 workflow 的其他 steps 共享（見 `05b-function.md` 的 callback 小節）。
+
+### context
+
+僅於 Tool stdin / http template 求值時可用（不出現在 workflow step 的一般 CEL）。提供本次 tool 呼叫的執行上下文：
+
+| 路徑 | 型別 | 說明 |
+|------|------|------|
+| `context.instance_id` | string | 當前 workflow / function instance id |
+| `context.step_id` | string | 呼叫 tool 的 step id |
+| `context.attempt` | int | 本次 attempt 計數（首次 = 1） |
+| `context.idempotency_key` | string | 依 `(instance_id + step_id + attempt + input_snapshot)` 計算的 hash；與 `05-tool.md` protocol mode stdin JSON 的 `context.idempotency_key` 同源 |
+| `context.trace_id` | string | W3C 相容 trace id（見 `runtime-spec/07-event-bus.md` 的 trace 傳播） |
+
+與 protocol mode stdin JSON 的 `context` 結構欄位一致；tool 開發者可以 CEL 取同一資料集、也可於 stdin JSON 中直接讀。
+
 ### artifacts
 
 Artifact 的 workspace 路徑與中繼資料。所有 steps 可用。

@@ -87,13 +87,16 @@ backend:
   "input": { ... },
   "config": { ... },
   "context": {
-    "idempotency_key": "string | null",
+    "idempotency_key": "string",
     "instance_id": "string",
     "step_id": "string",
-    "attempt": 1
+    "attempt": 1,
+    "trace_id": "string"
   }
 }
 ```
+
+`idempotency_key` 恆為 string（engine 一律計算，非 null），與 stdin template 的 `context.idempotency_key` 同源。
 
 tool → 引擎（stdout）：
 
@@ -212,7 +215,7 @@ template 的求值上下文：
 | `input`   | tool 的輸入資料                                   |
 | `env`     | 環境變數                                          |
 | `secret`  | 機密值                                            |
-| `context` | 執行上下文（`instance_id`、`step_id`、`attempt`） |
+| `context` | 執行上下文（`instance_id` / `step_id` / `attempt` / `idempotency_key` / `trace_id`）— 完整結構見 [04-expressions.md#context](04-expressions.md#context) |
 
 ##### stdout — 輸出解析
 

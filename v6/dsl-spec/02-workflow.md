@@ -38,6 +38,7 @@ triggers:
 triggers:
   - type: event
     event: order.created
+    scope: project              # MAY, 預設 project — workflow | project | global
     when: ${ event.data.source == "api" }
     input_mapping:
       order_id: ${ event.data.order_id }
@@ -47,8 +48,16 @@ triggers:
 | 欄位 | 型別 | 必填 | 說明 |
 |------|------|------|------|
 | `event` | string | MUST | 要訂閱的事件類型 |
+| `scope` | string | MAY | 僅匹配指定 scope 的事件；`project`（預設）/`global`；`workflow` 明確**拒絕**並於載入期回報 `registry.invalid_trigger_scope` |
 | `when` | CEL expression | MAY | 過濾條件，回傳 boolean |
 | `input_mapping` | map | MAY | 事件資料到 workflow input 的映射 |
+
+**scope 匹配規則**：
+
+- `scope: workflow` 的事件由發出者 instance 自身消費（透過 short-circuit 路徑），**不進入 trigger 匹配**，因此 trigger 不可宣告 `scope: workflow`
+- `scope: project` trigger：只匹配**同 project** 的 `scope: project` 事件（跨 project 即使名稱相同亦不匹配）
+- `scope: global` trigger：匹配任何 project 的 `scope: global` 事件
+- 預設 `project` 是因為最常見的跨 workflow 協作仍限於同 project；需要跨 project 協作 MUST 顯式宣告 `scope: global` 並在發出端以 `scope: global` emit
 
 ---
 

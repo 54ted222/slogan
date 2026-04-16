@@ -103,6 +103,8 @@ ErrorObject {
 | `invalid_duration_format` | duration 字面值或 CEL 結果不符 `<N><s/m/h>` 格式 |
 | `registry.invalid_catch_step` | workflow.config.catch 含白名單外的 step type |
 | `registry.version_not_specified` | 全域 default_version_policy=require_explicit 下，action 未帶 @version |
+| `registry.secret_access_denied` | 跨 project 引用未標記 `metadata.shared: true` 的 secret |
+| `registry.invalid_trigger_scope` | event trigger 宣告 `scope: workflow`（不合法） |
 ### Workflow / Trigger
 
 | code | 觸發 |
