@@ -95,11 +95,12 @@ metadata:
 
 | action 形式 | 判定為 | 範例 |
 |-------------|--------|------|
-| `<namespace>.<action>` | Tool / Function / builtin 動作 | `order.load`、`payment.process`、`builtin.echo` |
+| `<namespace>.<action>` | Tool / Function / builtin 動作 | `order.load`、`payment.process`、`builtin.echo`、`artifact.list` |
 | `<project>/<namespace>.<action>` | 跨 project 引用 | `order/order.load` |
 
 - 主體每一段 MUST 符合 `^[a-z][a-z0-9_]*$`（snake_case）；含 `-` / 大寫 / 其他字元 → 載入錯誤 `registry.invalid_action_name`。
 - Project 前綴以 `/` 分隔（project name 為 kebab-case，見 [06-project-and-secret](06-project-and-secret.md)）；巢狀 project 以 `/` 層層展開。
+- **Builtin 保留 namespace**：`builtin.*` 與 `artifact.*` 由 engine 內建（見 `runtime-spec/05-task-registry.md` Builtin Actions）；使用者 Tool / Function **不得**以此為 namespace 註冊（載入期衝突 `registry.duplicate_action`）。Builtin 不支援 `@version` 語法。
 
 ---
 

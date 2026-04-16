@@ -208,7 +208,7 @@ Builtin 的 input/output schema 由引擎內建，不需 YAML 定義。
 ### Builtin 版本規則
 
 - Builtin action **不支援** `@version` 語法；引擎將 builtin 視為「恆定版本」且不暴露 version 欄位
-- Step 宣告 `action: builtin.echo@1` 等帶版本號的形式 → **載入期拒絕**，`error.type: "registry.invalid_action_version"`、`details.hint: "builtin actions do not support @version"`
+- Step 宣告 `action: builtin.echo@1` / `action: artifact.list@1` 等帶版本號的形式（任何 `builtin.*` / `artifact.*` 前綴）→ **載入期拒絕**，`error.type: "registry.invalid_action_version"`、`details.hint: "builtin actions (builtin.* / artifact.*) do not support @version"`
 - Builtin action 的行為於 engine 版本升級時可能改變；使用者若需版本化，應以 Tool wrapper 封裝
 - Builtin input 驗證時機同 Tool（step 進入 RUNNING、CEL 求值後、執行前）；失敗 → step FAILED，`error.type == "schema_violation"`（不特別區分 tool / builtin）
 
