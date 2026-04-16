@@ -92,10 +92,10 @@ def start_async_foreach(step):
 
 **取消傳播**：父 instance 被取消 / 超時時，背景 scheduler MUST 收到 `instance.cancel` 訊號：
 
-- 尚未啟動的 iteration：從 pending queue 移除，狀態直接標記為 CANCELLED
+- 尚未啟動的 iteration：從 pending queue 移除，該迭代的所有 step 標記為 FAILED（`error.type == "cancelled"`；step 層無 CANCELLED 狀態）；iteration 計入 foreach 的 failed_indices
 - 已啟動的 iteration：依 `Cancel propagation` 章節流程發 cancel（exec SIGTERM / http close / sub-instance cancel）
 - 等待 `cancel_grace_period` 後，未終態者強制 KILL
-- 全部 iteration 達終態後寫 async foreach 的終態 checkpoint（CANCELLED）
+- 全部 iteration 達終態後：async foreach step **本身** 無獨立 CANCELLED state（step state enum 見 `08-persistence.md` 僅 WAITING / RUNNING / SUCCEEDED / FAILED / SKIPPED）；父 instance 若為 CANCELLED 路徑 → step 標記為 FAILED（`error.type == "cancelled"`），instance 本身進入 CANCELLED 終態；父 instance 若為 FAILED 路徑（timeout）→ step FAILED 向上傳播至 instance FAILED
 
 避免「父 instance 已終結但背景 iteration 仍在跑」的僵屍 task。
 
@@ -157,7 +157,7 @@ step 接收 cancel：
   - exec backend：對 process group SIGTERM；grace 後 SIGKILL
   - http backend：close connection
   - extension：呼叫 handler.cancel()
-- 若為 wait：刪除 subscription；step → CANCELLED
+- 若為 wait：刪除 subscription；step → FAILED，`error.type == "cancelled"`（step 層無 CANCELLED 狀態，見 `04-expression-evaluation.md` StepRef 可見狀態規則）
 - 若為 foreach/parallel：對所有 in-flight iteration / branch 發 cancel
 - 若為 saga 在 compensating：補償執行不被中止（避免半補償狀態），但 saga 完成補償後直接終結
 
