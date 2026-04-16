@@ -65,6 +65,8 @@ Event {
 
 `emit` step 的 scope 屬性決定事件路由範圍；`scope: workflow` 的事件**不會**離開該 instance 的虛擬隔離域，不會送至其他 instance 的 wait。
 
+**根目錄 definition 的 project 匹配**：匹配「同 project」時以 `project.name` 字串比較（根目錄 definition `project.name == ""`）；因此根目錄 definition emit 的 `scope: project` 事件只匹配其他根目錄 definition 的訂閱者，不會匹配具名 project 內的訂閱者，反之亦然（詳見 `dsl-spec/03-steps.md` emit 節）。
+
 **Self-emit（同 instance 自發自收）**：
 
 - `scope: workflow` 的 self-emit 走 engine 內的 short-circuit path（不進 Event Bus 外部隊列），直接路由至該 instance 的 wait subscription

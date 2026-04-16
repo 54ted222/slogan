@@ -116,7 +116,7 @@ ErrorObject {
 | `registry.secret_access_denied` | 跨 project 引用未標記 `metadata.shared: true` 的 secret |
 | `registry.invalid_trigger_scope` | event trigger 宣告 `scope: workflow`（不合法） |
 | `invalid_retry_config` | `retry.max_attempts` 字面值或 CEL 結果 < 1 或非整數 |
-| `registry.invalid_lifecycle_backend` | tool `lifecycle.init.backend.type` 為 `extension` 或非 `exec` / `http` |
+| `registry.invalid_lifecycle_backend` | tool `lifecycle.init.backend.type` 或 `lifecycle.destroy.backend.type` 為 `extension` 或非 `exec` / `http`；`error.details.hook` ∈ `{init, destroy}` |
 | `registry.invalid_action_version` | `builtin.*` action 帶 `@version` 宣告（builtin 不支援版本） |
 | `registry.invalid_version` | `metadata.version` 非正整數 |
 | `registry.invalid_http_method` | tool http backend `method` 不在支援清單 |
@@ -128,6 +128,7 @@ ErrorObject {
 | `registry.extension_handler_not_found` | tool `backend.type: extension` 的 handler 未註冊於 engine extension registry |
 | `invalid_fail_config` | `type: fail` 的 `message` 為空或 `code` 格式違反規則 |
 | `registry.duplicate_manual_trigger` | 同一 workflow 的 `triggers[]` 宣告多個 `type: manual` |
+| `registry.invalid_signal_target` | `wait.signals[].step` 指向不存在、非 async 或不可達作用域的 step（載入期）；或 hot reload 後目標 step 消失時，既有 subscription 以 `error.type == "invalid_signal_target"` 令 wait step FAILED（運行期） |
 ### Workflow / Trigger
 
 | code | 觸發 |

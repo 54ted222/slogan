@@ -63,6 +63,17 @@ backend:
 - compensate step 走 tool 的 `retry` 規則（若原 compensate tool 宣告 retry）；step 層 retry **不** 自動套用到 compensate
 - 建議 compensate tool 宣告 `idempotent: true`；引擎依此在 lease 切換時判斷是否重跑（見 `runtime-spec/03-step-execution.md` 的 saga 補償狀態機）
 
+### compensate.action 的版本解析
+
+compensate 觸發時，其 `action` 字串的版本解析規則如下，目的為確保 saga 補償在跨部署期間行為可重現：
+
+1. **顯式 `@version`**：`compensate.action: payment.refund@3` → 一律使用 version 3；若 registry 無此版本 → compensate 失敗，`error.type == "action_not_found"`（計入 `compensation_failures`）
+2. **無 `@version`** 且 **compensate 宣告於 tool definition**（tool 層）：於**原 step 執行 action 時**一併 resolve 並 pin（查詢當下的 `instance.action_pin` / `project.defaults.action_versions` / 全域 `default_version_policy`），將 resolved version 寫入 step checkpoint 的 `compensate_pin`；補償執行時恆使用此 pin，不重查 registry
+3. **無 `@version`** 且 **compensate 宣告於 step 層**（step 直接覆寫）：行為同上，pin 於原 step 執行時決定並快取於 checkpoint
+4. `default_version_policy: require_explicit` 下，無 `@version` 且無 `action_pin` 可套用 → 原 step 載入階段即失敗（`registry.version_not_specified`），不進入執行期；故 compensate 不會遇到「執行時無版本可用」
+
+由此保證：同一 saga 內，執行與補償看到的 action 實體為同一版本；即使其間 registry 新增 / 刪除版本，補償行為仍可重現。
+
 ---
 
 ## Backend Types
@@ -627,7 +638,7 @@ lifecycle:
 
 - Init backend SHOULD 為自足腳本（OAuth client credentials flow、讀本地 keychain 等）
 - 需要共用資料的多個 tool 應透過 `init output` 的共享 cache 傳遞，而非互相呼叫
-- Engine 在載入期 MUST 驗證 `lifecycle.init.backend.type` ∈ `{exec, http}`（不支援 `extension`，避免引入未知調用路徑）；違反 → `registry.invalid_lifecycle_backend`
+- Engine 在載入期 MUST 驗證 `lifecycle.init.backend.type` 與 `lifecycle.destroy.backend.type` **同屬** `{exec, http}`（不支援 `extension`，避免引入未知調用路徑且讓清理路徑與啟動路徑對稱）；違反 → `registry.invalid_lifecycle_backend`，`error.details.hook` 為 `"init"` 或 `"destroy"`
 
 若未來擴充允許 init 呼叫其他 tool，屆時將引入 init-depth 限制與 SCC 檢查；v6 不開放此能力以根絕死鎖風險。
 
