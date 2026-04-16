@@ -201,7 +201,7 @@ Builtin 的 input/output schema 由引擎內建，不需 YAML 定義。
 未來擴充（v6 保留，**暫不實作**）：
 
 - `artifact.read` / `artifact.write`：透過 builtin 讀寫 artifact 檔案；v6 建議使用 tool backend 自行讀寫
-- `builtin.uuid` / `builtin.hash` / `builtin.random`：純值產生器；v6 已由 CEL 函式提供（`uuid()` / `sha256()` 等）
+- `builtin.uuid` / `builtin.hash` / `builtin.random`：純值產生器；v6 暫以 CEL 函式覆蓋大部分需求（`uuid()`；`hash` / `random` 目前未內建，若需要請以 tool backend 包裝）；未來版本 MAY 將常用純函式（如 `sha256(s)` / `random_int(min, max)`）擴充為 CEL extension function
 
 所有 builtin action 的執行時機與 error handling 與 Tool action 一致（input_schema 驗證、schema_violation 錯誤碼、idempotent 保證等）。
 

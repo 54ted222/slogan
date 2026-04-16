@@ -62,7 +62,12 @@
   - 唯一例外：`retry.delay`（若為 CEL）每次 retry 前重新求值，屬控制欄位不進 signature。
   - 若使用者確實需要每次 retry 以新值呼叫，請將求值改為該 step 之前的 `assign`，或顯式關閉 `idempotent`。
 - 補償 step 獨立計數：`compensate_attempt` 首次 = 1，與原 step `attempt` 不共用；即使同一 tool 被多個 saga step 當作補償引用，key 以 `(instance_id, origin_step_id, "compensate", compensate_attempt)` 區分，不會 collision。
-- Signature 明確定義：`hash(action_name || "\0" || canonical_json(input_snapshot) || "\0" || attempt)`；`canonical_json` 為鍵遞增排序後的 JSON serialization（確保 map 鍵順序不影響 hash）。
+- Signature 明確定義：`SHA256_hex(action_name || "\0" || canonical_json(input_snapshot) || "\0" || attempt_as_decimal_string)`；`canonical_json` 採 **RFC 8785 JSON Canonicalization Scheme (JCS)** 規則：
+  - 物件 key 以 UTF-16 codepoint 順序遞增排序；相同 key 僅保留最後一個
+  - 不輸出空白字元（包括 key/value 分隔符後的空格、換行）
+  - 字串以 UTF-8 編碼；數值採 ECMAScript 7.1.12.1 `ToString` 規則（避免 `1.0` vs `1` / `1e2` vs `100` 等同值不同文字表示造成 hash 漂移）
+  - `null` / `true` / `false` 以固定字面值輸出；`array` 順序保留（不排序）
+  - 跨 engine 實作 MUST 對同一 logical input 產生**相同 bytes**；實作可使用現成 JCS library（如 Go `github.com/cyberphone/json-canonicalization`）
 
 ### idempotent + compensate 組合
 
