@@ -36,6 +36,13 @@ ToolResult：
 
 Engine Loop 不重複驗證；若 driver 未驗證，錯誤將以 tool 回傳結構傳播，但 step 可能已完成（違反 schema 保證）。因此驗證責任在 driver 層。
 
+#### Schema 缺省時的處理
+
+- `input_schema` 缺省（欄位不存在）→ driver **不**做任何 input 驗證、不套 default；CEL 求值後的 map 原樣序列化傳給 backend（exec 為 JSON stdin 或 args；http 為 request body；extension 為 ExtensionRequest.input）
+- `output_schema` 缺省 → driver 接收 tool output 後直接寫 checkpoint，不驗證；output 仍受 `engine.max_step_output_bytes` 上限保護
+- 無 schema 的 tool **仍可**宣告 `idempotent: true` / `compensate` 等；signature 計算基於 CEL 求值後的 input_snapshot（與有 schema 時一致）
+- 建議生產環境 tool **明確宣告 schema**；缺省僅適合 prototyping 與 wrapper tool（如 `builtin.echo`）
+
 #### output_schema 與 mapping 的交互
 
 Raw / HTTP backend 若同時宣告 `stdout.mapping` / `response.mapping` 與 `output_schema`，順序如下：

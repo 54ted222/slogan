@@ -206,9 +206,19 @@ RETURNING id, lease_owner, lease_expires_at;
 ### Tool 級
 
 - exec/http backend 將 `idempotency_key` 注入 `context`；tool 可用此值對外部系統去重。
-- `idempotency_key = hash(instance_id + step_id + attempt + input_snapshot)`；attempt 變動時重新生成。
-- `input_snapshot` 定義為「step 進入 RUNNING 時寫入 checkpoint 的 input 物件」；不含 `when` / `retry.delay` / `timeout` 等控制欄位的求值結果。
-- Tool 若宣告 `idempotent: true`，同一 `idempotency_key` 在引擎重試時 MUST 視為同一邏輯操作；backend driver 在 retry 前會先查 cached output。
+- `idempotency_key = hash(instance_id + step_id + attempt + input_snapshot)`；**含 attempt**，每次 retry 變動。
+- `input_snapshot` 定義為「step 首次進入 RUNNING 時寫入 checkpoint 的 input 物件」；後續 retry 沿用同一 snapshot（見 `03-step-execution.md` 的 attempt 與 signature 語意）；不含 `when` / `retry.delay` / `timeout` 等控制欄位的求值結果。
+
+### idempotency_key vs signature：用途區分
+
+| 識別子 | 包含欄位 | 用途 | 接收者 |
+|--------|---------|------|--------|
+| `signature`（engine 內部） | action_name + input_snapshot + attempt | Engine 做 retry cache lookup（lease 切換後避免重跑已 SUCCEEDED 的 attempt） | Engine 內部 |
+| `idempotency_key`（tool context） | instance_id + step_id + attempt + input_snapshot | Tool 對**外部系統**去重（如同 Stripe API 的 Idempotency-Key） | 傳至 tool，由 tool 自行使用 |
+
+- 兩者**皆含 attempt**；重試時 key 變動，tool 視為新請求；外部系統若希望跨 retry 共用結果，需自行以 (instance_id + step_id) 部分為 key
+- Tool 若宣告 `idempotent: true`：engine 於 retry 前查 `signature` cache；**tool 仍每次收到不同的 `idempotency_key`**，因為 tool 通常需要對外部系統去重而非本地（此設計刻意讓 tool 能觀測到 attempt 變化）
+- 若使用者需要「跨 attempt 穩定的 idempotency key」（如冪等付款請求），請於 CEL 中顯式生成：`idempotency_hint: ${ instance_id + ":" + step_id }` 作為 input 一部分，由 tool 讀取此欄位而非 context.idempotency_key
 
 ---
 

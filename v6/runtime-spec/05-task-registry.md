@@ -165,6 +165,21 @@ ActionOutcome：
 
 Builtin 的 input/output schema 由引擎內建，不需 YAML 定義。
 
+### Builtin 內建 schema
+
+| Action | input_schema | output_schema | 說明 |
+|--------|--------------|---------------|------|
+| `builtin.echo` | `{type: object}`（任意 map） | 與 input 相同 | 回傳 input；便於測試 |
+| `builtin.sleep` | `{type: object, properties: {duration: {type: string}}, required: [duration]}` | `{type: object, properties: {slept_ms: {type: integer}}}` | duration 依 duration format 解析；engine 以 non-blocking timer 實現（不阻塞 main loop） |
+| `artifact.list` | `{type: object, properties: {artifact: {type: string}}, required: [artifact]}` | `{type: array, items: {type: object, properties: {name: string, size: integer, modified_at: string(RFC3339)}}}` | 列出指定 artifact 子目錄下所有檔案；`artifact` 指 artifact 名稱；不遞迴 |
+
+未來擴充（v6 保留，**暫不實作**）：
+
+- `artifact.read` / `artifact.write`：透過 builtin 讀寫 artifact 檔案；v6 建議使用 tool backend 自行讀寫
+- `builtin.uuid` / `builtin.hash` / `builtin.random`：純值產生器；v6 已由 CEL 函式提供（`uuid()` / `sha256()` 等）
+
+所有 builtin action 的執行時機與 error handling 與 Tool action 一致（input_schema 驗證、schema_violation 錯誤碼、idempotent 保證等）。
+
 ### Builtin 版本規則
 
 - Builtin action **不支援** `@version` 語法；引擎將 builtin 視為「恆定版本」且不暴露 version 欄位
