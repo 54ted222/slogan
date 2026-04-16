@@ -126,8 +126,10 @@ ErrorObject {
 | `registry.invalid_label_value` | `metadata.labels.<key>` value 非 string 或含換行 / 超長 |
 | `registry.invalid_metadata` | `metadata.description` 超過 1024 chars 或其他 metadata 欄位違反基本限制 |
 | `registry.invalid_event_name` | `emit.event` / `wait.signals.event` / `trigger.event` 名稱格式錯或使用保留前綴 |
-| `registry.invalid_workflow_definition` | Workflow `steps[]` 為空或其他結構性錯誤 |
-| `registry.invalid_function_definition` | Function `steps[]` 為空或其他結構性錯誤 |
+| `registry.invalid_workflow_definition` | Workflow `steps[]` 為空或其他結構性錯誤（包含巢狀 step 結構違規如 `parallel.branches: []` / `saga.steps: []` / `callback.<name>: []` 等，發生於 Workflow 定義內時） |
+| `registry.invalid_function_definition` | Function `steps[]` 為空或其他結構性錯誤（同上，發生於 Function 定義內時） |
+
+> 結構性錯誤的 `error.type` 依**擁有該結構的頂層 kind** 決定：DSL spec 中如 [03-steps.md](../dsl-spec/03-steps.md) / [05b-function.md](../dsl-spec/05b-function.md) 所列的 `registry.invalid_workflow_definition` 為預設文案；實際發生於 Function definition 載入時，引擎 MUST 以 `registry.invalid_function_definition` 回報。`details.reason` 欄位（如 `empty_parallel_branches` / `empty_saga_steps` / `empty_callback_handler`）於兩者皆一致，便於監控規則通用化。
 | `registry.extension_handler_not_found` | tool `backend.type: extension` 的 handler 未註冊於 engine extension registry |
 | `invalid_fail_config` | `type: fail` 的 `message` 為空或 `code` 格式違反規則 |
 | `registry.duplicate_manual_trigger` | 同一 workflow 的 `triggers[]` 宣告多個 `type: manual` |

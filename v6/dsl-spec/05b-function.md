@@ -48,9 +48,33 @@ callback:                       # MAY — 宣告 function 對外發出的具名 
     input_schema: object        # MAY — 傳給 caller handler 的資料 schema
     output_schema: object       # MAY — caller handler 回傳的資料 schema
 
+config:                         # MAY — function instance 級設定
+  timeout: duration | CEL       # MAY — function instance 的最長執行時間（CEL 求值規則同 workflow）
+  max_step_executions: int      # MAY — step 執行次數上限
+  catch: [catch-step, ...]      # MAY — function 級錯誤處理（白名單同 workflow.config.catch）
+  secrets: [name, ...]          # MAY — 依賴的 secret 名稱列表（載入期驗證）
+
 steps:                          # MUST — 步驟序列（非空；載入期拒絕空陣列）
   - ...
 ```
+
+---
+
+## Function `config` 欄位
+
+Function 支援與 Workflow `config` 同名同語意的子集：
+
+| 欄位 | 說明 |
+|------|------|
+| `timeout` | function instance 的最長執行時間；duration 或 CEL；求值時機與規則見 [02-workflow.md](02-workflow.md#configtimeout--cancel_grace_period-的-cel-求值)；namespace 限 `input` / `env` / `secret` / `project`（建立 function instance 前一次性求值並持久化） |
+| `max_step_executions` | 類同 workflow；整個 function instance 執行期間的 step 執行次數上限 |
+| `catch` | 類同 `workflow.config.catch`；於 function instance 即將 FAILED 時執行；白名單與 workflow 一致（見 [09-error-model.md](../runtime-spec/09-error-model.md#workflow-級-catch)）。若 catch 透過 `type: return` 消化錯誤，function 仍受 `output_schema` 驗證 |
+| `secrets` | 類同 workflow；載入期驗證名稱存在於當前 project scope |
+
+Function **不支援** Workflow 獨有的 `cancellation_policy` / `cancel_grace_period`：
+
+- Function instance 的取消由**父 instance 傳播**（父 cancel → 子 cancel），使用父 instance 的 cancellation 語意；function 自身不可覆寫
+- 若需要子 function 的補償 / 清理邏輯，請於 function 內以 `saga` 表達
 
 ---
 
