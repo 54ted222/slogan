@@ -83,8 +83,12 @@ Function instance 由父 instance「擁有」；父 instance 若被取消，子 
 - 觸發：父 instance cancellation、外部 API 顯式 cancel、workflow 級 timeout 在 `cancellation_policy: graceful` 下的軟取消。
 - 引擎發送 cancel 訊號至所有未終結子節點，等待至 `cancel_grace_period`（預設 30s）；超時則強制終結。
 - 已執行的 step 不回滾（除非整體在 saga 內，由 saga 補償）。
+- **`config.catch` 是否執行**：
+  - 外部 API / 父 instance 傳播 cancel → **不執行** `config.catch`（cancel 非「錯誤」語意；instance 直接轉 CANCELLED）
+  - Workflow `config.timeout` 到期 → **執行** `config.catch`（timeout 視為錯誤，與 RUNNING → FAILED 同路徑，`error.type == "timeout"`）；若 catch 消化為 SUCCEEDED / FAILED，最終 state 依 catch 結果，**不**再轉 CANCELLED
+  - 兩種情境以 `cancel_reason` 欄位區分（`api` / `parent` / `timeout` / `ops`，見 `instance.cancel` 事件的 `requested_by`）
 - **延遲事件清理**：cancel 同時 DELETE 該 instance 的所有未投遞 `delayed_events`（`WHERE source_instance = $id AND claimed_by IS NULL`）；已被其他 engine claim 中的 event 仍會投遞（避免破壞 claim 所有者的執行），但接收方若對應 wait 已不存在則丟棄。
-- 終結前同上。
+- **終結流程**：寫終結 checkpoint（CANCELLED、ended_at）→ 發 `instance.cancelled` 事件 → 執行 destroy hooks（best-effort，同 SUCCEEDED / FAILED；失敗僅記錄於 `lifecycle.destroy_failed`）→ 清理 Resource Pool。
 
 #### cancellation_policy
 

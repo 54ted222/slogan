@@ -296,7 +296,7 @@ ErrorObject for saga_failed = {
 - `type: fail` 重寫錯誤訊息（仍 FAILED）
 - `type: return` 將 FAILED 轉為 SUCCEEDED 並寫入 output（建議謹慎）
 
-`config.catch` 僅可 namespace `error.*` / `input` / `vars` / `steps` / `secret`（已凍結）。**允許的 step types**（白名單，載入驗證器 MUST 拒絕白名單外；workflow 與 function 共用同一表）：
+`config.catch` 可用 namespace（皆已凍結 / read-only）：`error.*` / `input` / `vars` / `steps` / `secret` / `env` / `project` / `artifacts` / `context`（受限子集：僅 `instance_id` / `trace_id`，因無「當前 step」語意）。**不可用** `prev`（instance 層級無前一 step 概念）、`loop`（不在迭代內）、`event` / `callback`（非 trigger / callback 脈絡）。**允許的 step types**（白名單，載入驗證器 MUST 拒絕白名單外；workflow 與 function 共用同一表）：
 
 | type | 允許 | 說明 |
 |------|------|------|
