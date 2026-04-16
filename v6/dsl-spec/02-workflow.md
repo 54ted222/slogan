@@ -88,8 +88,10 @@ Workflow 級設定，所有欄位皆為可選。
 |------|------|------|
 | `timeout` | duration | workflow instance 的最長執行時間 |
 | `max_step_executions` | integer | step 執行次數上限（防止無限迴圈） |
+| `cancellation_policy` | enum | `graceful`（預設）/ `hard`；見 `runtime-spec/02-instance-lifecycle.md` |
+| `cancel_grace_period` | duration | graceful 模式的寬限期，預設 30s |
 | `catch` | catch 陣列 | workflow 級錯誤處理（含 timeout） |
-| `secrets` | string 陣列 | 依賴的 secret 名稱列表 |
+| `secrets` | string 陣列 | 依賴的 secret 名稱列表；載入期驗證所有名稱存在於當前 project scope，缺失 → 載入失敗 `registry.missing_secret`；運行時不額外檢查（CEL 引用未宣告的 secret 仍可解析，但建議開發者盡量宣告以便 CI/CD 檢查） |
 
 ```yaml
 config:

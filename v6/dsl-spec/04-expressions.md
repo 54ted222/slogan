@@ -222,7 +222,7 @@ artifacts.order_file.exists
 | `json_decode(string)` | any | 解碼 JSON |
 | `default(value, fallback)` | any | null 時回傳 fallback |
 | `coalesce(a, b, ...)` | any | 第一個非 null 值 |
-| `has(field)` | bool | 欄位是否存在 |
+| `has(path)` | bool | 欄位是否存在（見下方語意） |
 
 ### List 操作
 
@@ -234,6 +234,32 @@ artifacts.order_file.exists
 | `list.join(sep)` | string | 串接為字串 |
 
 所有 list 操作回傳新 list（純函式）。
+
+### has() 語意
+
+`has(path)` 對 map field / namespace path 檢查「欄位存在且非 null」；路徑途中任一層為 null → 回 `false`，**不拋異常**（與 CEL 標準 `has()` 對齊，但對 null 寬容處理）：
+
+```
+# steps.x 已 SUCCEEDED，output: { amount: 100 }
+has(steps.x.output)         # true
+has(steps.x.output.amount)  # true
+has(steps.x.output.missing) # false（欄位不存在）
+
+# steps.x 已 SKIPPED，output: null
+has(steps.x)                # true（StepRef 存在）
+has(steps.x.output)         # false（null 視為不存在）
+has(steps.x.output.amount)  # false（short-circuit，不拋異常）
+
+# steps.unknown_id（從未定義）
+has(steps.unknown_id)       # false
+has(steps.unknown_id.output)# false
+```
+
+配合 `default()` / `coalesce()` 做防禦性存取：
+
+```yaml
+amount: ${ has(steps.x.output.amount) ? steps.x.output.amount : 0 }
+```
 
 ---
 

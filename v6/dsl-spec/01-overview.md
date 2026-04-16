@@ -50,6 +50,17 @@ metadata:
   labels: map<string, string> # MAY — 分類用鍵值對
 ```
 
+### labels 傳遞規則
+
+| 來源 | 目的地 | 行為 |
+|------|--------|------|
+| Workflow definition labels | Workflow instance labels | 建立 instance 時複製（同 key 由 instance-time 覆寫） |
+| Project defaults.labels | Workflow / Tool / Function definition labels | 載入期合併（見 `06-project-and-secret.md` 的合併規則） |
+| Tool definition labels | step 執行紀錄 | **不**自動寫入 step instance；僅供 registry 觀測與 metric label 用（`tool_invocations_total{action_name}`；不含 labels dimension 以避免 cardinality 爆炸） |
+| Function definition labels | Function instance labels | 建立 function instance 時複製 |
+
+如 workflow step 需在執行紀錄中保留 Tool labels，應於 `emit` 或 `assign` 中顯式攜帶（引擎不隱式注入）。
+
 ### name 命名規則
 
 | Kind | 格式 | 範例 |

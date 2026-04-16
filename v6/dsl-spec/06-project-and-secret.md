@@ -18,7 +18,7 @@ metadata:
   name: order                   # MUST — kebab-case
   description: "訂單相關定義"
 
-owner: order-team               # MAY — 負責團隊
+owner: order-team               # MAY — 負責團隊（見下方「owner 用途」）
 
 defaults:                       # MAY — project 層級預設
   labels:                       # 自動套用至 project 下所有 definition
@@ -31,6 +31,14 @@ defaults:                       # MAY — project 層級預設
 - Project defaults.labels 先展開，definition 自身 `metadata.labels` **覆寫同名 key**（leaf-wins）
 - 巢狀 project：由根 project 向葉 project 逐層合併；葉 project defaults 覆寫父 project 同名 key；最終 definition labels 覆寫合併後的 defaults
 - 合併為 shallow merge（label value 為 string，無 deep merge 情境）
+
+### owner 用途
+
+v6 中 `owner` 為**文件性**欄位，引擎不做 ACL / 路由檢查：
+
+- 自動寫入 project 下所有 definition 的 `metadata.labels.owner`（如 definition 自身未指定同名 label）
+- `instance.failed` 事件的 `data.owner` 欄位會帶此值，便於告警系統分派（由消費者實作分派邏輯，引擎不直接通知）
+- 未來版本若引入 RBAC / 通知訂閱機制，此欄位將成為識別子；v6 先保留語意空間
 
 ### 資料夾結構
 

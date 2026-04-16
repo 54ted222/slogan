@@ -92,6 +92,7 @@ ErrorObject {
 | `registry.duplicate_action` | 重複註冊 |
 | `registry.name_conflict` | 同類型同名衝突 |
 | `registry.dependency_cycle` | Function 間循環依賴（載入期偵測） |
+| `registry.missing_secret` | workflow.config.secrets 宣告的 secret 不存在於 project scope |
 | `max_recursion_depth_exceeded` | 運行時 function 遞迴深度超限 |
 | `schema_incomplete` | Function callback 只宣告 input_schema 或 output_schema 之一 |
 | `invalid_var_name` | `type: assign` 的 vars key 含 path separator 或保留前綴 |
@@ -188,11 +189,33 @@ def handle_step_failure(step, error):
      type: "user_fail",
      message,
      code,
-     step_id: <current_step_id>
+     step_id: <current_step_id>,
+     cause: <parent_error> | null       # 見下方「catch 中 rethrow」
    }
 3. 依當前位置決定傳播：
-   - 一般 step 序列中：直接 raise（向所在控制結構傳播）
-   - catch handler 中：rethrow，跳出 catch
+   - 一般 step 序列中：直接 raise（向所在控制結構傳播）；cause = null
+   - catch handler 中：rethrow，跳出 catch；cause = catch 觸發的原 error（即 `error.*` namespace 內容）
+```
+
+### catch 中 rethrow 的 error 結構
+
+當 `type: fail` 出現在 catch handler 內：
+
+- 新 ErrorObject 的 `type` 仍為 `"user_fail"`
+- `cause` 欄位指向觸發 catch 的**原 error**（完整保留 `type` / `code` / `cause` 鏈）
+- 下游 catch / observability 可透過 `error.cause.type` 取得原因類型（如 `timeout` / `schema_violation` 等）
+
+範例：
+
+```yaml
+catch:
+  - type: fail
+    message: ${ "wrapped: " + error.message }
+    code: "wrapped_failure"
+# 傳播後：
+#   error.type == "user_fail"
+#   error.code == "wrapped_failure"
+#   error.cause.type == "timeout"   # 原錯誤類型
 ```
 
 `type: "user_fail"` 是頂層 `error.type`；使用者可在 catch 中分流（例如 `when: ${ error.type == "user_fail" && error.code == "order_cancelled" }`）。
