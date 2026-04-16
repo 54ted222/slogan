@@ -110,6 +110,7 @@ ErrorObject {
 | `definition_in_use` | 嘗試刪除仍有 active instance 引用的 definition version |
 | `max_recursion_depth_exceeded` | 運行時 function 遞迴深度超限 |
 | `max_step_executions_exceeded` | instance 執行的 step 次數超過 `config.max_step_executions`（見 `02-instance-lifecycle.md`）；走 config.catch |
+| `registry.unsupported_schema_keyword` | input_schema / output_schema 使用 v6 不支援的 JSON Schema keyword（如 `$ref` / `allOf` / `oneOf`）；載入期拒絕，`details.keyword` 為觸發的 keyword |
 | `schema_incomplete` | Function callback 只宣告 input_schema 或 output_schema 之一 |
 | `invalid_var_name` | `type: assign` 的 vars key 含 path separator 或保留前綴 |
 | `invalid_duration_format` | duration 字面值或 CEL 結果不符 `<N><s/m/h>` 格式 |

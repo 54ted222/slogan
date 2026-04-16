@@ -127,6 +127,14 @@ triggers:
 
 驗證器 MUST 使用嚴格模式（未定義欄位視為違反 `additionalProperties: false`，除非 schema 顯式允許）。
 
+### JSON Schema 版本與子集
+
+- Engine 採 **JSON Schema Draft 2020-12** 為基準
+- 支援關鍵字：`type` / `properties` / `required` / `additionalProperties` / `items` / `enum` / `const` / `minimum` / `maximum` / `minLength` / `maxLength` / `pattern` / `default` / `format`（僅 `date-time` / `email` / `uri` 常用幾種，engine 文件 SHOULD 列出完整支援清單）
+- **不支援**（v6 延後）：`$ref` / `$defs` / `allOf` / `anyOf` / `oneOf` / `not` / dynamic schema composition；使用者若於 schema 中宣告這些 keyword → 載入期拒絕，`error.type: "registry.unsupported_schema_keyword"`、`details.keyword: "<keyword_name>"`
+- 不支援的 `format` 值：engine 實作 SHOULD 記錄 warning 但不 fail（draft 2020-12 中 format 預設為 annotation 而非驗證）
+- 未來版本 MAY 放寬至完整 Draft 2020-12 或擴充 `$ref` 支援；v6 以簡單 schema 為主
+
 ### JSON Schema `default` 套用規則
 
 - 驗證器 MUST 在驗證 **之前** 以遞迴方式套用 `default`：若 input 缺少某欄位（key 不存在）**且** schema 對該欄位宣告 `default`，則補入 default 值

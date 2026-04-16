@@ -192,11 +192,11 @@ Builtin 的 input/output schema 由引擎內建，不需 YAML 定義。
 
 ### Builtin 內建 schema
 
-| Action | input_schema | output_schema | 說明 |
-|--------|--------------|---------------|------|
-| `builtin.echo` | `{type: object}`（任意 map） | 與 input 相同 | 回傳 input；便於測試 |
-| `builtin.sleep` | `{type: object, properties: {duration: {type: string}}, required: [duration]}` | `{type: object, properties: {slept_ms: {type: integer}}}` | duration 依 duration format 解析；engine 以 non-blocking timer 實現（不阻塞 main loop） |
-| `artifact.list` | `{type: object, properties: {artifact: {type: string}}, required: [artifact]}` | `{type: array, items: {type: object, properties: {name: string, size: integer, modified_at: string(RFC3339)}}}` | 列出指定 artifact 子目錄下所有檔案；`artifact` 指 artifact 名稱；不遞迴 |
+| Action | idempotent | input_schema | output_schema | 說明 |
+|--------|-----------|--------------|---------------|------|
+| `builtin.echo` | true | `{type: object}`（任意 map） | 與 input 相同 | 回傳 input；便於測試 |
+| `builtin.sleep` | false | `{type: object, properties: {duration: {type: string}}, required: [duration]}` | `{type: object, properties: {slept_ms: {type: integer}}}` | duration 依 duration format 解析；engine 以 non-blocking timer 實現（不阻塞 main loop）。非 idempotent：retry 會重新 sleep 一次 |
+| `artifact.list` | false | `{type: object, properties: {artifact: {type: string}}, required: [artifact]}` | `{type: array, items: {type: object, properties: {name: string, size: integer, modified_at: string(RFC3339)}}}` | 列出指定 artifact 子目錄下所有檔案；`artifact` 指 artifact 名稱；不遞迴。非 idempotent：檔案系統狀態可能在 retry 間變動 |
 
 未來擴充（v6 保留，**暫不實作**）：
 
