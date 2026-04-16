@@ -91,7 +91,9 @@ stdin 保持開啟；後續行為 `callback_result` 訊息。
 
 #### 邊界規則
 
-- 行長上限：建議 1MiB；超過 → 行視為損壞，driver 寫 stderr log 並丟棄。
+- 行長上限：建議 1MiB；超過 → step FAILED，error.type: `incomplete_protocol`，error.message 包含截斷的前 1KB。
+  - driver 發 SIGTERM 至 tool，等 5s 未退出則 SIGKILL；不得繼續等待後續訊息
+  - 原因：超長行可能是 `type: result` 訊息，丟棄後 tool 端認為成功但 driver 無法判定終態，造成掛起
 - Tool 在收到 `callback_result` 前可繼續輸出 `stream` / 發更多 `callback`。
 - Driver MUST 將 `call_id` 對應表持久化（key: `(instance_id, step_id, call_id)`），避免 process 中途崩潰時 callback 結果遺失。
 - 收到 `result` 後，driver 等待 process exit；若 process 在 `result` 後 5s 內未退出 → SIGTERM；再等 5s → SIGKILL。
@@ -105,8 +107,13 @@ stdin 保持開啟；後續行為 `callback_result` 訊息。
 3. 讀取 stdout / stderr
 4. 依 stdout.format 解析 raw
 5. 若有 stdout.mapping → 對 raw 套 mapping CEL → output
+   - mapping 求值失敗 → step FAILED，error.type: "expression_error.mapping"
+     error.details.raw 保留原始解析結果（便於 debug）
 6. 依 exit_code.success 判斷成功
+   - exit_code 不符 → step FAILED，error.type: "exit_code"（mapping 不再求值）
 ```
+
+mapping 與 exit_code 的處理順序：先檢查 exit_code，再求 mapping。
 
 stdin format：
 

@@ -343,3 +343,41 @@
 - **選項 A**：foreach iteration 內 `type: assign` 為編譯期禁止
 - **選項 B**：維持現狀，由使用者自行確保 key 不衝突（以 `loop.index` 區分）
 - **選項 C**：引入 iteration-local vars namespace（如 `iter.*`）
+
+---
+
+## P. v6 第二輪審閱（2026-04-16，待決策）
+
+第二輪審閱發現 10 個問題，6 個已直接修正（wait step 訊號 race、saga compensate 狀態機、stdout.mapping 失敗處理、idempotency_key 範圍、async foreach 取消傳播、NDJSON 超長行）。剩餘 4 個需決策：
+
+### P1. foreach / parallel `failure_policy: continue` 的 output 型別
+
+目前 output 為陣列，失敗位置填 null。這使下游 CEL 無法區分「未執行」vs「執行成功但輸出為 null」。
+
+- **選項 A**：output 結構改為 `{results: [...], failed_indices: [...]}`，失敗位置仍為 null 但有明確清單
+- **選項 B**：output 每項為 `{status, output?, error?}` 物件（型別安全，但使用者需多一層解構）
+- **選項 C**：維持現狀，使用者以 `has()` 或 `default()` 防禦
+
+### P2. emit scope=workflow 在 function instance 內的傳播範圍
+
+Function instance 內 emit scope=workflow 的事件，是否能被父 workflow 的 wait 訂閱？
+
+- **選項 A**：scope=workflow 嚴格隔離於該 instance（function instance 內外互不相通）
+- **選項 B**：scope=workflow 涵蓋「該 instance 及其所有後代 function instance」（即 instance tree）
+- **選項 C**：引入 `scope: tree` 作為新選項，`workflow` 維持嚴格隔離
+
+### P3. lifecycle destroy 失敗的 instance 終態處理
+
+目前「destroy 失敗僅記錄，不影響 instance 最終狀態」，但若涉及關鍵資源（DB 連線池）洩漏，instance 宣稱成功但系統層有問題。
+
+- **選項 A**：維持現狀（destroy 失敗僅警告）
+- **選項 B**：instance 保留 SUCCEEDED 狀態，但加上 `destroy_failed: true` 欄位於 observability metadata
+- **選項 C**：Tool definition 可標記 `lifecycle.destroy.critical: true`；critical destroy 失敗 → instance FAILED
+
+### P4. wait signals 預設 scope 過濾
+
+目前 scope 欄位 MAY，預設接受任一 scope（workflow/project/global）。多 project 環境中可能誤訂閱。
+
+- **選項 A**：維持現狀（預設寬鬆，由使用者顯式收緊）
+- **選項 B**：預設 scope=project（同 project 及以下），顯式寫 `scope: global` 才跨 project
+- **選項 C**：MUST 欄位，強制使用者明確指定

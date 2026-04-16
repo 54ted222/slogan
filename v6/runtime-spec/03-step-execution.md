@@ -155,7 +155,8 @@ vars 的 scope 是 instance-wide；子 instance 不繼承父 vars。
      { instance_id, step_id, event_type, match_expression, deadline }
    - Step 訊號（有 step 欄位）：
      若目標 step 已終態 → 直接讀取 output 並 SUCCEEDED（fast path）
-     否則訂閱 step.completed 事件
+     否則訂閱 step.completed 事件；事件到達時 MUST 再次讀取 target step 狀態確認已終態
+     （避免 step.completed 投遞過早導致 wait 讀取 undefined output）
 2. 寫 checkpoint：step RUNNING.waiting_signal
 3. 阻塞，無計算成本（engine loop 處理其他 instance）
 4. 任一訊號匹配 → 喚醒；取消其餘訂閱
@@ -209,6 +210,9 @@ caller engine 對 handler 的執行：
 3. 任一 step FAILED 未被內部 catch →
    a. 進入 RUNNING.compensating
    b. 依時間戳降序執行 compensation log 中的所有 compensate
+      - 每個 compensate 在 Instance Store 維護 compensate_state: pending → started → done | failed
+      - started 中的 compensate 崩潰後重啟，engine 依 compensate 的 idempotent 屬性決定是否重跑（建議補償 tool 設為 idempotent: true）
+      - done 狀態的 compensate 重啟後不再重跑（從 checkpoint 直接跳過）
    c. 補償失敗不中止其他補償；累計至 error.details.compensation_failures
    d. 全部補償完成 → step FAILED；error.type == "saga_failed"，error.details.compensation_failures: [...]
    e. 進入 saga.catch（若有）；catch 也可消化錯誤令 saga SUCCEEDED

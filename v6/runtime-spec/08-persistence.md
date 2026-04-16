@@ -160,6 +160,8 @@ RETURNING ...
 
 - exec/http backend 將 `idempotency_key` 注入 `context`；tool 可用此值對外部系統去重。
 - `idempotency_key = hash(instance_id + step_id + attempt + input_snapshot)`；attempt 變動時重新生成。
+- `input_snapshot` 定義為「step 進入 RUNNING 時寫入 checkpoint 的 input 物件」；不含 `when` / `retry.delay` / `timeout` 等控制欄位的求值結果。
+- Tool 若宣告 `idempotent: true`，同一 `idempotency_key` 在引擎重試時 MUST 視為同一邏輯操作；backend driver 在 retry 前會先查 cached output。
 
 ---
 

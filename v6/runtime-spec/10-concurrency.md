@@ -90,6 +90,15 @@ def start_async_foreach(step):
 
 背景 scheduler 持續按 concurrency 推進；達終態後寫 checkpoint、發 `step.completed`。
 
+**取消傳播**：父 instance 被取消 / 超時時，背景 scheduler MUST 收到 `instance.cancel` 訊號：
+
+- 尚未啟動的 iteration：從 pending queue 移除，狀態直接標記為 CANCELLED
+- 已啟動的 iteration：依 `Cancel propagation` 章節流程發 cancel（exec SIGTERM / http close / sub-instance cancel）
+- 等待 `cancel_grace_period` 後，未終態者強制 KILL
+- 全部 iteration 達終態後寫 async foreach 的終態 checkpoint（CANCELLED）
+
+避免「父 instance 已終結但背景 iteration 仍在跑」的僵屍 task。
+
 對應的 `wait` step 在訂閱時：
 - 若目標 step 已終態 → 直接讀取
 - 否則訂閱 `step.completed` 事件
