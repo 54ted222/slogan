@@ -137,6 +137,19 @@ def evaluate(expr_string, ctx) -> Value:
 - 命中後的明文 SHOULD 在 expression scope 結束後立即清除（best-effort）。
 - log / trace 中 `secret.*` 的值 MUST 被遮蔽為 `"***"`。
 
+### 錯誤訊息中的 secret 防洩漏
+
+當 CEL 求值異常（TypeError / method call on null 等）涉及 secret 運算元時：
+
+- Engine MUST 在構造 `ErrorObject` 前對 `error.message` 與 `error.fragment` 做過濾：
+  - 追蹤 SecretAccessor 本次 scope 讀出的明文值集合
+  - `error.message` 中任何與明文子串匹配者替換為 `"***"`（字面量 match；不計算 substring 距離）
+  - `error.fragment` 為 CEL 原文，不含值但可能含 secret key 名（如 `secret.PAYMENT_KEY`）；此為必要的 debug 資訊，不遮蔽
+- 第三方 CEL library 預設錯誤訊息（如 Go cel-go）MAY 序列化運算元摘要 → engine MUST 後處理該訊息，套用上述過濾
+- Redaction 失敗（過濾邏輯本身異常）→ 直接丟棄原 message，用固定字串 `"<redacted: expression error near secret>"` 取代
+
+此規則對所有 persistence 欄位（execution_log、steps.error、instances.error）同步適用。
+
 ---
 
 ## Template 求值

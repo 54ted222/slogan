@@ -46,12 +46,18 @@ Event {
 
 | Scope | 可被誰接收 |
 |-------|-----------|
-| `workflow` | 同一 workflow instance 內的 wait / 內部處理 |
-| `project` | 同一 project 內任何 workflow 的 trigger 或 wait |
-| `global` | 任意 project 的 trigger 或 wait |
+| `workflow` | **僅發送它的同一 instance** 內的 wait（包含 self-emit 場景）；不出實例 |
+| `project` | 同一 project 內任何 workflow 的 trigger 或 wait（含發送者自己） |
+| `global` | 任意 project 的 trigger 或 wait（含發送者自己） |
 | `internal` | 引擎內部訂閱者；不可被 trigger 引用 |
 
 `emit` step 的 scope 屬性決定事件路由範圍；`scope: workflow` 的事件**不會**離開該 instance 的虛擬隔離域，不會送至其他 instance 的 wait。
+
+**Self-emit（同 instance 自發自收）**：
+
+- `scope: workflow` 的 self-emit 走 engine 內的 short-circuit path（不進 Event Bus 外部隊列），直接路由至該 instance 的 wait subscription
+- 仍保持「先 checkpoint 再喚醒」的順序：emit step SUCCEEDED 寫入 checkpoint 後，engine loop 才投遞至 wait
+- `scope: project` / `global` 的 self-emit 經完整 bus 路徑；投遞時序可能晚於同 step 的後續 step，使用者不應依賴 self-emit 的即時性
 
 `scope: project` 與 `global` 事件可同時喚醒多個訂閱者；每個訂閱者收到該事件的獨立副本。
 

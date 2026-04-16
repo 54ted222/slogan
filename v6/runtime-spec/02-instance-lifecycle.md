@@ -192,6 +192,22 @@ Workflow → Function task step → Function instance 三層皆可有 timeout：
 
 ---
 
+## 版本鎖定（Definition pinning）
+
+Workflow / Function instance 建立時 MUST 記錄所用 definition 的 `(name, version)`；instance 生存期內：
+
+- 所有 step 執行、子 function 呼叫、action 解析都**使用該版本快照**；即使 definition 在運行中被更新/重載，instance 的行為不變
+- Registry 為每個 active version 保留完整 definition 記憶體快照；僅當**沒有 active instance** 引用舊 version 時才可 GC
+- 若 definition 被明確刪除（CLI `slogan delete`）而仍有 active instance → 拒絕刪除，error `definition_in_use`
+- 強制刪除（`--force`）→ 所有使用該 version 的 instance 被標記為 FAILED，`error.type: "workflow_version_deleted"`
+
+Trigger 建立新 instance 時：
+
+- Manual / event trigger 皆取 registry 中該 workflow 的**最大 version**（除非 API 帶明確 `version=N`）
+- 新 instance 一旦建立即鎖定該 version，不再隨 definition 更新改變
+
+---
+
 ## 結束後的保存期
 
 | 終態 | 預設保存 |

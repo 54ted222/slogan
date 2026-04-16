@@ -90,8 +90,10 @@ def resolve(action_name: str) -> Action:
 引擎啟動 / project 載入時：
 
 1. 全域唯一性：
-   - 兩個 action 完整 name 相同 → `registry.duplicate_action`
-   - 同類型同名 → `registry.name_conflict`
+   - 兩個 action 完整 name（含 version）相同 → `registry.duplicate_action`
+   - 同 name + 同 version 但 kind 不同（Tool vs Function）→ `registry.name_conflict`
+     - v6 **禁止** Tool 與 Function 共用同一 `name@version`（即使 kind 不同）；registry 為 action name 的單一真相來源，避免呼叫端猜 kind
+     - 同 name 不同 version 共存時，所有 version 必須為同一 kind；混 kind → 載入失敗
 2. Schema 一致性：
    - 同名不同版本：MAY 並存；引用時必須帶 version 或預設取 `version` 最大者（建議由 project 配置）
 3. Lifecycle：

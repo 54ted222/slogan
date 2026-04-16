@@ -120,6 +120,15 @@ metadata:
 - 使用 **MUST** / **SHOULD** / **MAY** 表示要求強度（RFC 2119）
 - 所有識別字 MUST 使用 `snake_case`（step id、variable name、event type）
 
+### YAML anchors / aliases
+
+v6 DSL 允許**單檔內**使用標準 YAML anchors (`&ref`) 與 aliases (`*ref`)、以及 merge key (`<<: *ref`)：
+
+- 範圍僅限單一 YAML 文件；**不跨檔案**
+- 解析器在載入期展開所有 anchor/alias，定義在 registry 中的結構不保留 anchor 資訊
+- 循環 anchor（`&a ... *a`）→ 載入失敗（由 YAML 解析器報錯，engine 不額外處理）
+- 跨檔案共享結構請用 Function（DSL 層）或 secret/env（資料層）；v6 不支援 `!include` 等擴充 tag
+
 ### Duration 格式
 
 ```

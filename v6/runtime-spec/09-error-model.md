@@ -93,6 +93,8 @@ ErrorObject {
 | `registry.name_conflict` | 同類型同名衝突 |
 | `registry.dependency_cycle` | Function 間循環依賴（載入期偵測） |
 | `registry.missing_secret` | workflow.config.secrets 宣告的 secret 不存在於 project scope |
+| `workflow_version_deleted` | instance 綁定的 workflow version 被強制刪除 |
+| `definition_in_use` | 嘗試刪除仍有 active instance 引用的 definition version |
 | `max_recursion_depth_exceeded` | 運行時 function 遞迴深度超限 |
 | `schema_incomplete` | Function callback 只宣告 input_schema 或 output_schema 之一 |
 | `invalid_var_name` | `type: assign` 的 vars key 含 path separator 或保留前綴 |
