@@ -150,13 +150,17 @@ TriggerSubscription {
 
 ```
 1. 求值 match_expr
+   - 異常（identifier / type 錯誤）→ 事件視為不匹配；記錄 warning metric
 2. 求值 input_mapping → 構造 instance input
-3. 驗證 input 符合 workflow.input_schema → 失敗則 reject 並發 alert
+   - 個別欄位求值異常 → 該欄位值為 null（由 schema validation 決定是否接受）
+3. 驗證 input 符合 workflow.input_schema
+   - 失敗 → trigger reject；**不建立 instance**；發內部事件 `trigger.rejected` 含 {workflow_name, trigger_index, event_id, violation_path}
+   - 此錯誤不向業務事件來源回報（event 已進 bus）；由 ops 監控 `trigger.rejected` 事件
 4. 建立新 workflow instance（PENDING）
 5. 發 instance.created 事件
 ```
 
-對 `manual` trigger：由 API / CLI 明確呼叫；不訂閱 Event Bus。
+對 `manual` trigger：由 API / CLI 明確呼叫；不訂閱 Event Bus。input_schema 違反時 API **同步**回傳 4xx + `workflow.input_schema_violation`，呼叫端知錯；不建立 instance。
 
 ---
 
@@ -188,6 +192,7 @@ emit 的順序保證：
 
 | Type | 發送者 | 訂閱者 | 用途 |
 |------|--------|--------|------|
+| `trigger.rejected` | Trigger Resolver | Ops 監控 | input_schema 驗證失敗，instance 未建立 |
 | `instance.created` | Trigger Resolver | Engine Loop | 開始執行 |
 | `instance.completed` | Engine Loop | Engine Loop / 父 instance | 子 instance 終結通知 |
 | `instance.failed` | Engine Loop | 同上 | |

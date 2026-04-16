@@ -69,6 +69,26 @@
 | `data` | jsonb | |
 | `due_at` | timestamp | |
 | `source_instance` | uuid | |
+| `claimed_by` | string \| null | 搶取該 event 的 engine_id；null 表示可被搶取 |
+| `claimed_until` | timestamp \| null | claim 的 TTL；過期視為未 claim |
+
+多 engine 搶取 SQL 模式：
+
+```sql
+UPDATE delayed_events
+SET    claimed_by = $engine_id, claimed_until = now() + 30s
+WHERE  event_id = (
+         SELECT event_id FROM delayed_events
+         WHERE due_at <= now()
+           AND (claimed_by IS NULL OR claimed_until < now())
+         ORDER BY due_at ASC
+         FOR UPDATE SKIP LOCKED
+         LIMIT 1
+       )
+RETURNING *;
+```
+
+投遞成功後 DELETE；投遞失敗則清空 `claimed_by`（下次 retry）。避免時鐘漂移造成重複投遞。
 
 ### resource_pool
 
@@ -189,6 +209,20 @@ RETURNING ...
 - `secret.*` 解密後的明文不寫入任何持久化欄位（input_snapshot / log / output）。
 - 寫入前對 input_snapshot / output / log 做 redaction：以 SecretAccessor 追蹤被讀過的明文 → log writer 將其替換為 `"***"`。
 - TLS / disk encryption 由實作層提供。
+
+---
+
+## Size Limits（存入前檢查）
+
+| 欄位 | 預設上限 | 超限行為 |
+|------|----------|----------|
+| `steps.input_snapshot` | 16 MB | step FAILED，`error.type == "input_too_large"`，error.details.size 保留原始大小 |
+| `steps.output` | 16 MB | step FAILED，`error.type == "output_too_large"`；原 output 不入庫，error.details.preview 保留前 4 KB |
+| `instance.output` | 16 MB | instance FAILED，`error.type == "output_too_large"` |
+| 單筆 `execution_log.payload` | 1 MB | 超限則截斷尾部，log 記錄 truncation 標記 |
+| 單一 event.data（Event Bus） | 1 MB | emit step FAILED，`error.type == "event_too_large"` |
+
+上限可由 engine config 覆寫（`engine.max_step_output_bytes` 等）。超大資料建議以 artifact 儲存並在 output 中傳 path 引用。
 
 ---
 

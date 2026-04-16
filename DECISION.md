@@ -474,3 +474,18 @@ func Register(name string, handler ExtensionHandler)
 ```
 **選項 B**：v6 僅保留 `extension` 為佔位，具體 SPI 延後至獨立 `extension-spec/`
 **選項 C**：跨語言 SPI 以 WASM component model 統一，避免 Go plugin ABI 問題
+
+---
+
+## T. v6 第六輪審閱（2026-04-16，待決策）
+
+第六輪新發現 5 項，4 項已直接修正（delayed_events atomic claim、巢狀 saga 補償順序、trigger input_schema 驗證失敗路徑、大 output 儲存上限）。剩餘：
+
+### T1. 未加密 Secret 檔的防呆機制
+
+`is_encrypted: false` 的 Secret YAML 可能被誤提交至 Git。目前規格無機械式防護。
+
+- **選項 A**：CLI `slogan deploy` 載入時若遇 `is_encrypted: false` 直接拒絕；要求先 `slogan secret encrypt`
+- **選項 B**：引擎啟動載入時拒絕 `is_encrypted: false`（強制所有 Secret 必須加密）
+- **選項 C**：提供 `slogan init` 自動建立 `.gitignore` + pre-commit hook，但引擎仍接受明文（開發便利）
+- **選項 D**：Secret metadata 增加 `git_safe: false` 標記；有此標記的檔案 engine MAY 拒絕載入除非明示 `--allow-plaintext-secrets`

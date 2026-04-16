@@ -93,6 +93,9 @@ ErrorObject {
 |------|------|
 | `workflow.input_schema_violation` | trigger 階段輸入驗證失敗 |
 | `output_schema_violation` | return 輸出驗證失敗 |
+| `input_too_large` | step input snapshot 超過 size limit |
+| `output_too_large` | step / instance output 超過 size limit |
+| `event_too_large` | emit event.data 超過 size limit |
 
 ### 系統 / 內部
 

@@ -453,6 +453,10 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
   - 不同分支 / 不同迭代間**無全序保證**，補償可能並行進行
   - 同一分支或同一迭代內部仍遵循時間戳降序
   - 分支間有隱含依賴時，補償順序由 tool 作者自行以 idempotent 設計處理；引擎不提供依賴宣告
+- **巢狀 saga**：內層 saga 視為外層的單一 step
+  - 內層 saga 自己先完成（含可能的補償）才算「內層 saga step 終態」
+  - 外層 saga 觸發補償時，內層 saga 若已成功，只執行外層補償層邏輯；若內層 saga 已處於 compensating，外層等待內層補償結束再繼續外層補償鏈
+  - 排序規則：內層整體視為一個時間點（進入 SUCCEEDED 的時戳）參與外層的降序補償
 - 無 `compensate` 的 step（Tool 未定義且 step 未覆寫）跳過
 
 #### 補償失敗處理
