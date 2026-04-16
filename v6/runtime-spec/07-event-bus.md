@@ -123,13 +123,27 @@ WaitSubscription {
       match_expr: CEL | null,
     }
   ],
-  deadline:        timestamp,    # 由 wait.timeout 計算
+  deadline:        timestamp,    # 由 wait.timeout 計算；一次性決定、寫入 checkpoint
   any_of:          bool,         # signals 模式下恆為 true（任一匹配即喚醒）
   created_at:      timestamp,
 }
 ```
 
 訂閱寫入 Instance Store 的 wait_subscriptions 表（持久化），同步於 Event Bus 的訂閱者註冊（in-memory）。
+
+**Deadline 決定時機**：
+
+- `wait.timeout` 求值發生在 step 進入 RUNNING 前、與其他欄位（`signals[].match`）同一批次；若求值錯誤 → step 直接 FAILED，`error.type == "expression_error"`（不建立 subscription）
+- `deadline = <subscription 寫入 store 的 transaction commit 時刻> + <timeout 求值結果>`；**一次性決定**，寫入 checkpoint 後不再重算
+- Engine 重啟 / failover 後 MUST 沿用 checkpoint 中的 `deadline`，即使 `wait.timeout` 是 CEL 表達式也不重新求值（避免 replay 與線上執行的偏差）
+- 若缺省 `wait.timeout` → `deadline = null`，表示無限等待（僅 instance / workflow timeout 可終止）
+- 若 `timeout` 求值為 `0` 或負值 → step 在訂閱寫入前 FAILED，`error.type == "invalid_timeout"`
+
+**Subscription 建立與 step signal 的競賽**：
+
+- 若 `signals` 內含 step 訊號且目標 async step **已終態**：走 fast path（見 `03-step-execution.md` 的 `type: wait`），不建立 subscription
+- 若目標 async step **尚未啟動**（PENDING，例如 wait 在 parallel 的另一 branch 中先執行）：`step.completed` 事件仍以 event bus 訂閱方式等待，subscription 於其 `deadline` 到期前保留
+- 若目標 step **不存在於 workflow definition**（載入驗證已拒絕）：此情境不會進入執行期；但若 definition 重載替換後 step 消失，engine 以 `error.type == "invalid_signal_target"` 讓 wait step 立即 FAILED
 
 **Subscription 清理規則**：
 

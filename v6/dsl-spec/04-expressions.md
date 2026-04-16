@@ -181,12 +181,20 @@ artifacts.order_file.exists
 | Instance PENDING → RUNNING | Engine 建立 `<workspace_root>/<instance_id>/` 目錄（mode 0700） |
 | First tool 引用 `artifacts.<name>.path` | Engine 建立 `<workspace_path>/artifacts/<name>/` 子目錄（lazy） |
 | Step 執行中 | Tool 可讀寫 `artifacts.<name>.path` 下檔案；engine 不介入內容 |
-| `artifacts.<name>.exists` 求值 | 檢查該 artifact 目錄存在且至少含一個檔案（非空目錄視為 exists） |
+| `artifacts.<name>.exists` 求值 | 檢查該 artifact 目錄存在且至少含一個檔案（非空目錄視為 exists）— **snapshot 語意**：僅保證求值瞬間結果；不阻止後續刪除。若欲安全讀檔請直接在 tool 內打開檔案並處理 `ENOENT` |
+| Instance 進入終態（SUCCEEDED / FAILED / CANCELLED） | Engine 即刻對 `<instance_id>/` workspace 加**寫鎖**；此後所有 tool spawn 以唯讀 mount 形式掛入（`ro`），`catch` handler 仍可讀取 artifact 但**不得寫入** |
 | Instance 終結 | 依 `retention_until` 時刻清理整個 `<instance_id>/` 目錄（跟隨 instance 保存期；見 `08-persistence.md`） |
 | Instance CANCELLED 或 FAILED | 保留至保存期（預設 30 天 FAILED / 7 天 CANCELLED），便於 debug |
 
 - Artifact 不跨 instance 共享；每 instance 獨立 workspace
 - 複雜 artifact（宣告式 artifact definition、retain policy、遠端 source）為未來版本功能（見 `FUTURE.md`），v6 僅支援 per-instance 隱式建立
+
+**並發與生命週期規則**：
+
+- 同一 step 執行中對 artifact 目錄的並發寫入（tool 自身產生的 I/O）engine 不仲裁；tool 自行負責檔案鎖。
+- `artifacts.<name>.exists` 求值採 snapshot：若在同一 CEL 表達式中多次引用同一 artifact，求值器 MUST 在該表達式生命期內快取首次結果（避免單一表達式內部不一致）。
+- Tool lifecycle `destroy` hook（見 tool spec）若需存取 artifact：MUST 在 instance 進入終態前執行並完成；`destroy` 執行期間 engine 暫緩 workspace 寫鎖切換。超過 lifecycle 宣告的 `destroy.timeout` → 強制加鎖並視 `destroy` 為失敗（記錄 observability 事件，不影響 instance 終態）。
+- 清理（retention 到期刪除 workspace）MUST 以 atomic rename 至 `<workspace_root>/_pending_delete/<instance_id>/` 後再刪除；任何殘存的讀取（例如 ops 工具直接開啟檔案）不會看到半刪除狀態。
 
 ---
 

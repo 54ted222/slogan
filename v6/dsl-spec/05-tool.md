@@ -725,6 +725,14 @@ tool → 引擎（發出 callback 請求）：
 {"type": "callback_result", "call_id": "cb-1", "error": {"type": "string", "message": "string"}}
 ```
 
+引擎 → tool（callback 被 caller step timeout 中斷；特例 error type）：
+
+```json
+{"type": "callback_result", "call_id": "cb-1", "error": {"type": "timeout", "message": "caller timeout"}}
+```
+
+收到 `"type":"timeout"` 的 callback_result 表示 caller 已放棄本 step；tool SHOULD 儘速輸出 `result` 結束（引擎也會關閉 stdin）。超時見 [runtime-spec/02-instance-lifecycle.md 的「Callback timeout 規則」](../runtime-spec/02-instance-lifecycle.md#callback-timeout-規則)。
+
 tool → 引擎（最終結果，之後 close stdout）：
 
 ```json

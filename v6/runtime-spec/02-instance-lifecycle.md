@@ -170,6 +170,20 @@ Workflow Instance
 | `wait.timeout` | wait subscription 建立 | event 到達 / step 終態 | wait FAILED，`error.type == "timeout"` |
 | `callback timeout` | 發出 callback 訊息 | handler `return` | callback step FAILED，`error.type == "timeout"` |
 
+### Callback timeout 規則
+
+Callback 無獨立 timeout 欄位；採用以下規則：
+
+- Tool callback（`05-tool.md` 協議的 `{"type":"callback",...}`）與 function callback（`05b-function.md` 的 `type: callback`）共用同一規則。
+- **Callback 等待期間繼承當前 step 的 timeout 剩餘時間**；即 `step.timeout` 時鐘在 callback 發出後不暫停。若發出 callback 時 step 已剩 5s，callback handler MUST 在 5s 內完成並回覆。
+- 若 step 未設 `timeout`，依順序向上繼承：function `config.timeout` → workflow `config.timeout`；皆無則 callback 可無限等待（不建議）。
+- Callback 逾時處置：
+  1. 引擎標記 step FAILED，`error.type == "timeout"`
+  2. Tool 端：引擎 MUST 對同一 `call_id` 回覆 `{"type":"callback_result","call_id":"...","error":{"type":"timeout","message":"caller timeout"}}`，讓 tool 可清理；之後引擎關閉 stdin / SSE 連線
+  3. Function callback：caller 撤銷 handler 的 pending state；function instance 收到 callback_result error 自行決定是否 FAILED
+  4. 若 callback 遲到（step 已終態後才送達 callback_result）→ 引擎丟棄該訊息並記錄 `callback.late_result` 觀測事件
+- Tool 協議可附 `deadline` 欄位：引擎首次 callback 請求時 MAY 於 `input` 之外帶 `deadline` (Unix 毫秒) 告知 tool 當前 callback 必須在何時前回覆；tool 側未實作者 MAY 忽略。
+
 Timeout 計時器 SHOULD 持久化（記錄 deadline 而非剩餘秒數），確保 engine 重啟後仍能正確觸發。
 
 ### 巢狀 timeout 的先到先生效

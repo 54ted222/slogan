@@ -63,6 +63,26 @@ triggers:
 
 驗證器 MUST 使用嚴格模式（未定義欄位視為違反 `additionalProperties: false`，除非 schema 顯式允許）。
 
+### 驗證層級分工
+
+Schema 驗證分三個獨立層級，各司其職、不互相代勞：
+
+| 層級 | Schema 來源 | 驗證時機 | 失敗行為 |
+|------|-------------|----------|----------|
+| Workflow instance input | `workflow.input_schema` | trigger 建立 instance 前 | 拒絕建立 |
+| Workflow instance output | `workflow.output_schema` | 終結 `return` 前 | instance FAILED |
+| Function instance input / output | `function.input_schema` / `function.output_schema` | 同上（各自對 function instance） | 同上（在 function instance 層級失敗）|
+| Task step 的 tool input | 被呼叫的 Tool definition 的 `input_schema` | step 進入 RUNNING、CEL 求值後、呼叫 backend 前 | step FAILED，`error.type == "tool_input_schema_violation"` |
+| Task step 的 tool output | 被呼叫的 Tool definition 的 `output_schema` | backend 回傳、寫入 checkpoint 前 | step FAILED，`error.type == "tool_output_schema_violation"` |
+| Callback input / output | `callback.input_schema` / `callback.output_schema`（見 `05b-function.md`） | callback 傳入 caller 前 / handler return 後 | callback_result 以 error 回傳 |
+
+驗證原則：
+
+- **CEL 求值結果即視為最終型別**；驗證器不對 CEL 輸出做自動強制轉換（`int(x)` 之類的強制轉換須由使用者顯式呼叫）。例：若 schema 要求 `integer` 而 CEL 傳入 `3.0`（double），驗證失敗而非靜默轉型。
+- Task step 的 `input:` map 不通過 workflow 級 `input_schema`，只受 Tool 的 `input_schema` 檢查。
+- Workflow 的 `input_schema` **不** 連鎖套用到任何 step；子 step 對 `input.*` 的引用只保證「CEL namespace 可解析」，不額外驗證。
+- Tool output 僅在 task step 層驗證，不再於 workflow `output_schema` 重驗（除非該 output 被 `type: return` 引用）。
+
 ```yaml
 input_schema:
   type: object

@@ -207,6 +207,16 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
   - `ignore`：迭代失敗視為 `null` output；foreach 永遠 SUCCEEDED。
 - 迭代內部 step 的 `catch` 在 `failure_policy` 之前求值；被 catch 處理的失敗不視為迭代失敗。
 
+### 迭代內的 step 可見性
+
+`do[]` 中的 step 屬於**每迭代獨立的作用域**，引擎為每次迭代建立一個 frame：
+
+- `loop.item` / `loop.index` 於 frame 生命期內固定，不受其他迭代影響。
+- `steps.*` namespace 僅可見**本迭代已完成的 step**；無法跨迭代讀取（例如迭代 3 無法讀迭代 2 的 `steps.foo.output`）。需要跨迭代累積請改用 `vars`（搭配 `concurrency: 1`）或 foreach 完成後讀整個陣列 `steps.<foreach_id>.output[i]`。
+- `prev` 僅指向**本迭代內**語法上的前一 step；迭代的第一個 step `prev == null`。
+- `when` 於各迭代獨立求值；同一 step id 可能在某些迭代 SKIPPED、某些迭代 SUCCEEDED。
+- Output 陣列的位置即使對應迭代 SKIPPED / FAILED / `ignore`（見 `failure_policy`），**MUST 以 `null` 占位**以維持 index 對齊（foreach output 長度恆等於 items / count）；SKIPPED 與 FAILED 在陣列中不可區分，需檢查 `steps.<foreach_id>.output[i] == null` 並搭配 `error.failed_indices` 辨識。
+
 ---
 
 ## parallel
@@ -229,6 +239,15 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 - `async: false`（預設）：阻塞模式，等待所有 branches 完成。Output 為一個 array，索引對應 branches 順序。
 - `async: true`：非阻塞模式，啟動後立即繼續下一步。須搭配 `type: wait` 的 `step` 模式取得結果。
+
+### Branch 作用域
+
+各 branch 為**獨立作用域**，規則與 foreach 迭代類似：
+
+- `steps.*` 僅可見**本 branch 已完成**的 step；branches 間無法互讀 output。跨 branch 共享資料請於 parallel 前以 `assign` 寫入 `vars`（注意 branch 內對 `vars` 的寫入僅對**本 branch**可見；parallel 結束後不保留，避免並發 race）。
+- `prev` 僅指向本 branch 語法上的前一 step。
+- `when` 於各 branch 內獨立求值；不同 branch 的同名 step id **MUST** 由載入驗證器拒絕（parallel 內所有 branch 的 step id 集合必須互斥、且不與外層衝突），以避免 `steps.<id>` 解析歧義。
+- Output 陣列長度固定等於 branches 數；若某 branch 的最後一個 step SKIPPED 或整個 branch 為空 → 該索引位置為 `null`。`failure_policy: continue` / `ignore` 時失敗 branch 亦以 `null` 占位。
 
 ---
 
