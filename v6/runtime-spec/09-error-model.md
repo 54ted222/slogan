@@ -69,7 +69,12 @@ ErrorObject {
 
 | code | 觸發 |
 |------|------|
-| `spawn_failed` | exec backend process spawn 失敗 |
+| `spawn_failed` | exec backend process spawn 失敗（聚合碼） |
+| `spawn_failed.not_found` | command 檔案不存在（`ENOENT`） |
+| `spawn_failed.permission_denied` | command 無執行權限（`EACCES` / `EPERM`） |
+| `spawn_failed.resource_exhausted` | fork 失敗，通常因 PID 上限或 RLIMIT（`EAGAIN`） |
+| `spawn_failed.oom` | OS OOM killer 於 spawn 階段觸發 |
+| `spawn_failed.working_dir` | `working_dir` 不存在或無權限 |
 | `incomplete_protocol` | tool 未發出 result 即結束 |
 | `exit_code` | exit code 不在 success 列表 |
 | `http_error` | HTTP 4xx/5xx 在 error_on_status 列表 |

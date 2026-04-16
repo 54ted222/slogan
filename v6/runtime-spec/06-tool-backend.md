@@ -266,7 +266,7 @@ extension handler 必須是 in-process（Go plugin、Python entry point、WASM m
 
 | 監測項 | 行為 |
 |--------|------|
-| Process spawn 失敗 | ToolResult `error.type == "spawn_failed"` |
+| Process spawn 失敗 | ToolResult `error.type` 依原因細分（見 `09-error-model.md`）：`spawn_failed.not_found` / `permission_denied` / `resource_exhausted` / `oom` / `working_dir`；error.code 保留 errno 數值 |
 | stdout 超過 size limit（建議 16MB） | 截斷尾部；保留前段；error 記錄 truncation |
 | Process 寫 stderr 速率過高（建議 > 10MB/s） | rate-limit log；其餘丟棄 |
 | HTTP body 超過 size limit | 同上 |

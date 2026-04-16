@@ -73,6 +73,21 @@ Definition name 自動加上 project 路徑前綴：
 
 支援子 project，每一層都需要 `project.yaml`。子 project 繼承父 project 的 defaults，可覆寫。
 
+### 載入順序與 defaults 合併
+
+引擎啟動時對 projects 資料夾深度優先掃描：
+
+1. 依檔案樹由根到葉收集所有 `project.yaml`
+2. 按深度升序逐層建立 defaults chain：`[root, level1, level2, ...]`
+3. Action 載入時，其所屬 project 的 defaults 已由外向內疊加完成（外層先展開，內層覆寫同 key）
+4. 最後將 action 自身的 `metadata.labels` 疊加在合併後 defaults 上（leaf-wins）
+
+**跨 project 引用**：
+
+- Project A 的 action 使用 `action: b/some.action` 引用 Project B 的 action，載入驗證時會觸發 Project B 先完成載入（自動相依）
+- 循環依賴（A → B → A）在 `registry.dependency_cycle` 檢查中偵測
+- 若 B 的 action 使用 project defaults 的版本預設，B 自身的 defaults 優先，而非呼叫端 A 的 defaults
+
 ---
 
 ## Part B — Secret Definition（`kind: Secret`）

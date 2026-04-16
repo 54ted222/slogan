@@ -402,13 +402,27 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 ## return
 
-結束 workflow instance，標記為 SUCCEEDED。
+結束 **當前 instance**，標記為 SUCCEEDED。
 
 ```yaml
 - type: return
   output: # MAY
     status: "completed"
 ```
+
+### 作用域規則
+
+| 位置 | 行為 |
+|------|------|
+| Workflow 頂層 steps[] | 結束整個 workflow instance；output 為 return 值 |
+| Function 頂層 steps[] | 結束該 function instance；output 回傳給呼叫端 task step |
+| `foreach.do[]` | **只結束當前迭代**；該迭代視為 SUCCEEDED，output 為 return 值；foreach 繼續其他迭代 |
+| `parallel.branches[i].steps[]` | 只結束該 branch；其他 branch 不受影響 |
+| `if.then` / `if.else` / `switch.cases[].then` | 結束外層最接近的 instance（workflow 或 function）；分支結構不建立新 scope |
+| `saga.steps[]` | 結束外層最接近的 instance；saga 不捕獲 return |
+| `catch[]` | 結束外層最接近的 instance |
+
+若需在 foreach / parallel 內提前中止整個 workflow，使用 `type: fail`（錯誤向上傳播）或外層 `if` 判斷後於迴圈外 `return`。
 
 ---
 

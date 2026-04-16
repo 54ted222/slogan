@@ -20,6 +20,24 @@ message: "Order ${ input.order_id } is ${ steps.check.output.status }"
 amount: ${ steps.load.output.amount }    # integer
 ```
 
+### YAML 與 CEL 的 escape 交互
+
+- YAML 先一層 unescape（依 scalar 類型：plain / single-quoted / double-quoted / block），再由引擎掃 `${ }` 解析內部 CEL
+- CEL 字串字面值使用 `"..."` 或 `'...'`，escape 規則為 CEL 標準（`\"`、`\\`、`\n` 等）
+- 當 CEL 字串含 YAML 特殊字元（`:`、`#`、`{}` 等）時 SHOULD 以 block scalar (`|` / `>`) 避免雙層 escape 地獄：
+
+  ```yaml
+  # 推薦：block scalar 包裹含引號的 CEL
+  query: |
+    ${ "SELECT * FROM orders WHERE status = \"pending\"" }
+
+  # 避免：plain scalar 中混用 YAML 與 CEL escape
+  # query: ${ "SELECT * FROM orders WHERE status = \"pending\"" }  # YAML 解析歧義
+  ```
+
+- 多行 CEL 表達式：YAML 的 `|` block scalar 保留換行，但 CEL 解析前會先將換行視為 whitespace（CEL 語法允許跨行）。建議將長表達式拆分為 `assign` 中間變數以提升可讀性
+- 單一 `${ }` 佔整值時型別保留；若 `${ }` 外有任何其他字元（含空白），整值強制轉 string
+
 ---
 
 ## 求值上下文（Namespaces）

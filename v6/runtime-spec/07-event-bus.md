@@ -183,6 +183,16 @@ TriggerSubscription {
 
 對 `manual` trigger：由 API / CLI 明確呼叫；不訂閱 Event Bus。input_schema 違反時 API **同步**回傳 4xx + `workflow.input_schema_violation`，呼叫端知錯；不建立 instance。
 
+#### Trigger 效能與索引
+
+高事件吞吐場景（10K+ events/s × 數千 trigger subscription）不能對每事件 O(N) 全掃 CEL：
+
+- Trigger Resolver MUST 以 `event_type` 建立 index（hash map），事件到達時 O(1) 取回候選 triggers
+- 候選 triggers 的 `when` CEL MUST 在載入期預編譯（parse + type check）；執行期只做 evaluate
+- `when` 求值異常（identifier / type error）→ 該 trigger 視為不匹配（log warning，不拒絕事件；避免一個壞 trigger 癱瘓整個事件流）
+- 建議實作再對 `when` 內的常量條件（如 `event.data.source == "api"`）做 partial evaluation，在 index 層額外分桶
+- 監控指標：`trigger_eval_duration_ms{workflow}` histogram
+
 ---
 
 ## emit step
