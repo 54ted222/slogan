@@ -226,7 +226,14 @@ else:
 
 - `working_dir`：預設為 `artifacts._workspace_path`（即 `<engine.workspace_root>/<instance_id>`）；CEL 支援 `${ }`（如引用 `artifacts.<name>.path`）
   - Engine MUST 在 tool spawn **前**確保 `working_dir` 存在（若引用 artifact path，則確保對應 artifact 目錄已建立）
-  - `working_dir` 求值結果 MUST 在 workspace 下（canonical 化後以 workspace_path 為前綴）；escape 外部 → ToolResult `{success: false, error: {type: "spawn_failed.working_dir"}}`
+  - `working_dir` 求值結果 MUST 在 workspace 下；engine 於 CEL 求值後、spawn 前以下列程序驗證（**canonical 路徑定義**）：
+    1. 將 `working_dir` 字串與 `<engine.workspace_root>` 同時做**平台原生的 realpath 解析**（遞迴展開所有 symlink，直到非 symlink 為止；POSIX 用 `realpath()` / Windows 用 `GetFinalPathNameByHandle`）
+    2. 標準化 `.` / `..` segments，於 case-insensitive 檔案系統（HFS+ / NTFS default）執行 case folding
+    3. 以**bytewise prefix match** 比對 canonicalized `working_dir` 是否以 `canonicalized <workspace_root>/<instance_id>` 為前綴（允許完全相等或 `/` 分隔的子路徑；拒絕 `<root>-sibling` 類似字首誤判）
+    4. Symlink 解析失敗（如 broken link、permission denied、循環 symlink）→ 視為 escape 意圖拒絕
+    5. 路徑不存在：allowed — engine 於 step 1 解析 symlink 成功但目標不存在時，以現有祖先目錄的 realpath + 剩餘 literal segments 重建；若剩餘 segments 無 `..` 跳脫 workspace 即通過
+  - 驗證於 **每次 spawn 前** 重做（即便同一 step 的 retry 也重驗；避免 TOCTOU：symlink 在 retry 間被替換）
+  - escape 外部 → ToolResult `{success: false, error: {type: "spawn_failed.working_dir_escape", details: {canonical_path, workspace_path, reason: "prefix_mismatch" | "symlink_resolve_failed" | "broken_symlink"}}}`（`spawn_failed.working_dir` 舊錯誤碼繼續適用於目錄不存在或無權限的情況）
 - `shell`：明確指定時用該 shell 執行 `command`；未指定時直接 `exec()` `command + args`，不經 shell（避免 quoting 問題）。
   - 接受值：**絕對路徑**（如 `/bin/bash`、`/usr/bin/env zsh`）或**檔名**（`sh`、`bash`、`zsh`、`dash`、`ash`、`busybox`）
   - 檔名會透過 `PATH` 查找；找不到 → ToolResult `{success: false, error: {type: "spawn_failed.not_found"}}`
@@ -240,9 +247,20 @@ else:
 
 - **Merge 語意**：同 key 由後者覆寫、不同 key 皆保留；即若 backend.env 未宣告 `PATH` / `HOME`，process 仍繼承 OS 的值（不會被清空）
 - **系統必要變數**：若 backend.env 明確設 `PATH: "/custom/bin"` → process 只看到 `/custom/bin`（覆寫 OS PATH）；使用者若想「追加」請顯式拼接：`PATH: "${ env.PATH }:/custom/bin"`（需先在 engine 的 `env` namespace 中看到 `env.PATH`）
-- **清空特定變數**：設為空字串 `""` → process env 仍含該 key 但值為空；若需**完全刪除**該 key（如禁止子 process 繼承 `AWS_ACCESS_KEY_ID`），目前 v6 **不支援**；替代方案為不使用 OS 環境傳遞機密，改用 `secret.*`
 - **敏感變數攔截**：engine **不**預先過濾 OS env（不建議在系統環境傳機密）；若 operator 啟動 engine 時該環境變數已存在，tool process 會自然繼承；建議部署時以最小 env 啟動 engine
-- **預留 key**：engine 保留 `SLOGAN_*` 前綴；backend.env 使用 `SLOGAN_*` → 載入期警告（非錯誤），執行時仍注入以供 tool 讀取 engine 注入的 metadata
+- **預留 key（SLOGAN_* 前綴）**：engine 保留 `SLOGAN_*` 前綴作為 metadata 注入通道；規則如下：
+  - backend.env 使用 `SLOGAN_*` key → **載入失敗**，`registry.invalid_env_key`、`details.reason: "reserved_prefix"`；由使用者設值可能遮蔽 engine 注入值並造成 tool 混淆
+  - Engine 於每次 spawn tool process 時自動注入以下 SLOGAN_* 變數（exec / raw / stream 模式皆注入；extension 模式以 context map 傳遞同樣欄位）：
+    - `SLOGAN_INSTANCE_ID` = 當前 instance uuid
+    - `SLOGAN_STEP_ID` = 當前 task step 的 step_id
+    - `SLOGAN_STEP_PATH` = 含巢狀路徑（見 `08-persistence.md` steps.step_path）
+    - `SLOGAN_ATTEMPT` = 當前 attempt 序號（retry 計數，從 1 起算）
+    - `SLOGAN_IDEMPOTENCY_KEY` = 見 `08-persistence.md` 的 idempotency_key 定義
+    - `SLOGAN_TRACE_ID` = instance 的 trace_id
+    - `SLOGAN_ACTION_NAME` = resolved canonical action name（含 project 前綴與 version）
+    - `SLOGAN_ENGINE_ID` = 當前持有 lease 的 engine_id
+  - 未來若新增 SLOGAN_* 變數，tool 讀取未知 key 視為 optional；不存在則 fallback 至 tool 預設行為
+- **空字串清空**：設為空字串 `""` → process env 仍含該 key 但值為空；若需**完全刪除**該 key（如禁止子 process 繼承 `AWS_ACCESS_KEY_ID`），目前 v6 **不支援**；替代方案為不使用 OS 環境傳遞機密，改用 `secret.*`；若環境變數刪除為剛性需求，建議以 wrapper script 於 tool 啟動前清理
 
 `secret.*` 注入後在 process 環境中以明文存在；driver 啟動後**立即**從本身記憶體中清除其副本（best-effort），避免 dump core 時暴露。
 
@@ -305,9 +323,16 @@ Content-Type 以 application/json 為主（含 +json suffix 如 application/ld+j
   → 嘗試 json_decode → 成功則 raw = decoded value
   → 失敗（body 為 JSON 但語法錯）→ step FAILED，error.type == "http_body_malformed_json"、error.details.preview 保留前 1 KB
 其他 Content-Type：
-  → raw = string body（以 Content-Type 宣告的 charset 或預設 UTF-8 解碼）
-  → 解碼失敗 → error.type == "http_body_decode_failed"
+  → raw = string body（依下述「charset 解析順序」決定編碼）
+  → 解碼失敗 → error.type == "http_body_decode_failed"、error.details.encoding_tried 保留嘗試的編碼名
 ```
+
+**charset 解析順序**（依序嘗試，首個適用即採用）：
+
+1. 若 `Content-Type` header 含 `charset=<name>` 參數 → 以該 charset 解碼（IANA 名稱大小寫不敏感；未知 charset 名 → `http_body_decode_failed`、`error.details.reason: "unknown_charset"`）
+2. 否則檢查 body 前 4 bytes 之 BOM：`EF BB BF` → UTF-8、`FE FF` → UTF-16-BE、`FF FE` → UTF-16-LE、`00 00 FE FF` → UTF-32-BE、`FF FE 00 00` → UTF-32-LE；BOM 本身於解碼後移除
+3. 無 charset 且無 BOM → 預設 **UTF-8**（符合 RFC 3629 對 JSON 的規範；對非 JSON body 亦採同預設以求一致）
+4. 若 content-type 為 `application/json` 無 charset 且解碼結果含 non-UTF-8 序列 → `http_body_decode_failed`，不做自動偵測（engine 不猜測 Latin-1 / Windows-1252；需要請設 `response.mapping` 自訂處理或改 tool backend 為 exec + stdout raw）
 
 `response.mapping` 若存在則對 raw 套 CEL 得最終 output；失敗 → `expression_error.mapping`。
 

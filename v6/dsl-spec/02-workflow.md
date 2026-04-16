@@ -64,7 +64,12 @@ triggers:
 
 若同一事件（相同 `event.id`）同時匹配**同一 workflow** 的多個 event trigger（不同 `when` / `scope` / `input_mapping`）：
 
-- 引擎**僅建立一個 instance**；選用 `triggers[]` 陣列中**索引最小**的那個 trigger 的 `input_mapping` 與 `scope` 規則執行
+- 引擎**僅建立一個 instance**；選用 `triggers[]` 陣列中**通過 `scope` 與 `when` 過濾後索引最小**的那個 trigger 的 `input_mapping` 與 `scope` 規則執行
+- **選取順序**：先依 triggers[] 索引由小至大列出 event / manual 型 trigger；對每個 trigger 依序判定 scope 匹配、`when` 求值 → 第一個通過者即為「被選中 trigger」；其餘不再求值（避免副作用與 CEL 開銷）
+- **去重與多匹配的原子性**：去重檢查（步驟 2）以 `(workflow_name, workflow_version, event.id)` 為 key，**per-event 執行一次**（非 per-trigger）。流程為：
+  1. 先依上述順序找到「被選中 trigger」（未通過任一 trigger → 事件被丟棄，不進 dedup 表，發 `trigger.skipped` observability 事件）
+  2. 找到被選中 trigger 後，以 INSERT `(workflow_name, workflow_version, event.id)` 至 trigger_dedup 表並以 unique 衝突判定去重；INSERT 成功 → 進入 input_mapping；INSERT 衝突 → 視為重複投遞，丟棄事件（ack）、不建立 instance
+  - 此順序確保「未被選中的 trigger 不佔用 dedup slot」；後續同 `event.id` 若因 trigger 定義變更匹配到其他 trigger，仍會被 dedup 表擋下（設計意圖：以 event.id 為去重鍵，不因 trigger 版本差異重複觸發）
 - 未被選中的 trigger 不執行；不發出警告（由使用者自行避免冗餘 trigger）
 - 此選擇寫入 `instance.triggered_by_trigger_index`（便於追蹤）
 - 跨**不同 workflow** 的 trigger 匹配（即使同 event）→ 各自獨立建立 instance（見現有「at-least-once」與去重規則）；同一事件在不同 workflow 之間不去重
@@ -74,18 +79,19 @@ triggers:
 每個匹配的事件通過以下固定順序處理（任一失敗即停止並進入對應失敗路徑）：
 
 ```
-1. scope 過濾（event.scope 符合 trigger.scope）
-2. 去重檢查（trigger_dedup 表查 event.id）
-3. when CEL 求值（namespace: event / env / secret / project；不含 input — 此時尚未映射）
-4. input_mapping CEL 求值（namespace: event / env / secret / project；產出 input 候選值）
-5. workflow.input_schema 驗證（對 input 候選值）
-6. 建立 instance（寫入 action_pins / trace_id / labels snapshot / 等）
-7. 發 instance.created 事件
+1. 選取 trigger：依 triggers[] 索引由小至大，對每個事件型 trigger 判定 scope 匹配與 when CEL；
+   第一個通過者為「被選中 trigger」；皆未通過 → 丟棄事件（不進 dedup、不建立 instance）
+2. 去重檢查 + insert（trigger_dedup 表以 (workflow_name, workflow_version, event.id) 為 key 做 INSERT；
+   衝突 → 丟棄事件 ack）
+3. input_mapping CEL 求值（namespace: event / env / secret / project；產出 input 候選值）
+4. workflow.input_schema 驗證（對 input 候選值）
+5. 建立 instance（寫入 action_pins / trace_id / labels snapshot / triggered_by_trigger_index / 等）
+6. 發 instance.created 事件
 ```
 
-- 步驟 3、4 的 CEL namespace **不含** `input` —— input 在步驟 5 通過驗證後才成為 instance 的 input；`input_mapping` 中引用 `input.*` → `expression_error.identifier_not_found`
+- 步驟 1 的 `when` 與步驟 3 的 `input_mapping` CEL namespace **不含** `input` —— input 在步驟 4 通過驗證後才成為 instance 的 input；`input_mapping` 中引用 `input.*` → `expression_error.identifier_not_found`
 - 同一 trigger 內多個 `input_mapping` key 間彼此獨立求值（不可互相引用；需要二階段組裝時請在 workflow 內以 `assign` 處理）
-- 步驟 6 若因 size limit 等其他原因失敗 → `workflow.instance_create_failed`；事件已 ack，進 dead letter
+- 步驟 5 若因 size limit 等其他原因失敗 → `workflow.instance_create_failed`；事件已 ack、dedup 已 commit，進 dead letter
 
 #### input_mapping 失敗場景
 

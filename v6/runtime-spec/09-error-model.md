@@ -77,6 +77,7 @@ ErrorObject {
 | `spawn_failed.resource_exhausted` | fork 失敗，通常因 PID 上限或 RLIMIT（`EAGAIN`） |
 | `spawn_failed.oom` | OS OOM killer 於 spawn 階段觸發 |
 | `spawn_failed.working_dir` | `working_dir` 不存在或無權限 |
+| `spawn_failed.working_dir_escape` | `working_dir` canonical 化後不在 `<workspace_root>/<instance_id>` 前綴下；`error.details.reason` ∈ `{prefix_mismatch, symlink_resolve_failed, broken_symlink}` |
 | `incomplete_protocol` | tool 未發出 result 即結束 |
 | `exit_code` | exit code 不在 success 列表 |
 | `http_error` | HTTP 4xx/5xx 在 error_on_status 列表、或 retry_on_status 耗盡 attempts |
@@ -131,6 +132,7 @@ ErrorObject {
 | `registry.duplicate_manual_trigger` | 同一 workflow 的 `triggers[]` 宣告多個 `type: manual` |
 | `registry.invalid_signal_target` | `wait.signals[].step` 指向不存在、非 async 或不可達作用域的 step（載入期）；或 hot reload 後目標 step 消失時，既有 subscription 以 `error.type == "invalid_signal_target"` 令 wait step FAILED（運行期） |
 | `registry.missing_callback_handler` | caller（workflow / function）的 `type: task` step 的 `callback:` map 缺漏 function 宣告的 callback handler；或含有 function 未宣告的 callback 名（`details.reason: "unknown_callback_name"`）；caller 載入期拒絕 |
+| `registry.invalid_env_key` | tool `backend.env` 使用 `SLOGAN_*` 保留前綴 key（`details.reason: "reserved_prefix"`）；或 key 不符合 env var 命名規則（`^[A-Za-z_][A-Za-z0-9_]*$`） |
 ### Workflow / Trigger
 
 | code | 觸發 |
