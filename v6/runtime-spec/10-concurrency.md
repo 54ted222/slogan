@@ -134,17 +134,22 @@ graph: workflow_inst → step → sub_step → ... → tool_process
                      → sub_instance → ...
 ```
 
-cancel 訊號從上向下傳播：
+cancel 訊號從上向下傳播（狀態機：`RUNNING.*` → `RUNNING.cancelling` → `CANCELLED`）：
 
 ```
 def cancel_instance(inst, reason):
-    inst.state = CANCELLED.pending
+    # 進入 RUNNING.cancelling 子態；state 仍為 RUNNING，不直接跳 CANCELLED
+    inst.state    = RUNNING
+    inst.substate = "cancelling"
+    inst.cancel_requested = true
+    inst.cancel_reason = reason
     write_checkpoint(inst)
     for child in inst.live_children():
         publish("instance.cancel", { target: child.id, reason })
     for in_flight_step in inst.live_steps():
         signal_step_cancel(in_flight_step)
     schedule_grace_deadline(inst, cancel_grace_period)
+    # grace 到期或所有子節點終結後，於終結 checkpoint 將 state 改為 CANCELLED
 ```
 
 step 接收 cancel：

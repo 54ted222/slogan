@@ -288,30 +288,32 @@ ErrorObject for saga_failed = {
 
 ---
 
-## Workflow 級 catch
+## Workflow / Function 級 catch
 
-`config.catch` 在 instance FAILED 即將定案前最後求值；可：
+`config.catch` 在 workflow **或** function instance FAILED 即將定案前最後求值；可：
 
 - `type: emit` 發失敗事件
 - `type: fail` 重寫錯誤訊息（仍 FAILED）
 - `type: return` 將 FAILED 轉為 SUCCEEDED 並寫入 output（建議謹慎）
 
-`config.catch` 僅可 namespace `error.*` / `input` / `vars` / `steps` / `secret`（已凍結）。**允許的 step types**（白名單，載入驗證器 MUST 拒絕白名單外）：
+`config.catch` 僅可 namespace `error.*` / `input` / `vars` / `steps` / `secret`（已凍結）。**允許的 step types**（白名單，載入驗證器 MUST 拒絕白名單外；workflow 與 function 共用同一表）：
 
 | type | 允許 | 說明 |
 |------|------|------|
 | `emit` | ✅ | 通知、發失敗事件 |
 | `fail` | ✅ | 重寫 / 包裝錯誤訊息後保持 FAILED |
-| `return` | ✅ | 將 FAILED 轉為 SUCCEEDED（謹慎） |
+| `return` | ✅ | 將 FAILED 轉為 SUCCEEDED（謹慎）；對 function 需符合其 `output_schema`（見 `dsl-spec/05b-function.md`） |
 | `assign` | ✅ | 更新 vars（僅觀測用；instance 即將終結） |
 | `if` / `switch` | ✅ | 分支控制（body 內仍受此白名單約束） |
 | `task` | ❌ | 禁止；catch 不得發起新的 tool / function 呼叫 |
 | `wait` | ❌ | 禁止；instance 即將終結，不得阻塞 |
 | `foreach` / `parallel` | ❌ | 禁止；同上 |
 | `saga` | ❌ | 禁止；config.catch 不展開補償 |
-| `callback` | ❌ | 僅 function 內部可用，不適用 workflow catch |
+| `callback` | ❌ | config.catch 內不可觸發 callback（function 即將終結，caller 的 handler 無法安全路由） |
 
 若 YAML 中 config.catch 含任一禁止 type → 載入失敗，`registry.invalid_catch_step`（新增錯誤碼）。Step 級 `catch`（task / wait 等）仍保留**全部** step types 可用性，不受此限制。
+
+Function 的 `config.catch` 的 `return` 若求值成功且通過 `output_schema` 驗證 → function instance SUCCEEDED，父 task step 收到成功 output；若 `output_schema` 驗證失敗 → function 仍 FAILED（`error.type == "output_schema_violation"`）、父 step 以 FAILED 呈現，先前由 catch 準備的 output 不保留於 function instance。
 
 ---
 

@@ -45,6 +45,7 @@ Function instance 由父 instance「擁有」；父 instance 若被取消，子 
 | `RUNNING.waiting_signal` | 當前 step 為 `wait` signals 模式，已建立訂閱（事件訊號 / step 訊號） |
 | `RUNNING.suspended_callback` | function instance 處於 `type: callback` step，等待 caller handler |
 | `RUNNING.compensating` | saga 進入補償階段 |
+| `RUNNING.cancelling` | 收到 cancel 訊號、已發 cancel 至子節點、等待 grace period 或子節點終結；到期 / 全數終結後 transition 至 CANCELLED（見 `10-concurrency.md` Cancel propagation） |
 
 ---
 
