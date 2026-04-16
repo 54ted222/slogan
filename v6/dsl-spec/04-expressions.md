@@ -201,7 +201,7 @@ secret.STRIPE_SECRET
 | `context.instance_id` | string | 當前 workflow / function instance id |
 | `context.step_id` | string | 呼叫 tool 的 step id |
 | `context.attempt` | int | 本次 attempt 計數（首次 = 1） |
-| `context.idempotency_key` | string | 依 `(instance_id + step_id + attempt + input_snapshot)` 計算的 hash；與 `05-tool.md` protocol mode stdin JSON 的 `context.idempotency_key` 同源 |
+| `context.idempotency_key` | string | SHA256 hex of NUL-separated `(instance_id, step_id, canonical_json(input_snapshot), attempt_as_decimal)`；詳細公式見 `runtime-spec/08-persistence.md` Idempotency 章節；與 `05-tool.md` protocol mode stdin JSON 的 `context.idempotency_key` 同源 |
 | `context.trace_id` | string | W3C 相容 trace id（見 `runtime-spec/07-event-bus.md` 的 trace 傳播） |
 
 與 protocol mode stdin JSON 的 `context` 結構欄位一致；tool 開發者可以 CEL 取同一資料集、也可於 stdin JSON 中直接讀。
