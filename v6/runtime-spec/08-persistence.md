@@ -102,6 +102,8 @@ RETURNING *;
 | `init_error` | jsonb \| null |
 | `init_at` | timestamp |
 | `destroy_at` | timestamp \| null |
+| `reusable_across_restart` | bool | tool 定義的 `lifecycle.init.reusable_across_restart`；engine crash 後是否復用 |
+| `init_engine_id` | string | 建立此 init_output 的 engine 進程 ID（restart detect 用） |
 
 ### execution_log
 

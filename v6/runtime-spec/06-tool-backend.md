@@ -256,6 +256,18 @@ extension handler 必須是 in-process（Go plugin、Python entry point、WASM m
 - 後續解析直接讀 cache；`context.lifecycle.init` 注入該 output
 - init 失敗：cache 寫入 sentinel `__failed__`；後續解析直接 raise `lifecycle_init_failed`
 
+#### 重啟後的 init cache 有效性
+
+Engine crash → 新 engine 進程接管 instance 後對 cache 的處理：
+
+| init output 類型 | 預設行為 |
+|------------------|----------|
+| 預設（未標記） | **忽略舊 cache**，重啟後重新執行 init（避免 session token 已過期） |
+| Tool 標記 `lifecycle.init.reusable_across_restart: true` | 復用 resource_pool 中既存的 `init_output`（適合連接池預熱等靜態輸出） |
+
+- resource_pool 表新增欄位 `reusable_across_restart: bool`（預設 false），由 init 階段依 tool definition 寫入
+- 舊 cache 若被忽略，MUST 在新 init 成功寫入前以 `init_output=null, init_error=null` 重設該 row；避免「舊值殘留又無新值」的不一致視圖
+
 ### destroy
 
 - Instance 終結時，Resource Pool 列出所有 init 過的 tool；逐一執行 destroy backend

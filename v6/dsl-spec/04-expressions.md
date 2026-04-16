@@ -216,13 +216,23 @@ artifacts.order_file.exists
 
 | 函式 | 回傳 | 說明 |
 |------|------|------|
-| `now()` | timestamp | 當前 UTC 時間 |
+| `now()` | timestamp | 當前 UTC 時間（RFC 3339 Nano 精度） |
 | `uuid()` | string | UUID v4 |
 | `json_encode(value)` | string | 編碼為 JSON |
 | `json_decode(string)` | any | 解碼 JSON |
 | `default(value, fallback)` | any | null 時回傳 fallback |
 | `coalesce(a, b, ...)` | any | 第一個非 null 值 |
 | `has(path)` | bool | 欄位是否存在（見下方語意） |
+| `timestamp(string)` | timestamp | 解析 RFC 3339 字串為 timestamp |
+| `duration(string)` | duration | 解析 `5m` 等 duration string |
+
+### Timestamp / Duration 型別
+
+- `now()` 與 `timestamp(...)` 皆回傳 CEL **timestamp** 型別，內部 UTC；兩 timestamp 相減得 duration
+- CEL 的 `.getFullYear()` / `.getMonth()` 等 accessor 以 UTC 為基準；**不提供時區參數**
+- 本地時間格式化 / 時區轉換 **不在 CEL 中支援**；需要時由 tool backend 處理（如 `date` CLI、Python tool）
+- Duration 比較與加減合法：`now() + duration("5m") > steps.x.ended_at`
+- Timestamp 與字串的 `==` 永不匹配（型別不符）；需先 `string(now())` 才能與字面字串比較
 
 ### List 操作
 

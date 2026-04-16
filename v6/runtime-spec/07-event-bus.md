@@ -65,6 +65,19 @@ Event {
 - **延遲**：`emit.delay > 0` 時事件先入延遲 queue；deadline 到才實際投遞。
 - **死訊**：訂閱者持續處理失敗（如連續超過 `max_redelivery`，建議 5 次）→ 進入 dead-letter；引擎發 `bus.dead_letter` internal 事件可被 ops 監控。
 
+#### delivery / target 的使用規則
+
+| 情境 | `delivery` | `target` | 備註 |
+|------|-----------|---------|------|
+| Business emit（預設） | `broadcast` | null | 所有匹配 trigger / wait 的訂閱者皆收到 |
+| Internal `step.completed` / `wait.timeout` / `event.matched` | `unicast` | 目標 instance_id | Engine Loop 只路由至該 instance；避免廣播雜訊 |
+| Internal `tool.callback` | `unicast` | caller instance_id | 走 driver 直通；不發至 bus broadcast |
+| Internal `tool.stream` | `broadcast`（內部） | null | 供 workflow 的 wait 訂閱 |
+| Internal `instance.cancel` | `unicast` | target instance_id | |
+
+- `emit` step 目前**僅支援 broadcast**（v6）；DSL 無 unicast 欄位。unicast 是 engine 內部路由機制，不暴露給使用者業務邏輯
+- Internal unicast event 若 target instance 不存在（已 GC）→ 事件進 `bus.dead_letter`，`failure_reason: "instance_not_found"`
+
 #### bus.dead_letter 事件結構
 
 ```

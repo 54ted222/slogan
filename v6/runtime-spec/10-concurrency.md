@@ -174,9 +174,21 @@ cancel 訊號到達時，該 instance 可能由另一個 engine 進程持有 lea
 
 ### Foreach 並行 iteration 的 vars 寫入
 
-iteration 內的 `type: assign` 寫入 vars **共享於 instance**（vars 是 instance 級 namespace）。多 iteration 並行 assign 同一 key → 寫入順序不可預測。**建議**在 foreach 內僅讀 vars，不寫；若必須寫請以 `loop.index` 區分 key。
+iteration 內的 `type: assign` 寫入 vars **共享於 instance**（vars 是 instance 級 namespace）。
 
-實作層面：vars 寫入 MUST 為 atomic（單一 key 級別）；無須提供整體 transaction。
+**可見性規則（happens-after 語意）**：
+
+| 讀取位置 | 看得到的寫入 |
+|----------|--------------|
+| 同一 iteration 內後續 step | 同 iteration 前面 `assign` 的所有寫入（立即可見） |
+| 其他 iteration 內的 step | 不保證可見；可能看到初始值或其他 iteration 的部分寫入 |
+| foreach 結束後的 step | 所有 iteration 的最終寫入（last-write-wins by assign 完成時間） |
+
+實作層面：
+
+- vars 寫入 MUST 為 atomic（單一 key 級別，以 DB row-level lock 達成）；無須提供整體 transaction
+- 多 iteration 並行 assign 同一 key → 最終值由 **最後一個完成 assign 的 iteration 決定**（last-write-wins）；若需確定性輸出請用 step output 而非 vars
+- **建議**在 foreach 內僅讀 vars，不寫；若必須寫請以 `loop.index` 區分 key（`vars["result_" + string(loop.index)] = ...`）
 
 ### Tool callback 與 result 競爭
 

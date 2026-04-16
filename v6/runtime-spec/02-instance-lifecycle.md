@@ -172,6 +172,24 @@ Workflow Instance
 
 Timeout 計時器 SHOULD 持久化（記錄 deadline 而非剩餘秒數），確保 engine 重啟後仍能正確觸發。
 
+### 巢狀 timeout 的先到先生效
+
+Workflow → Function task step → Function instance 三層皆可有 timeout：
+
+| 層級 | 欄位 | 生效範圍 |
+|------|------|----------|
+| Workflow config | `workflow.config.timeout` | workflow instance 整體 |
+| Task step | `timeout` on `type: task` | 從呼叫 function 起到其終結 |
+| Function config | 呼叫的 Function 自身 `config.timeout`（若有） | function instance 整體 |
+
+計時 **獨立**，三個 deadline 並存；先到的先生效：
+
+- Function timeout 先到 → function instance FAILED（`error.type: timeout`），父 task step 收到 function FAILED（可被父 catch 處理）
+- Task step timeout 先到 → task step FAILED，function instance 被 cancel
+- Workflow timeout 先到 → workflow 進入終結流程（含 config.catch），所有子 function instance 被 cancel
+
+建議應用層設計為 **function timeout < task step timeout < workflow timeout**，避免上層 timeout 優先觸發導致難以定位問題。
+
 ---
 
 ## 結束後的保存期
