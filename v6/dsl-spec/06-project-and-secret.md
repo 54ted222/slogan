@@ -82,6 +82,14 @@ projects/
       customer_onboarding.yaml
 ```
 
+### 空子目錄規則
+
+- `workflows/` / `tools/` / `functions/` / `secrets/` 皆為**慣例**子目錄，非強制存在；缺失或空目錄皆視為「該類別無 definition」，不報錯
+- 載入器以**檔案副檔名**（`.yaml` / `.yml`）遞迴掃描 project 根（含子資料夾），依每個檔案的 `kind` 欄位分類；檔案**不需**放在 `<kind>s/` 目錄下（建議但非強制）
+- 根目錄內不含 `project.yaml` 但含 `workflows/` 等子目錄 → 視為**根目錄 definition**（見上「根目錄 definition」），不自動建立虛擬 project
+- 空 project（僅有 `project.yaml`，無任何 definition）→ 合法；適合作為 namespace 占位或僅宣告 `defaults.labels` / `owner` 的元件
+- 非 YAML 檔案（如 `.md` / `.json` / `.sh`）被忽略；engine 不嘗試解析
+
 ### Name 自動前綴
 
 Definition name 自動加上 project 路徑前綴：

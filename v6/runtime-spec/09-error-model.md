@@ -54,7 +54,7 @@ ErrorObject {
 | code | 觸發 |
 |------|------|
 | `invalid_count` | foreach.count 為負或非整數 |
-| `invalid_items` | foreach.items 求值結果為 null |
+| `invalid_items` | foreach.items 求值結果非 list（含 null / string / int / map / bool） |
 | `async_step_failed` | wait signals 中 step 訊號所等待的 async step FAILED |
 | `branch_failed` | parallel branch 失敗（fail_fast 政策下） |
 
@@ -117,6 +117,7 @@ ErrorObject {
 | `registry.invalid_http_method` | tool http backend `method` 不在支援清單 |
 | `registry.invalid_label_value` | `metadata.labels.<key>` value 非 string 或含換行 / 超長 |
 | `registry.invalid_metadata` | `metadata.description` 超過 1024 chars 或其他 metadata 欄位違反基本限制 |
+| `registry.invalid_event_name` | `emit.event` / `wait.signals.event` / `trigger.event` 名稱格式錯或使用保留前綴 |
 ### Workflow / Trigger
 
 | code | 觸發 |

@@ -278,6 +278,15 @@ artifacts.order_file.exists
 | `list.map(x, expr)` | list | 映射 |
 | `list.size()` | int | 長度 |
 
+#### Lambda 變數作用域
+
+`exists` / `all` / `filter` / `map` 的第一個參數為 lambda 局部變數（如 `x`）：
+
+- lambda 變數**遮蔽**外層同名 namespace；例：`list.map(steps, ...)` 內 `steps` 指 lambda 變數（元素），不再指向 `steps.*` namespace
+- lambda 內仍可透過**不同名稱**存取外層 namespace；遮蔽僅發生在同名情況
+- **載入期警告**：若 lambda 變數名與 CEL 保留 namespace（`input` / `steps` / `prev` / `vars` / `loop` / `event` / `env` / `secret` / `error` / `callback` / `context` / `project` / `artifacts`）相同 → 產生 lint warning 但不拒絕；建議使用 `it` / `elem` / `x` 等短名避免誤解
+- lambda 不能跨呼叫共享狀態（純函式）；連續 `list.filter(x, ...).map(y, ...)` 彼此獨立
+
 #### size() 的通用型別語意
 
 `size()` 統一規則（與 CEL 標準一致）：

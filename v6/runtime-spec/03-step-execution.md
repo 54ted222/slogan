@@ -128,9 +128,7 @@ vars 的 scope 是 instance-wide；子 instance 不繼承父 vars。
 ### 啟動
 
 1. 求值 `items` 或 `count`
-   - `items` 求值結果 MUST 為 list：
-     - `null` → step FAILED，`error.type: "invalid_items"`（提示使用者以 `default()` 防禦）
-     - 非 list（string / int / map / bool）→ step FAILED，`error.type: "expression_error.type_error"`
+   - `items` 求值結果 MUST 為 list；**任何**非 list 型別（含 null / string / int / map / bool）→ step FAILED，`error.type: "invalid_items"`，`error.details.actual_type` 記錄實際型別（提示使用者以 `default(x, [])` 防禦）
    - `count` 求值結果 MUST 為非負整數：
      - 負數 / 小數 / 非整數型別 → step FAILED，`error.type: "invalid_count"`
 2. `count: N` → 內部 items = `[0..N-1]`，`loop.item == loop.index`
