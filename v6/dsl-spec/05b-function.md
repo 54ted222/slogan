@@ -132,13 +132,19 @@ callback:
         approved: { type: boolean }
 ```
 
-宣告為契約：caller 必須為每個 callback 提供同名 handler，否則 function 載入時驗證失敗。
+宣告為契約：每個呼叫此 function 的 `type: task` step 的 `callback:` map 必須**為每個** function 所宣告的 callback 提供同名 handler。**驗證時機於 caller（workflow / 呼叫方 function）definition 載入時**（由 Task Registry 展開 action → function definition → 檢查 callback 名稱集合），而非 function 自身載入時（function 無法預知 caller）。
+
+- 缺漏任一 handler → caller 載入失敗，`registry.missing_callback_handler`，`error.details.action` 為 function 名稱、`error.details.callback_name` 為缺漏的 callback 名
+- 多餘 handler（caller 提供了 function 未宣告的 callback 名）→ 同類錯誤碼，`error.details.reason: "unknown_callback_name"`；避免拼字錯誤靜默被忽略
+- 若 caller 的 task step 對象在載入時尚未註冊（forward reference 或跨 project 延後 resolve）→ 驗證延後至實際 resolve 時；resolve 後缺漏仍以 caller 載入失敗呈現（走 hot reload / staged load 的重新驗證路徑）
 
 **Schema 宣告完整性**：
 
 - `input_schema` 與 `output_schema` MAY 缺省；缺省時對應方向不做驗證
-- 若任一存在，兩者 MUST 都有（語意完整）；僅宣告單邊 → 載入失敗，`error.type: "schema_incomplete"`
-- 例外：若 callback handler 端以 `type: return` 無 output 結束，視為 output 為 `null`；output_schema 若不允許 null 則 FAILED（`error.type: "schema_violation"`）
+- 若任一存在，兩者 MUST 都有（語意完整）；僅宣告單邊 → 載入失敗，`error.type: "schema_incomplete"`；由 Task Registry 於 function definition 載入時檢驗
+- **Handler 結束行為**：Handler steps 以 `type: return` 結束為建議做法；若 steps 自然走完（fall-through）不顯式 `return` → handler output 恆為 `null`（語意同 workflow fall-through，見 `runtime-spec/02-instance-lifecycle.md`）；`output_schema` 若不允許 null 則 callback step FAILED（`error.type: "schema_violation"`）
+- 若 handler 以 `type: return` 無 output 結束 → output 為 `null`，套用同上規則
+- Handler steps **為空陣列**（`callback.some_name: []`）→ caller 載入失敗，`registry.invalid_workflow_definition`、`details.reason: "empty_callback_handler"`（與 steps 非空規則一致）
 
 ### Function 內：`type: callback` step
 
@@ -209,7 +215,7 @@ Handler 的求值與資料規則：
 | `callback.name` | 觸發的 callback 名稱（同一 task 多種 callback 共用 handler 時可分流） |
 | `input` / `steps` / `vars` | caller 自身的 namespace（handler 與 caller 共享） |
 
-Handler 必須以 `type: return` 結束並回傳符合 `output_schema` 的資料；該 output 將作為 function 端 `type: callback` step 的 output。
+Handler 建議以 `type: return` 結束並回傳符合 `output_schema` 的資料；若 fall-through（未顯式 return）→ output 為 `null`（見上「Handler 結束行為」）；handler 最終 output 將作為 function 端 `type: callback` step 的 output，並依 callback 宣告的 `output_schema` 驗證。
 
 #### 多個 callback 時的分流
 

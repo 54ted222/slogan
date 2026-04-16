@@ -130,6 +130,7 @@ ErrorObject {
 | `invalid_fail_config` | `type: fail` 的 `message` 為空或 `code` 格式違反規則 |
 | `registry.duplicate_manual_trigger` | 同一 workflow 的 `triggers[]` 宣告多個 `type: manual` |
 | `registry.invalid_signal_target` | `wait.signals[].step` 指向不存在、非 async 或不可達作用域的 step（載入期）；或 hot reload 後目標 step 消失時，既有 subscription 以 `error.type == "invalid_signal_target"` 令 wait step FAILED（運行期） |
+| `registry.missing_callback_handler` | caller（workflow / function）的 `type: task` step 的 `callback:` map 缺漏 function 宣告的 callback handler；或含有 function 未宣告的 callback 名（`details.reason: "unknown_callback_name"`）；caller 載入期拒絕 |
 ### Workflow / Trigger
 
 | code | 觸發 |
