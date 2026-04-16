@@ -58,7 +58,9 @@ ErrorObject {
 | `invalid_count` | foreach.count 為負或非整數 |
 | `invalid_items` | foreach.items 求值結果非 list（含 null / string / int / map / bool） |
 | `async_step_failed` | wait signals 中 step 訊號所等待的 async step FAILED |
-| `branch_failed` | parallel branch 失敗（fail_fast 政策下） |
+| `branch_failed` | parallel branch 失敗（fail_fast 政策下）；details.branch_index 為觸發分支；error.cause 為該分支原 error |
+| `foreach_failed` | foreach 於 `failure_policy: continue` 下所有迭代結束後至少一個失敗；error.details.failed_indices 為失敗索引清單；error.cause 為首個失敗迭代的 error（供典型 debug 使用） |
+| `parallel_failed` | parallel 於 `failure_policy: continue` 下所有 branch 結束後至少一個失敗；details.failed_indices 為失敗 branch 索引；error.cause 為首個失敗 branch 的 error |
 
 ### Saga
 
