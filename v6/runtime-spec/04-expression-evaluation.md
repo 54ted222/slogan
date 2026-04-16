@@ -21,7 +21,7 @@
 | util   | `now()` / `uuid()` / `json_encode` / `json_decode` / `default` / `coalesce` / `has` |
 | numeric coerce | `int(x)` / `double(x)` / `string(x)` |
 
-`now()` 與 `uuid()` 的副作用記錄詳見 12-determinism-and-replay。
+`now()` 與 `uuid()` 的副作用（replay 讀回）詳見 `08-persistence.md` 的「Replay」章節。
 
 `s.extractMatches(regex)` 為引擎擴充：回傳完整匹配組的字串陣列，無匹配回 `[]`。
 
@@ -79,6 +79,8 @@
 | `input` / `args` / `data` / `headers` / 任何字面值欄位 | step 進入 RUNNING 之後、handler 執行之前；一次性求值，求值結果 snapshot 至 step state |
 | `match` (wait signals 事件訊號) | event 到達時 |
 | `match` (trigger when) | trigger event 到達時，於 instance 建立前 |
+| `condition` (if) | if step 進入時，於共通 `when` 通過後 |
+| `subject` (switch) | switch step 進入時，於共通 `when` 通過後 |
 | `cases[].value` | switch 對應 case 被檢查時（lazy） |
 | `items` / `count` (foreach) | foreach 開始時 |
 | `concurrency` / `failure_policy` 等控制旗標 | foreach / parallel 開始時 |
@@ -116,13 +118,13 @@ def evaluate(expr_string, ctx) -> Value:
 
 ## Namespace 寫入規則
 
-- `input` / `event` / `error` / `callback` / `context` / `templates` / `project` / `env` / `secret` / `artifacts` / `config` / `session`：read-only，呼叫端不可修改。
+- `input` / `event` / `error` / `callback` / `context` / `project` / `env` / `secret` / `artifacts`：read-only，呼叫端不可修改。
 - `vars`：僅 `type: assign` 可寫；其他 step 拋寫入錯誤。
 - `steps`：僅 step 終態時由 Engine Loop 寫入。
 - `loop`：foreach 進入時 push、退出時 pop；不可由使用者寫。
 - `prev`：每進入新 step 時由 Engine Loop 重綁；無使用者寫入。
 
-引擎不允許 expression 產生 namespace 副作用；`now()` / `uuid()` 是純值產生器，但其結果為了 replay 一致性會被記錄（見 12-determinism-and-replay）。
+引擎不允許 expression 產生 namespace 副作用；`now()` / `uuid()` 是純值產生器，但其結果為了 replay 一致性會被記錄（見 `08-persistence.md` 的「Replay」章節）。
 
 ---
 

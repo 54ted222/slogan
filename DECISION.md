@@ -286,3 +286,60 @@
 ### N5. 同一 artifact 的並行寫入處理
 
 - [x] **C** — 由 artifact 設定決定（`concurrency: lock | last_write_wins`）
+
+---
+
+## O. v6 規格一致性修正（2026-04-16 審閱，待決策）
+
+審閱 v6 規格時發現以下不合理或實作困難之處，部分已直接修正，剩餘待決：
+
+### O1. `if` / `switch` 的條件欄位與共通 `when` 衝突（已修正）
+
+- [x] `if` 改用 `condition`；`switch` 改用 `subject`
+- 共通 `when` 統一為前置條件（false → SKIPPED）
+- `if.condition` / `switch.subject` 在共通 `when` 通過後才求值
+
+### O2. `error.compensation_failures` 路徑不一致（已修正）
+
+- [x] 統一為 `error.details.compensation_failures`（與 runtime error model 對齊）
+
+### O3. wait event signals 缺少 scope 過濾（已修正）
+
+- [x] 於 signals 事件訊號新增 `scope` 欄位（`workflow` / `project` / `global`，預設不限）
+- 訂閱模型同步更新（07-event-bus.md / 08-persistence.md）
+
+### O4. `type: callback` step 的 `name` 與 `id` 衝突（已修正）
+
+- [x] 預設 `name` 作為 step 識別子；迴圈中多次呼叫同一 callback 時 MUST 顯式指定 `id`
+
+### O5. Task registry resolve 無法處理 project prefix（已修正）
+
+- [x] resolve 算法切分 project prefix（kebab-case）與 action body（snake_case + dotted）
+
+### O6. 殘留 v5 namespace 引用（已修正）
+
+- [x] 移除 `session` / `config` / `templates` 於 Runtime 04 的 write rules
+- [x] 更新 lifecycle hooks 範圍說明
+- [x] 修正不存在的 `12-determinism-and-replay` 引用
+
+### O7. Artifact 寫入操作未定義（待決策）
+
+- `artifacts.<name>.path` 等 namespace 已出現於 DSL spec
+- 但 05-task-registry.md 目前 builtin 僅宣告 `artifact.list`，`read` / `write` 標為未來
+- **選項 A**：v6 納入 `artifact.read` / `artifact.write` 作為核心 builtin
+- **選項 B**：維持現狀，v6 只允許 tool 透過 `artifacts._workspace_path` 讀寫檔案
+- **選項 C**：延後至 v2，移除 DSL spec 中 `artifacts.<name>` 用例
+
+### O8. Workflow `config.catch` 允許的 step 類型（待決策）
+
+- Runtime 09 目前以 SHOULD 建議「僅 emit/fail/return/assign」
+- **選項 A**：升級為 MUST，載入時驗證（拒絕含 wait/task 等 I/O 型 step）
+- **選項 B**：維持 SHOULD，由實作決定
+- 考量：config.catch 執行在 instance 即將 FAILED 的終結流程中，若允許長 I/O 會延長終結時間並可能再度失敗
+
+### O9. foreach 內 vars 並行寫入 race（待決策）
+
+- 目前文件說「建議避免」，但 atomic 寫入僅保證單 key 級別
+- **選項 A**：foreach iteration 內 `type: assign` 為編譯期禁止
+- **選項 B**：維持現狀，由使用者自行確保 key 不衝突（以 `loop.index` 區分）
+- **選項 C**：引入 iteration-local vars namespace（如 `iter.*`）

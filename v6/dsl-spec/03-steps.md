@@ -96,7 +96,7 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 ```yaml
 - type: if
-  when: ${ steps.load_order.output.status == "cancelled" }
+  condition: ${ steps.load_order.output.status == "cancelled" }
   then:
     - type: fail
       message: "order cancelled"
@@ -105,7 +105,12 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
       event: order.processing
 ```
 
-- `when` 為 `true` → 執行 `then`；為 `false` → 執行 `else`（若有）
+| 屬性 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `condition` | CEL expression | MUST | 分支條件，求值結果為 boolean |
+
+- `condition` 為 `true` → 執行 `then`；為 `false` → 執行 `else`（若有）
+- `condition` 與共通屬性 `when`（前置條件）為不同欄位：`when: false` → 整個 `if` step SKIPPED；`condition` 僅在 `when` 通過後才求值
 - Output 為被選中分支最後一個 step 的 output
 
 ---
@@ -114,7 +119,7 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 ```yaml
 - type: switch
-  when: ${ input.action }
+  subject: ${ input.action }
   cases:
     - value: "pay"
       then:
@@ -126,7 +131,7 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
         - type: task
           action: shipment.create
           input: { order_id: ${ input.order_id } }
-    - value: ${ input.some_value == "cancel" }
+    - value: ${ vars.dynamic_action }
       then:
         - type: task
           action: order.cancel
@@ -136,8 +141,14 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
       message: ${ "unknown action: " + input.action }
 ```
 
-- 匹配第一個符合的 case，無匹配且有 `default` → 執行 default
-- `value` 可為字面值或 CEL 表達式
+| 屬性 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `subject` | CEL expression | MUST | 待匹配值（任意型別） |
+| `cases[].value` | 字面值 or CEL | MUST | 匹配值；與 `subject` 做 `==` 比較 |
+
+- 匹配第一個 `value == subject` 的 case；無匹配且有 `default` → 執行 default；皆無 → SUCCEEDED 且 output 為 `null`
+- `value` 為 CEL 時，該 case 被檢查時才求值（lazy）；求值結果型別需與 `subject` 相容才可能匹配
+- `subject` 與共通屬性 `when`（前置條件）為不同欄位：`when: false` → 整個 `switch` step SKIPPED
 
 ---
 
@@ -146,8 +157,8 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 ```yaml
 - id: reserve_items
   type: foreach
-  items: ${ input.items } # MUST（與 count 擇一）— 回傳 list 的 CEL 表達式
-  count: ${ config.max_iterations } # MUST（與 items 擇一）— 整數或回傳整數的 CEL
+  items: ${ input.items } # 回傳 list 的 CEL 表達式
+  # count: ${ vars.max_iterations } # 或以整數迭代（與 items 擇一）
   concurrency: 3 # MAY, 預設 1
   async: true # MAY, 預設 false — 非阻塞模式，不等待完成即繼續下一步
   failure_policy: fail_fast # MAY — fail_fast | continue | ignore, 預設 fail_fast
@@ -161,7 +172,7 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 迭代變數：`loop.item`（當前元素）、`loop.index`（索引，從 0 開始）。
 
-- `items` 與 `count` MUST 擇一。`count: N` 等價於 `items: range(N)`，此時 `loop.item == loop.index`。
+- `items` 與 `count` MUST 擇一；兩者皆缺或皆提供 → 載入驗證失敗。`count: N` 等價於 `items: [0..N-1]`，此時 `loop.item == loop.index`。
 - `count` 的值 MUST 為非負整數；負值或非整數 → step FAILED，`error.type == "invalid_count"`。
 - `concurrency`：同時執行的迭代上限；`async` 不影響此值。
 - `async: false`（預設）：阻塞模式，等待所有迭代完成後才繼續；engine 依 `concurrency` 並行調度。Output 為一個 array，索引與 items 一一對應。
@@ -247,6 +258,7 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 | 屬性 | 型別 | 必填 | 說明 |
 |------|------|------|------|
 | `event` | string | MUST | 事件類型 |
+| `scope` | string | MAY | 限定事件來源 scope：`workflow` / `project` / `global`；預設接受任一 scope |
 | `match` | CEL expression | MAY | 事件過濾條件 |
 
 #### Step 訊號
@@ -313,7 +325,7 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 ```yaml
 # 根據匹配到的訊號分支處理
 - type: switch
-  when: ${ steps.wait_result.output.event }
+  subject: ${ steps.wait_result.output.event }
   cases:
     - value: "payment.confirmed"
       then:
@@ -441,10 +453,12 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 個別 compensate action 失敗時，引擎 **繼續執行其他 compensate**（best-effort），不中止補償鏈：
 
 - 補償 step 應使用 `retry` 處理暫時錯誤；retry 用盡後仍失敗則記錄，但不阻斷其他補償。
-- 所有補償完成後（含失敗），進入 saga `catch`；`error.compensation_failures` 為失敗清單：
+- 所有補償完成後（含失敗），進入 saga `catch`；`error.details.compensation_failures` 為失敗清單：
 
   ```
-  error.compensation_failures: [
+  error.type: "saga_failed"
+  error.cause: <觸發補償的原 step error>
+  error.details.compensation_failures: [
     { step_id: "debit", error: { type, message, code } },
     ...
   ]

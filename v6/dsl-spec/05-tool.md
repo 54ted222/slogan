@@ -587,7 +587,7 @@ lifecycle:
 
 ### 求值上下文
 
-`init` / `destroy` 不隸屬於任何 step，`${ }` 僅允許引用 `secret` / `env` / `project` / `artifacts._workspace_path`，不可引用 `input` / `steps` / `prev` / `vars` / `loop` / `event` / `session`。完整表格見 `04-expressions.md`。
+`init` / `destroy` 不隸屬於任何 step，`${ }` 僅允許引用 `secret` / `env` / `project` / `artifacts._workspace_path`，不可引用 `input` / `steps` / `prev` / `vars` / `loop` / `event`。完整表格見 `04-expressions.md`。
 
 `init` 失敗 → 依賴此 tool 的所有後續 step 進入 FAILED，`error.type == "lifecycle_init_failed"`。
 

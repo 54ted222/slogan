@@ -48,13 +48,14 @@
 
 ### wait_subscriptions
 
+訂閱的 patterns 以 JSONB 欄位儲存（signals 可含多個 pattern）：
+
 | 欄位 | 型別 | 說明 |
 |------|------|------|
 | `subscription_id` | uuid | |
 | `instance_id` / `step_id` | | |
-| `event_type` | string | |
-| `match_expr` | string \| null | CEL 文字 |
-| `any_of` | bool | events 模式 |
+| `patterns` | jsonb | `[{event_type, scope?, match_expr?}]` 陣列 |
+| `any_of` | bool | signals 模式恆為 true |
 | `deadline` | timestamp | wait.timeout |
 | `created_at` | timestamp | |
 

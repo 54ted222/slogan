@@ -73,7 +73,11 @@ WaitSubscription {
   instance_id:     string,
   step_id:         string,
   patterns: [
-    { event_type: string, match_expr: CEL | null }
+    {
+      event_type: string,
+      scope:      "workflow" | "project" | "global" | null,  # null = 不限 scope
+      match_expr: CEL | null,
+    }
   ],
   deadline:        timestamp,    # 由 wait.timeout 計算
   any_of:          bool,         # signals 模式下恆為 true（任一匹配即喚醒）
@@ -89,6 +93,8 @@ WaitSubscription {
 def deliver(event, subscription):
     for pattern in subscription.patterns:
         if event.type != pattern.event_type:
+            continue
+        if pattern.scope is not None and event.scope != pattern.scope:
             continue
         if pattern.match_expr:
             ctx = build_event_match_ctx(event, subscription.instance)

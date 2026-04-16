@@ -132,7 +132,11 @@ Function 中以 `type: callback` step 觸發 callback：
 
 `timeout` 涵蓋 handler 執行的**整體時長**（從發出 callback 事件算起至 handler 回傳 `return` 為止）。Handler 內各 step 的 `timeout` / `retry` 獨立計時，但不延長外層 callback 的 `timeout`；若 handler 內 step 失敗被其內部 `catch` 處理則不向外傳播，否則向上浮出到 handler 頂層 → 整個 callback step FAILED。Handler output 由引擎在 handler `return` 時依 callback 宣告的 `output_schema` 驗證；不符 → callback step FAILED，`error.type == "schema_violation"`。
 
-`name` 同時作為此 step 的識別子（不再宣告 `id`）。後續 step 以 `steps.<name>.output` 取得 handler 回傳值；若緊接的下一步，也可用 `prev.output`（`prev` 無需帶名稱）。
+Step 識別規則：
+
+- 預設以 `name` 作為 step 的識別子（相當於 `id: <name>`），後續 step 以 `steps.<name>.output` 取得 handler 回傳值。
+- 若同一 function 內需多次呼叫同一 callback（如 `foreach` 內），MUST 顯式指定 `id` 以避免 ID 衝突；此時 `steps.<id>.output` 生效。
+- 緊接的下一步可用 `prev.output`（無需帶名稱）。
 
 ### Caller 端：`callback` 區塊
 
@@ -147,7 +151,8 @@ Function 中以 `type: callback` step 觸發 callback：
     some_name:
       - type: task
         action: builtin.echo
-        message: "callback received: ${ callback.input }"
+        input:
+          message: "callback received: ${ callback.input }"
       - type: return
         output:
           approved: true
@@ -226,8 +231,9 @@ steps:
 
   - id: wait_confirmed
     type: wait
-    event: payment.confirmed
-    match: ${ event.data.payment_id == steps.create_payment.output.payment_id }
+    signals:
+      - event: payment.confirmed
+        match: ${ event.data.payment_id == steps.create_payment.output.payment_id }
     timeout: 30m
     catch:
       - type: fail
@@ -323,7 +329,8 @@ steps:
 
   - type: task
     action: builtin.echo
-    message: "review result: ${ prev.output.approved }"
+    input:
+      message: "review result: ${ prev.output.approved }"
 
   - type: return
     output:

@@ -62,13 +62,15 @@ metadata:
 
 ### Task registry 解析規則
 
-`type: task` 的 `action` 透過 task registry 解析。解析依 **第一段（第一個 `.` 之前）** 的命名風格分流：
+`type: task` 的 `action` 透過 task registry 解析。v6 只接受 `snake_case` + dotted 格式作為 action 名稱主體：
 
-| 第一段命名風格 | 判定為 | 範例 |
-|----------------|--------|------|
-| `snake_case` | Tool / Function / builtin 動作 | `order.load`、`payment.process` |
+| action 形式 | 判定為 | 範例 |
+|-------------|--------|------|
+| `<namespace>.<action>` | Tool / Function / builtin 動作 | `order.load`、`payment.process`、`builtin.echo` |
+| `<project>/<namespace>.<action>` | 跨 project 引用 | `order/order.load` |
 
-- 名稱中 `-` 與 `_` 互斥：第一段若含 `-`，整段 MUST 為 kebab-case；若含 `_`，MUST 為 snake_case。混用 → 載入錯誤 `registry.invalid_action_name`。
+- 主體每一段 MUST 符合 `^[a-z][a-z0-9_]*$`（snake_case）；含 `-` / 大寫 / 其他字元 → 載入錯誤 `registry.invalid_action_name`。
+- Project 前綴以 `/` 分隔（project name 為 kebab-case，見 [06-project-and-secret](06-project-and-secret.md)）；巢狀 project 以 `/` 層層展開。
 
 ---
 

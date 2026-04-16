@@ -72,7 +72,7 @@ steps:
       order_id: ${ input.order_id }
 
   - type: if
-    when: ${ steps.load_order.output.status == "cancelled" }
+    condition: ${ steps.load_order.output.status == "cancelled" }
     then:
       - type: fail
         message: "order already cancelled"

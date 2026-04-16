@@ -67,10 +67,11 @@ vars 的 scope 是 instance-wide；子 instance 不繼承父 vars。
 ## type: if
 
 ```
-1. 求值 when（mandatory）
-2. true  → 執行 then[] 至完成；output = 最後一個 step 的 output
-3. false → 執行 else[] 至完成；output = 最後一個 step 的 output；無 else 則 output: null, status SUCCEEDED
-4. 子 step 任一 FAILED 且未被內部 catch → 整個 if FAILED
+1. 求值共通 when（前置條件）：false → SKIPPED；異常 → FAILED
+2. 求值 condition（mandatory, boolean）
+3. true  → 執行 then[] 至完成；output = 最後一個 step 的 output
+4. false → 執行 else[] 至完成；output = 最後一個 step 的 output；無 else 則 output: null, status SUCCEEDED
+5. 子 step 任一 FAILED 且未被內部 catch → 整個 if FAILED
 ```
 
 `if` step 的 `id` 可被引用：`steps.<if_id>.output` 為被選中分支的最後一個 step output。
@@ -80,14 +81,15 @@ vars 的 scope 是 instance-wide；子 instance 不繼承父 vars。
 ## type: switch
 
 ```
-1. 求值 when（任意值，非 boolean）
-2. 依序求值 cases[].value，找到第一個 == when 的 case
-3. 沒匹配且有 default → 執行 default[]
-4. 沒匹配且無 default → SUCCEEDED, output: null
-5. 子 step 失敗處理同 if
+1. 求值共通 when（前置條件）：false → SKIPPED；異常 → FAILED
+2. 求值 subject（任意型別）
+3. 依序求值 cases[].value，找到第一個 == subject 的 case
+4. 沒匹配且有 default → 執行 default[]
+5. 沒匹配且無 default → SUCCEEDED, output: null
+6. 子 step 失敗處理同 if
 ```
 
-`cases[].value` 可為字面值或 CEL；CEL 求值在 case 開始檢查時才執行（lazy）。
+`cases[].value` 可為字面值或 CEL；CEL 求值在 case 開始檢查時才執行（lazy）。`subject` 與 `value` 的型別需相容才可能匹配（如 `subject` 為 string、`value` 回傳 boolean 則永不匹配）。
 
 ---
 
@@ -207,8 +209,8 @@ caller engine 對 handler 的執行：
 3. 任一 step FAILED 未被內部 catch →
    a. 進入 RUNNING.compensating
    b. 依時間戳降序執行 compensation log 中的所有 compensate
-   c. 補償失敗不中止其他補償；累計至 error.compensation_failures
-   d. 全部補償完成 → step FAILED；error.type == "saga_failed"，compensation_failures: [...]
+   c. 補償失敗不中止其他補償；累計至 error.details.compensation_failures
+   d. 全部補償完成 → step FAILED；error.type == "saga_failed"，error.details.compensation_failures: [...]
    e. 進入 saga.catch（若有）；catch 也可消化錯誤令 saga SUCCEEDED
 4. 全部 step SUCCEEDED → SUCCEEDED, output: null（saga 不暴露 sub-step output）
 ```

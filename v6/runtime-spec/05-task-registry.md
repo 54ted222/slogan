@@ -40,22 +40,34 @@ Action {
 
 ```
 def resolve(action_name: str) -> Action:
-    # 1. 命名風格判定
-    first = action_name.split(".", 1)[0]
+    # 1. 若含 '/'，切出 project prefix 與 action body
+    if "/" in action_name:
+        prefix, body = action_name.rsplit("/", 1)
+        # prefix 每一段 MUST 為 kebab 風格 project name
+        for seg in prefix.split("/"):
+            if not is_kebab(seg):
+                raise InvalidActionName(action_name)
+    else:
+        body = action_name
 
-    # 2. snake_case 第一段 → 一般 action
-    if is_snake(first):
-        if action_name in registry.actions:
-            return registry.actions[action_name]
-        raise NotFound("action", action_name)
+    # 2. action body MUST 為 snake_case + dotted
+    first = body.split(".", 1)[0]
+    if not is_snake(first):
+        raise InvalidActionName(action_name)
+    for seg in body.split("."):
+        if not is_snake(seg):
+            raise InvalidActionName(action_name)
 
-    # 3. 不合法
-    raise InvalidActionName(action_name)
+    # 3. 以完整 action_name 查表
+    if action_name in registry.actions:
+        return registry.actions[action_name]
+    raise NotFound("action", action_name)
 ```
 
-`is_snake(s)`：`^[a-z][a-z0-9_]*$`
+- `is_snake(s)`：`^[a-z][a-z0-9_]*$`
+- `is_kebab(s)`：`^[a-z][a-z0-9-]*$`
 
-純單字（如 `git`）視為 snake；引擎以註冊表是否存在區分 namespace。
+純單字（如 `git`）同時符合 snake / kebab；引擎以註冊表是否存在區分 namespace。
 
 ---
 

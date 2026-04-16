@@ -57,6 +57,7 @@ Function instance 由父 instance「擁有」；父 instance 若被取消，子 
 
 ### RUNNING → SUCCEEDED
 - 觸發點：`type: return` step 或 `steps[]` 自然走完（fall-through）。
+- fall-through 時最終 output 為 `null`；若 workflow / function 定義了 `output_schema` 且 schema 不接受 `null`，則 instance FAILED，`error.type == "output_schema_violation"`。
 - 終結前：
   1. 求值 `output_schema`（若 instance 為 workflow / function）
   2. 寫入最終 output 與終結時間戳
