@@ -324,9 +324,11 @@ emit 的順序保證：
 
 所有 `scope: internal` 的事件 **僅 engine 與 ops 監控可訂閱**；使用者 workflow 的：
 
-- `wait.signals[].event`：載入期拒絕保留前綴（見 `dsl-spec/03-steps.md` 的 event 名稱規則）
-- Event trigger：同上
-- `emit.event`：同上（使用者不能 emit 保留 type）
+- `wait.signals[].event`：載入期拒絕保留前綴（見 `dsl-spec/03-steps.md` 的 event 名稱規則）；**唯一例外** 為 `tool.stream`，允許 workflow 訂閱以接收本 instance tool 的 stream 訊息
+- Event trigger：不含例外；`tool.stream` 為 internal scope，trigger 不能訂閱 internal 事件
+- `emit.event`：同上保留規則（使用者不能 emit 保留 type，含 `tool.stream`）
+
+**`tool.stream` 的訂閱作用域**：wait 訂閱 `tool.stream` 時以 `match` 表達式辨識來源（如 `match: ${ event.source.step_id == "my_task" }`）；`tool.stream` 事件的 `source.instance_id` 恆為呼叫 tool 的 instance 自身（見「source 於特殊上下文的歸屬」），因此跨 instance 不會相互干擾。
 
 業務層若需要「instance 完成」事件，建議 workflow 主動 `emit workflow.completed`（使用者自訂 type）。
 

@@ -27,6 +27,7 @@ Action {
   compensate: { action_name, input_template } | null,
   idempotent: bool,
   lifecycle:  { init?, destroy? } | null,
+  definition_hash: string,      # 規範化 YAML 的 SHA256（見下「Hot reload」）；builtin 為固定哨兵值（如 "builtin:<name>"）
   registered_at: timestamp,
   loader:     LoaderInfo,        # 來源檔案 / project
 }
