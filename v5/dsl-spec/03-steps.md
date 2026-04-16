@@ -164,9 +164,15 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 - `items` 與 `count` MUST 擇一。`count: N` 等價於 `items: range(N)`，此時 `loop.item == loop.index`。
 - `count` 的值 MUST 為非負整數；負值或非整數 → step FAILED，`error.type == "invalid_count"`。
-- `async: false`（預設）：阻塞模式，等待所有迭代完成後才繼續。Output 為一個 array，索引與 items 一一對應。
-- `async: true`：非阻塞模式，啟動後立即繼續下一步。須搭配 `type: wait` 的 `step` 模式取得結果。
+- `concurrency`：同時執行的迭代上限；`async` 不影響此值。
+- `async: false`（預設）：阻塞模式，等待所有迭代完成後才繼續；engine 依 `concurrency` 並行調度。Output 為一個 array，索引與 items 一一對應。
+- `async: true`：非阻塞模式，foreach 啟動後立即視為「進入 RUNNING」並繼續下一步；engine 在背景依 `concurrency` 持續調度迭代直到完成。須搭配 `type: wait` 的 `step` 模式取得最終結果。
 - 巢狀 `foreach` 時，內層 `loop.item` / `loop.index` 遮蔽外層；需要外層時改用具名 step 的 output 或先 `assign` 保留。
+- `failure_policy`：
+  - `fail_fast`（預設）：任一迭代 FAILED → 取消尚未開始的迭代，已啟動的迭代繼續執行至終態；foreach FAILED，`error.step_id` 為首個失敗者。
+  - `continue`：迭代失敗不中止迴圈；所有迭代完成後若有任一失敗 → foreach FAILED，`error.failed_indices` 為失敗索引清單；output 包含成功迭代的結果（失敗位置為 `null`）。
+  - `ignore`：迭代失敗視為 `null` output；foreach 永遠 SUCCEEDED。
+- 迭代內部 step 的 `catch` 在 `failure_policy` 之前求值；被 catch 處理的失敗不視為迭代失敗。
 
 ---
 

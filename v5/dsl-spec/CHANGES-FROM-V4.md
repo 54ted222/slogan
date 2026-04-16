@@ -38,6 +38,15 @@ v5 的目標是**收斂與補齊**：把 v4 中分歧的命名統一為單一寫
 | C9 | Duration 格式 | 正式 EBNF：`duration := segment+`、`segment := <int> ("h"|"m"|"s")`；不支援小數 / 單位重複 | `01-overview.md` |
 | C10 | Foreach 巢狀 `loop` 變數 | 內層 `loop.item` / `loop.index` 遮蔽外層；需要外層時以具名 step 或先 `assign` 保留 | `03-steps.md` |
 | C11 | Callback step 的 output 存取 | `name` 即 step id，統一用 `steps.<name>.output`；緊接下一步可用 `prev.output`（不帶名稱） | `05b-function.md` |
+| C12 | Wait `step` 模式下 async step FAILED 行為 | Wait FAILED，`error.type == "async_step_failed"`、`error.cause` 為原 error；陣列模式以首個失敗者為主、其餘仍跑完 | `03-steps.md` |
+| C13 | Saga 補償失敗處理 | Best-effort：補償失敗不中止其他補償；最終 `error.compensation_failures` 列出失敗清單 | `03-steps.md` |
+| C14 | Workflow input/output schema 驗證時機 | input 在 instance 建立時、output 在 `return` 求值後；失敗錯誤碼 `workflow.input_schema_violation` / `output_schema_violation` | `02-workflow.md` |
+| C15 | Foreach `failure_policy` 與 catch 互動 | Iteration 內部 `catch` 在 `failure_policy` 之前求值；三策略行為明文化 | `03-steps.md` |
+| C16 | Callback step `timeout` 涵蓋範圍 | 從發 callback 算起到 handler `return` 為止；handler 內 step timeout 不延長外層 | `05b-function.md` |
+| C17 | Agent `system` / `prompt` 合併分隔符 | step 值以 `\n\n` 連接於 definition 尾部 | `06-agent.md` |
+| C18 | `${ }` 引用不存在 step 的錯誤碼 | `error.type == "expression_error"` | `04-expressions.md` |
+| C19 | Task registry 解析規則 | 第一段命名風格分流：snake_case → action；kebab-case → MCP server；`toolset` → toolset 引用；混用 `-`/`_` → `registry.invalid_action_name` | `01-overview.md` |
+| C20 | MCP server `env` / `headers` / `config` 求值上下文 | 同 lifecycle init（僅 `secret` / `env` / `project` / `artifacts._workspace_path`） | `07-resources.md` |
 
 ---
 
@@ -46,7 +55,7 @@ v5 的目標是**收斂與補齊**：把 v4 中分歧的命名統一為單一寫
 | # | 項目 | 說明 | 檔案 |
 |---|------|------|------|
 | A1 | `foreach.count` 參數 | `count: <int|CEL-int>` 作為 `items: range(n)` 的快捷 | `03-steps.md` |
-| A2 | Tool callback 協議 | 補齊 v4 標記為「待補」的協議。定義 exec protocol / exec stream / http SSE / extension 四種傳輸下 tool ↔ engine 的 `{type:"callback"}` / `{type:"callback_result"}` JSON 訊息格式，與 `05b-function.md` caller `callback:` 區塊直接對接 | `05-tool.md` |
+| A2 | Tool callback 協議 | 補齊 v4 標記為「待補」的協議。完整定義 NDJSON framing、`call_id` 對應、`v5-stream` 模式探測、SSE / `X-Callback-URL` 路由，與 `05b-function.md` caller `callback:` 區塊直接對接 | `05-tool.md` |
 | A3 | Agent tools 合併錯誤碼 | `tools` 與 `tools_override` 共存 → `agent.tools_conflict`；toolset includes 循環 → `toolset.circular_include`；foreach 非法 count → `invalid_count`；lifecycle init 失敗 → `lifecycle_init_failed` | `03-steps.md`、`06-agent.md`、`07-resources.md` |
 
 ---

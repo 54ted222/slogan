@@ -153,8 +153,8 @@ Workflow 透過 `type: agent` step 呼叫 agent definition。
 
 | 欄位       | 合併行為                                            |
 | ---------- | --------------------------------------------------- |
-| `system`   | step 值 append 到 definition 的 `system` 尾部（兩者間自動換行） |
-| `prompt`   | step 值 append 到 definition 的 `prompt` 尾部（user message） |
+| `system`   | step 值以 `\n\n` 連接於 definition 的 `system` 尾部，組成單一 system message |
+| `prompt`   | step 值以 `\n\n` 連接於 definition 的 `prompt` 尾部，組成單一 user message |
 | `input`    | 直接作為 agent 的 `input` namespace（definition 無 `input` 概念） |
 | `model`    | 見上節「合併優先級」（deep merge scalar，alias 最終解析） |
 | `config.*` | Deep merge：定義 `config` 逐欄被 step `config` 覆寫 |
@@ -194,14 +194,19 @@ Workflow 透過 `type: agent` step 呼叫 agent definition。
   action: order.analyzer
   input:
     order: ${ steps.load_order.output }
+  timeout: 2m            # task 級欄位仍然可用
+  retry: { ... }
+  catch: [...]
 ```
 
 兩種寫法差異：
 
 | 需求                                     | 建議                                    |
 | ---------------------------------------- | --------------------------------------- |
-| 只需要傳 input、取 output                | `type: task`（最單純）                  |
-| 需要覆寫 system / prompt / tools / config | `type: agent`（支援覆寫欄位）           |
+| 只需要傳 input、取 output                | `type: task`（最單純，可附 `timeout` / `retry` / `catch`） |
+| 需要覆寫 `system` / `prompt` / `model` / `tools` / `config` | `type: agent`（為這些覆寫欄位提供 schema） |
+
+`type: task` 呼叫 agent 時，agent definition 的所有預設值生效，無覆寫；`callback:` 區塊仍可使用（呼叫端 callback 與 tool callback 共用語法）。
 
 ---
 

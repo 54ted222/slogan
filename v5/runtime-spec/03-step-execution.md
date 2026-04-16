@@ -1,0 +1,295 @@
+# 03 — Step Execution
+
+本文件針對 [dsl-spec/03-steps.md](../dsl-spec/03-steps.md) 定義的每種 step type，給出引擎執行語意。
+
+---
+
+## 通用執行流程
+
+每個 step 由 Engine Loop 依序執行下列階段：
+
+```
+1. precondition  → 求值 when；false → SKIPPED；異常 → FAILED
+2. resolve       → 解析 input / args / 其他 ${ } 欄位；異常 → FAILED
+3. checkpoint A  → 寫入 step RUNNING 狀態
+4. execute       → 委派至對應 type handler；可能阻塞、發事件、產生 side effect
+5. complete      → 收到 outcome；若 FAILED 進入 retry / catch；若 SUCCEEDED 寫 output
+6. checkpoint B  → 寫入終態
+7. publish       → 推進 next step；發 step.completed 事件
+```
+
+階段 1–2 為**純讀**：未通過時 step 不消耗 retry 計數。階段 3 後的失敗才會觸發 retry。
+
+---
+
+## type: task
+
+### 解析
+
+1. Task Registry resolve `action` → `Action`（Tool / Function / Agent / MCP / builtin / toolset entry）
+2. 失敗 → FAILED `error.type == "registry.action_not_found"`
+
+### 執行
+
+| Action 種類 | 委派對象 | 執行語意 |
+|-------------|----------|----------|
+| Tool | Backend Driver | spawn / HTTP；單訊息或 NDJSON；按 `idempotent` 決定是否快取 result |
+| Function | Engine Loop（建立 Function Instance） | 父 step 進入 `waiting_subinstance`；子 instance 終結後恢復 |
+| Agent | Engine Loop（建立 Agent Session） | 同上；不允許覆寫欄位（用 `type: agent` 才能覆寫） |
+| MCP tool | Backend Driver（MCP transport） | 透過 MCP 協議呼叫；`callback` 不適用 |
+| builtin | 引擎內建實作 | 同步呼叫，無 process / network |
+
+### Callback 路由（Tool）
+
+- 進入 step 時若 caller 有 `callback:`，driver 啟用 NDJSON 模式（exec）或 SSE（http）。
+- Tool 發 `{type:"callback", call_id, name, input}` → driver 暫停 reading → engine 執行對應 handler steps（共享 caller namespace）→ handler `return` → engine post `{type:"callback_result", call_id, output}` 至 stdin / `X-Callback-URL`。
+- Handler FAILED 不直接 FAIL caller；engine post `callback_result.error`，由 tool 自行決定是否中止（若 tool 寫 `result.success == false`，caller step FAILED）。
+
+### Output 寫入
+
+- `idempotent: true` 的 step：若 retry 觸發，driver 先嘗試讀取 instance store 的 cached output（key `(instance_id, step_id, attempt_signature)`）；命中則跳過實際呼叫。
+- 非 idempotent：每次 attempt 都實際呼叫；persistence 只記錄最後一次成功的 output。
+
+---
+
+## type: assign
+
+純 namespace 寫入。
+
+```
+1. 對 vars map 中每個 key 求值對應 expression
+2. 全部成功 → 寫入 vars namespace；step SUCCEEDED，output 為 vars 增量 map
+3. 任一失敗 → FAILED；vars 不變動（atomic）
+```
+
+vars 的 scope 是 instance-wide；子 instance 不繼承父 vars。
+
+---
+
+## type: if
+
+```
+1. 求值 when（mandatory）
+2. true  → 執行 then[] 至完成；output = 最後一個 step 的 output
+3. false → 執行 else[] 至完成；output = 最後一個 step 的 output；無 else 則 output: null, status SUCCEEDED
+4. 子 step 任一 FAILED 且未被內部 catch → 整個 if FAILED
+```
+
+`if` step 的 `id` 可被引用：`steps.<if_id>.output` 為被選中分支的最後一個 step output。
+
+---
+
+## type: switch
+
+```
+1. 求值 when（任意值，非 boolean）
+2. 依序求值 cases[].value，找到第一個 == when 的 case
+3. 沒匹配且有 default → 執行 default[]
+4. 沒匹配且無 default → SUCCEEDED, output: null
+5. 子 step 失敗處理同 if
+```
+
+`cases[].value` 可為字面值或 CEL；CEL 求值在 case 開始檢查時才執行（lazy）。
+
+---
+
+## type: foreach
+
+### 啟動
+
+1. 求值 `items` 或 `count`
+2. `count: N` → 內部 items = `[0..N-1]`，`loop.item == loop.index`
+3. items 空陣列 → SUCCEEDED, output: `[]`
+4. 寫 checkpoint：foreach RUNNING、總迭代數
+
+### 阻塞模式（async: false）
+
+- Engine 依 `concurrency` 並行建立子 step 序列；每個迭代為一個獨立的執行分支，擁有自己的 `loop.*` 與 step namespace（迭代間不共享 `steps.*`）。
+- 子 step 完成順序由完成時間決定；output array 仍按原索引排列。
+- `failure_policy` 行為見 dsl-spec/03-steps.md；引擎在每個迭代終態時重新評估是否取消其餘。
+
+### 非阻塞模式（async: true）
+
+- foreach 寫入 RUNNING 後立即發 `step.async_started` 事件並返回；父 instance 推進至下一步。
+- 引擎在背景以同樣的 `concurrency` 持續調度；達終態後寫入終態 checkpoint，發 `step.completed` 事件。
+- 對應的 `wait` step 在訂閱階段檢查當前狀態；若已完成則直接讀取 output。
+
+### Loop 變數遮蔽
+
+- 進入 foreach 時 push 新 `loop` frame；離開時 pop。
+- 巢狀 foreach：內層 frame 完全遮蔽外層；CEL 中 `loop` 永遠指當前最內層。
+
+---
+
+## type: parallel
+
+- 與 foreach 類似但分支固定為 `branches[]`。
+- 阻塞 / 非阻塞、`failure_policy` 同 foreach。
+- 每個 branch 是獨立 step 序列；branch 內無 `loop.*`。
+
+---
+
+## type: emit
+
+```
+1. 求值 event 名稱、scope、data、delay
+2. 構造事件物件：{ id: uuid(), type: <event>, scope, data, source: instance_id, timestamp: now() }
+3. 若 delay > 0 → 寫入延遲 queue；否則直接 publish
+4. SUCCEEDED, output: { event_id }
+```
+
+- emit 不等待消費者；at-least-once 投遞由 Event Bus 保證。
+- delay queue 是持久化的；engine 重啟後仍會在 deadline 觸發。
+
+---
+
+## type: wait
+
+### Event 模式（單一 / 多事件）
+
+```
+1. 為每個訂閱寫入 wait subscription 至 store：
+   { instance_id, step_id, event_type, match_expression, deadline }
+2. 寫 checkpoint：step RUNNING.waiting_event
+3. 阻塞，無計算成本（engine loop 處理其他 instance）
+4. Event Bus 收到匹配事件 → 求值 match → 通過則 wake；不通過則丟棄該訂閱對應這次事件
+5. 多事件模式下任一 match 即喚醒；其他訂閱取消
+6. timeout 觸發 → step FAILED, error.type == "timeout"
+```
+
+訂閱 wake-up 依賴 Engine Loop 收到 `event.matched` 事件後重新 schedule 該 instance。
+
+### Step 模式
+
+```
+1. 解析 step 參數（單一 string 或 string array）
+2. 若所有目標 step 已終態 → 直接讀取 output 並 SUCCEEDED（fast path）
+3. 否則寫 checkpoint：RUNNING.waiting_step；訂閱 step.completed 事件
+4. 訂閱回呼：每個目標 step 終態時檢查是否全部完成
+5. 終態判定見 dsl-spec/03-steps.md
+```
+
+---
+
+## type: fail
+
+- 不執行任何 I/O；直接構造 error 並 raise 至上層。
+- 在 catch handler 內使用時，rethrow 至 catch 外層。
+
+---
+
+## type: return
+
+- 求值 `output`；對父 instance 是「子 instance SUCCEEDED 的 output」。
+- 對 workflow / function：觸發 instance 終態流程（含 output_schema 驗證）。
+- 對 agent session：觸發 session 終態；agent step 收到 output。
+
+---
+
+## type: agent
+
+執行流程：
+
+```
+1. 解析 agent definition
+2. 合併欄位（system / prompt / model / config / input / tools — 規則見 dsl-spec/06-agent.md）
+3. 建立 Agent Session（child instance）
+4. 父 step 進入 waiting_subinstance；session.id 寫入 step state
+5. Session 執行 agent.steps（自訂或預設 loop）
+6. Session 終態 → 父 step 取得 output；status 同 session
+```
+
+`max_iterations` / `max_tool_calls` 計數器於 session 創建時初始化，session 結束後丟棄。
+
+---
+
+## type: callback（function 內部）
+
+```
+1. 求值 input；驗證符合 callback 宣告的 input_schema
+2. 寫 checkpoint：function instance RUNNING.suspended_callback
+3. 發送 callback request 給 caller instance（含 caller step_id、callback name、call_id、input）
+4. caller engine 收到後執行對應 handler steps（共享 caller namespace；不影響 caller step 進度）
+5. handler return → 驗證符合 output_schema → 回覆 callback_result
+6. function instance 喚醒，step SUCCEEDED with output
+7. timeout 在 step 1 寫入 deadline；deadline 到 → FAILED, error.type == "timeout"
+```
+
+caller engine 對 handler 的執行：
+
+- 為 handler 建立短命的「callback frame」：擁有獨立 `steps.*` namespace（避免與 caller 主流程衝突），共享 caller 的 `input` / `vars`。
+- handler 內 step 對 `prev` 的解析以 handler steps 為準（不指向 caller 主流程）。
+- handler `return` 結束；若未 return 則最後一個 step output 視為 handler output。
+
+---
+
+## type: saga
+
+```
+1. 進入 RUNNING；初始化 compensation log = []
+2. 依序執行 steps：
+   - step SUCCEEDED 且有 compensate（tool 預設或 step 覆寫） → 推入 compensation log
+3. 任一 step FAILED 未被內部 catch →
+   a. 進入 RUNNING.compensating
+   b. 依時間戳降序執行 compensation log 中的所有 compensate
+   c. 補償失敗不中止其他補償；累計至 error.compensation_failures
+   d. 全部補償完成 → step FAILED；error.type == "saga_failed"，compensation_failures: [...]
+   e. 進入 saga.catch（若有）；catch 也可消化錯誤令 saga SUCCEEDED
+4. 全部 step SUCCEEDED → SUCCEEDED, output: null（saga 不暴露 sub-step output）
+```
+
+並行子 step 的補償時序見 dsl-spec/03-steps.md「補償規則」。
+
+---
+
+## Retry
+
+step `retry` 在 step 達 FAILED 時介入：
+
+```
+attempts ← 1
+while step FAILED and attempts < max_attempts:
+    sleep(delay × backoff_factor^(attempts-1) if backoff == exponential else delay)
+    attempts += 1
+    重新進入「3. checkpoint A」（覆寫舊 RUNNING checkpoint）
+    執行 → 取得新 outcome
+若仍 FAILED → 進入 catch
+```
+
+- delay 與 backoff 在每次 attempt 開始前求值（支援 CEL）。
+- attempt 計數寫入 checkpoint，engine 重啟可正確還原。
+
+---
+
+## Catch
+
+`catch` 是一個 step 序列，可使用 `error.*` namespace。
+
+```
+1. step FAILED 且 retry 用盡
+2. 若有 catch[] → 視為一段子 steps，依序執行
+3. catch 中的 step 也可能 FAILED；catch 不再重新進入 catch（避免無限）
+4. catch 全部 SUCCEEDED → 原 step 視為已處理，status SUCCEEDED；output 為 catch 最後一個 step 的 output（若有）
+5. catch 中觸發 type: fail → 錯誤向上拋
+6. catch 自身有未處理錯誤 → 錯誤向上拋
+```
+
+`when` 在 catch 內 step 上仍可用，常見搭配：
+
+```yaml
+catch:
+  - type: fail
+    when: ${ error.type == "timeout" }
+    message: ...
+  - type: emit
+    event: step.recovered
+```
+
+---
+
+## Lifecycle init / destroy
+
+- init 不在 step pipeline；由 Tool Registry 在 resolve 階段檢查並按需呼叫。
+- 第一次解析某 tool → 從 Resource Pool 查 cache；miss → 執行 init backend → 寫 cache。
+- init 失敗：所有依賴此 tool 的 step 在 RUNNING checkpoint 之前 FAIL（`error.type == "lifecycle_init_failed"`）。
+- destroy 在 instance 終結時觸發；失敗僅記錄，不影響 instance 最終狀態。

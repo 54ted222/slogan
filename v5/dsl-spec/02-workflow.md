@@ -54,7 +54,14 @@ triggers:
 
 ## input_schema / output_schema
 
-以 JSON Schema 定義 workflow 的輸入輸出結構：
+以 JSON Schema 定義 workflow 的輸入輸出結構。驗證時機：
+
+| 階段 | 時機 | 失敗處理 |
+|------|------|----------|
+| `input_schema` | trigger 欲建立 instance 時、入庫前 | 拒絕建立 instance；trigger 回報錯誤 `workflow.input_schema_violation`，詳情含違反欄位路徑 |
+| `output_schema` | `type: return` 求值其 `output` 後、寫回前 | workflow 以 FAILED 結束，`error.type == "output_schema_violation"` |
+
+驗證器 MUST 使用嚴格模式（未定義欄位視為違反 `additionalProperties: false`，除非 schema 顯式允許）。
 
 ```yaml
 input_schema:

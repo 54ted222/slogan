@@ -64,7 +64,19 @@ steps.load_order.status             # "SUCCEEDED" | "FAILED" | "SKIPPED" | null
 | `prev.output` | `null` |
 | `prev.output.<field>` | 求值異常 → 若欄位為 CEL 則該 step FAILED |
 
-需要「最近一個 SUCCEEDED 步驟」的輸出時，以 `steps.<id>.output` 具名引用，並自行用 `when` 或 `default()` 處理。
+需要「最近一個 SUCCEEDED 步驟」的輸出時，以 `steps.<id>.output` 具名引用。防禦性寫法：
+
+```yaml
+- type: task
+  action: order.process
+  when: ${ prev.status == "SUCCEEDED" }     # 上一步未跳過才執行
+  input: { amount: ${ prev.output.amount } }
+
+# 或：上一步 SKIPPED 時帶預設值
+- type: task
+  action: order.process
+  input: { amount: ${ default(prev.output, {amount: 0}).amount } }
+```
 
 ### vars
 
@@ -190,7 +202,7 @@ artifacts.order_file.exists
 ## 求值語意
 
 - **純函式**：表達式求值不產生副作用（`now()`、`uuid()` 除外）
-- **求值失敗**：型別錯誤、null reference → 所在 step FAILED
+- **求值失敗**：型別錯誤、null reference、引用不存在的識別字（`steps.<unknown_id>`）→ 所在 step FAILED，`error.type == "expression_error"`，`error.message` 包含失敗的表達式片段
 - **Null 安全**：用 `has()`、`default()`、`coalesce()` 做防禦性存取
 - **求值時機**：step 進入 RUNNING 狀態時求值
 - **`when` 優先**：`when` 為 false → step SKIPPED，不求值其他欄位；`when` 求值異常 → step FAILED

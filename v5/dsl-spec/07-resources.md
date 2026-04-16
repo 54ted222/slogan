@@ -56,8 +56,10 @@ mcp_servers:
 | `command` | string | stdio 時 MUST — 啟動命令 |
 | `url` | string | sse 時 MUST — endpoint URL |
 | `env` | map | MAY — 環境變數（支援 `${ }`） |
-| `headers` | map | MAY — HTTP headers（sse） |
-| `config` | map | MAY — 額外設定 |
+| `headers` | map | MAY — HTTP headers（sse；支援 `${ }`） |
+| `config` | map | MAY — 額外設定（支援 `${ }`） |
+
+`${ }` 求值上下文同 lifecycle init：僅 `secret` / `env` / `project` / `artifacts._workspace_path`；server 啟動於 workflow instance 首次需要其 tool 時（lazy），求值一次後快取。
 
 ---
 
