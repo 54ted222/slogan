@@ -26,7 +26,10 @@
 | `lease_owner` / `lease_expires_at` | string / timestamp | Lease |
 | `trace_id` | string | 跨 instance 追蹤 |
 | `retention_until` | timestamp | 保存期截止 |
-| `action_pins` | jsonb | map `{canonical_action_name: version}`；首次解析該 action 時寫入，鎖定此 instance 後續同名解析（見 `05-task-registry.md`） |
+| `action_pins` | jsonb | map `{lookup_key: {canonical: string, version: int}}`；首次解析該 action 時寫入，鎖定此 instance 後續同名解析（object 形式確保 compensate pin 亦可表達；見 `05-task-registry.md` hot reload 規則第 4 項） |
+| `triggered_by_trigger_index` | int \| null | workflow instance 由 `triggers[index]` 建立時寫入；manual trigger 記錄對應 index；無 trigger 的情境（function instance）為 null |
+| `idempotency_key` | string \| null | manual trigger 的 `Idempotency-Key` header 值（若提供）；用於 24h TTL 內重複呼叫回傳既有 instance；event trigger / function instance 為 null |
+| `labels` | jsonb | 建立 instance 時從 definition.metadata.labels 快照（含 project defaults 合併，見 `dsl-spec/01-overview.md` labels 傳遞規則）；manual trigger API / event trigger 呼叫方 MAY 於建立時傳入額外 labels 覆寫（shallow merge，同 key 以呼叫方為準）；**建立之後為凍結狀態**，runtime 不支援動態設定（未來版本 MAY 開放 `instance.set_labels` builtin）；null 視同空 map |
 | `cancel_requested` | bool | 外部 cancel 訊號標記；由不持有 lease 的進程以無鎖 UPDATE 寫入，lease 持有進程於 event loop tick 檢查並進入 CANCELLED 流程（見 `10-concurrency.md`）。預設 `false`；寫入後不再回寫 `false`（終態本身已代表取消完成） |
 | `cancel_reason` | string \| null | cancel_requested 被置為 true 時隨附的 reason；供 observability 使用 |
 
