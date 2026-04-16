@@ -77,7 +77,7 @@
 |------|--------|
 | `when` | step 進入時，先於其他欄位 |
 | `input` / `args` / `data` / `headers` / 任何字面值欄位 | step 進入 RUNNING 之後、handler 執行之前；一次性求值，求值結果 snapshot 至 step state |
-| `match` (wait event) | event 到達時 |
+| `match` (wait signals 事件訊號) | event 到達時 |
 | `match` (trigger when) | trigger event 到達時，於 instance 建立前 |
 | `cases[].value` | switch 對應 case 被檢查時（lazy） |
 | `items` / `count` (foreach) | foreach 開始時 |

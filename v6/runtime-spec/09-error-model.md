@@ -54,7 +54,7 @@ ErrorObject {
 | code | 觸發 |
 |------|------|
 | `invalid_count` | foreach.count 為負或非整數 |
-| `async_step_failed` | wait `step` 模式所等待的 async step FAILED |
+| `async_step_failed` | wait signals 中 step 訊號所等待的 async step FAILED |
 | `branch_failed` | parallel branch 失敗（fail_fast 政策下） |
 
 ### Saga

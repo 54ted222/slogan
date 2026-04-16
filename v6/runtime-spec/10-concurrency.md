@@ -147,9 +147,9 @@ step 接收 cancel：
 3. 若 event 已開始投遞（已寫 step.completed），timeout 不再觸發（檢查 step.state）
 ```
 
-### 多個事件同時匹配 events 模式
+### 多個訊號同時匹配 signals 模式
 
-`events: [...]` 的 any-of：第一個被引擎處理的 match 喚醒，其餘訂閱被取消。**「第一個被處理」**由 bus 投遞順序決定，非業務時間戳；建議使用者不依賴具體哪個 event 勝出。
+`signals: [...]` 的 any-of：第一個被引擎處理的 match 喚醒，其餘訂閱被取消。**「第一個被處理」**由 bus 投遞順序決定，非業務時間戳；建議使用者不依賴具體哪個訊號勝出。
 
 ### Lease vs cancel
 

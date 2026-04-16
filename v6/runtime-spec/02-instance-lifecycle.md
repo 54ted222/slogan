@@ -42,8 +42,7 @@ Function instance 由父 instance「擁有」；父 instance 若被取消，子 
 | 子態 | 條件 |
 |------|------|
 | `RUNNING.executing` | 當前 step 處於 RUNNING |
-| `RUNNING.waiting_event` | 當前 step 為 `wait` event 模式，已寫入 wait subscription |
-| `RUNNING.waiting_step` | 當前 step 為 `wait` step 模式，等待 async step 終態 |
+| `RUNNING.waiting_signal` | 當前 step 為 `wait` signals 模式，已建立訂閱（事件訊號 / step 訊號） |
 | `RUNNING.suspended_callback` | function instance 處於 `type: callback` step，等待 caller handler |
 | `RUNNING.compensating` | saga 進入補償階段 |
 

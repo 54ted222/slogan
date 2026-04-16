@@ -219,32 +219,16 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 ## wait
 
-暫停 workflow instance，等待事件或指定時間。三種模式互斥：單一事件、多事件、duration。
+暫停 workflow instance，等待訊號或指定時間。兩種模式互斥：`signals`、`duration`。
 
-### 單一事件
+### Signals 模式
 
-```yaml
-- id: wait_payment
-  type: wait
-  event: payment.confirmed
-  match: ${ event.data.order_id == input.order_id }
-  timeout: 30m
-  catch:
-    - type: fail
-      when: ${ error.type == "timeout" }
-      message: "payment timeout"
-```
-
-`steps.<id>.output` = `event.data`。
-
-### 多事件（any-of）
-
-同時等待多個不同事件，**任一**匹配即恢復。
+`signals` 為訊號陣列，每個訊號可為事件訊號或 step 訊號。**任一**訊號匹配即恢復。
 
 ```yaml
 - id: wait_result
   type: wait
-  events: # MUST — 事件陣列
+  signals:
     - event: payment.confirmed
       match: ${ event.data.order_id == input.order_id }
     - event: payment.failed
@@ -258,42 +242,20 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
       message: "等待逾時"
 ```
 
-Output：
+#### 事件訊號
 
-| 欄位                      | 說明                                       |
-| ------------------------- | ------------------------------------------ |
-| `steps.<id>.output.event` | 匹配到的事件類型（如 `payment.confirmed`） |
-| `steps.<id>.output.data`  | 該事件的 `event.data`                      |
+| 屬性 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `event` | string | MUST | 事件類型 |
+| `match` | CEL expression | MAY | 事件過濾條件 |
 
-```yaml
-# 根據匹配到的事件分支處理
-- type: switch
-  when: ${ steps.wait_result.output.event }
-  cases:
-    - value: "payment.confirmed"
-      then:
-        - type: emit
-          event: order.processing
-    - value: "payment.failed"
-      then:
-        - type: fail
-          message: "付款失敗"
-    - value: "order.cancelled"
-      then:
-        - type: fail
-          message: "訂單已取消"
-```
+#### Step 訊號
 
-### Duration 模式
+等待一個 `async: true` 的非阻塞步驟（`foreach` 或 `parallel`）完成。
 
-```yaml
-- type: wait
-  duration: 5m
-```
-
-### Step 模式
-
-等待一個 `async: true` 的非阻塞步驟（`foreach` 或 `parallel`）完成，並取得其結果。
+| 屬性 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `step` | string | MUST | 非阻塞步驟的 ID |
 
 ```yaml
 - id: reserve_items
@@ -316,7 +278,8 @@ Output：
 # 阻塞等待 foreach 完成
 - id: wait_reserve
   type: wait
-  step: reserve_items # MUST — 要等待的非阻塞步驟 ID，可為字串或字串陣列
+  signals:
+    - step: reserve_items
   timeout: 5m
   catch:
     - type: fail
@@ -324,22 +287,67 @@ Output：
       message: "reserve timeout"
 ```
 
-`step` 為字串陣列時：等待**所有**指定 step 完成才恢復；output 為 map `{<step_id>: <output>, ...}`。
-`step` 為單一字串時：output 即該 step 的 output。
+#### 混合訊號
 
-所等待的 async step 終態決定 wait step 結果：
+事件訊號與 step 訊號可混合使用，任一匹配即恢復：
+
+```yaml
+- id: wait_or_cancel
+  type: wait
+  signals:
+    - step: reserve_items
+    - event: order.cancelled
+      match: ${ event.data.order_id == input.order_id }
+  timeout: 10m
+```
+
+#### Output
+
+| 欄位 | 說明 |
+|------|------|
+| `steps.<id>.output.signal` | 匹配到的訊號類型：`"event"` 或 `"step"` |
+| `steps.<id>.output.event` | 事件訊號匹配時：事件類型（如 `payment.confirmed`）；step 訊號時為 `null` |
+| `steps.<id>.output.step` | step 訊號匹配時：step ID；事件訊號時為 `null` |
+| `steps.<id>.output.data` | 事件訊號匹配時：`event.data`；step 訊號匹配時：該 step 的 output |
+
+```yaml
+# 根據匹配到的訊號分支處理
+- type: switch
+  when: ${ steps.wait_result.output.event }
+  cases:
+    - value: "payment.confirmed"
+      then:
+        - type: emit
+          event: order.processing
+    - value: "payment.failed"
+      then:
+        - type: fail
+          message: "付款失敗"
+    - value: "order.cancelled"
+      then:
+        - type: fail
+          message: "訂單已取消"
+```
+
+#### Step 訊號的終態行為
 
 | async step 終態 | wait step 行為 |
 |-----------------|----------------|
-| SUCCEEDED | wait SUCCEEDED，output 為該 step 的 output |
-| FAILED | wait FAILED，`error.type == "async_step_failed"`、`error.step_id` 為該 step 的 id；`error.cause` 為該 step 的原 error 物件；output 為 null（由 `catch` 存取 `error.*`） |
+| SUCCEEDED | wait SUCCEEDED，`output.data` 為該 step 的 output |
+| FAILED | wait FAILED，`error.type == "async_step_failed"`、`error.step_id` 為該 step 的 id；`error.cause` 為該 step 的原 error 物件 |
 | SKIPPED | wait SKIPPED |
 
-陣列模式下任一子 step FAILED → wait FAILED，`error.step_id` 為首個失敗者；其餘 step 仍執行至終態（不取消）。
+### Duration 模式
+
+```yaml
+- type: wait
+  duration: 5m
+```
 
 ### 模式判斷規則
 
-- `event`、`events`、`duration`、`step` 四者 MUST 擇一，不可同時存在
+- `signals` 與 `duration` 兩者 MUST 擇一，不可同時存在
+- `signals` MUST 為非空陣列
 
 ---
 

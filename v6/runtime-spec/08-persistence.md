@@ -17,7 +17,7 @@
 | `definition_version` | int | |
 | `project` | string \| null | |
 | `state` | enum | `PENDING` / `RUNNING` / `SUCCEEDED` / `FAILED` / `CANCELLED` |
-| `substate` | string \| null | RUNNING 細分（`executing` / `waiting_event` / `waiting_step` / `suspended_callback` / `compensating`） |
+| `substate` | string \| null | RUNNING 細分（`executing` / `waiting_signal` / `suspended_callback` / `compensating`） |
 | `input` | jsonb | 初始 input |
 | `output` | jsonb \| null | 終態 output |
 | `error` | jsonb \| null | 終態 error 物件 |

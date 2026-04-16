@@ -79,8 +79,9 @@ steps:
 
   - id: wait_payment
     type: wait
-    event: payment.confirmed
-    match: ${ event.data.order_id == steps.load_order.output.id }
+    signals:
+      - event: payment.confirmed
+        match: ${ event.data.order_id == steps.load_order.output.id }
     timeout: 30m
     catch:
       - type: fail

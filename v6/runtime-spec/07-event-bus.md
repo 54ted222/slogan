@@ -65,7 +65,7 @@ Event {
 
 ## Wait subscription
 
-`type: wait` 的 event / events 模式建立 subscription：
+`type: wait` 的 `signals` 中事件訊號建立 subscription（step 訊號透過 `step.completed` 事件訂閱處理，不經此路徑）：
 
 ```
 WaitSubscription {
@@ -76,7 +76,7 @@ WaitSubscription {
     { event_type: string, match_expr: CEL | null }
   ],
   deadline:        timestamp,    # 由 wait.timeout 計算
-  any_of:          bool,         # events 陣列模式為 true
+  any_of:          bool,         # signals 模式下恆為 true（任一匹配即喚醒）
   created_at:      timestamp,
 }
 ```
@@ -175,7 +175,7 @@ emit 的順序保證：
 | `instance.completed` | Engine Loop | Engine Loop / 父 instance | 子 instance 終結通知 |
 | `instance.failed` | Engine Loop | 同上 | |
 | `instance.cancelled` | Engine Loop / API | 同上 | |
-| `step.completed` | Engine Loop | Engine Loop | 推進下一步 / 喚醒 wait step 模式 |
+| `step.completed` | Engine Loop | Engine Loop | 推進下一步 / 喚醒 wait signals 中的 step 訊號 |
 | `step.async_started` | Engine Loop | Engine Loop | foreach/parallel async 模式 |
 | `event.matched` | Event Bus | Engine Loop | 喚醒 wait step |
 | `wait.timeout` | Engine Loop（timer） | Engine Loop | 觸發 wait step FAILED |

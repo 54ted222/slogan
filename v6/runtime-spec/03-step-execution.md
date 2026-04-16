@@ -143,29 +143,24 @@ vars 的 scope 是 instance-wide；子 instance 不繼承父 vars。
 
 ## type: wait
 
-### Event 模式（單一 / 多事件）
+### Signals 模式
+
+`signals` 陣列中每個訊號各自建立訂閱，任一匹配即喚醒：
 
 ```
-1. 為每個訂閱寫入 wait subscription 至 store：
-   { instance_id, step_id, event_type, match_expression, deadline }
-2. 寫 checkpoint：step RUNNING.waiting_event
+1. 遍歷 signals[]，依類型建立訂閱：
+   - 事件訊號（有 event 欄位）：寫入 wait subscription 至 store
+     { instance_id, step_id, event_type, match_expression, deadline }
+   - Step 訊號（有 step 欄位）：
+     若目標 step 已終態 → 直接讀取 output 並 SUCCEEDED（fast path）
+     否則訂閱 step.completed 事件
+2. 寫 checkpoint：step RUNNING.waiting_signal
 3. 阻塞，無計算成本（engine loop 處理其他 instance）
-4. Event Bus 收到匹配事件 → 求值 match → 通過則 wake；不通過則丟棄該訂閱對應這次事件
-5. 多事件模式下任一 match 即喚醒；其他訂閱取消
-6. timeout 觸發 → step FAILED, error.type == "timeout"
+4. 任一訊號匹配 → 喚醒；取消其餘訂閱
+5. timeout 觸發 → step FAILED, error.type == "timeout"
 ```
 
-訂閱 wake-up 依賴 Engine Loop 收到 `event.matched` 事件後重新 schedule 該 instance。
-
-### Step 模式
-
-```
-1. 解析 step 參數（單一 string 或 string array）
-2. 若所有目標 step 已終態 → 直接讀取 output 並 SUCCEEDED（fast path）
-3. 否則寫 checkpoint：RUNNING.waiting_step；訂閱 step.completed 事件
-4. 訂閱回呼：每個目標 step 終態時檢查是否全部完成
-5. 終態判定見 dsl-spec/03-steps.md
-```
+訂閱 wake-up 依賴 Engine Loop 收到 `event.matched` 或 `step.completed` 事件後重新 schedule 該 instance。
 
 ---
 
