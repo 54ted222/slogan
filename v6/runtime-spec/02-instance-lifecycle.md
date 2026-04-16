@@ -191,6 +191,17 @@ Workflow Instance
 | `wait.timeout` | wait subscription 建立 | event 到達 / step 終態 | wait FAILED，`error.type == "timeout"` |
 | `callback timeout` | 發出 callback 訊息 | handler `return` | callback step FAILED，`error.type == "timeout"` |
 
+### max_step_executions 限制
+
+`workflow.config.max_step_executions` / `function.config.max_step_executions`（見 DSL spec）於運行時以 instance-level counter 追蹤：
+
+- Counter 初值為 0；每次 step 由 `WAITING` / retry-sleep 進入 `RUNNING` checkpoint 時 +1（即每次 attempt 計 1 次，retry 也計入；`when:false` 的 SKIPPED **不**計入，因為未進入 RUNNING）
+- 每次 checkpoint commit 後比對：若 counter > `config.max_step_executions` → instance 立即進入終結流程，`error.type == "max_step_executions_exceeded"`、`error.details.limit` 為該欄位值、`error.details.observed` 為實際 counter
+- 該錯誤走 `config.catch`（與 timeout 同路徑）；catch 消化後 instance 可 SUCCEEDED；否則 FAILED
+- Counter 持久化於 `instances.step_executions_count` 欄位；engine 重啟沿用，不重置
+- 無 `config.max_step_executions` 宣告 → 不做檢查（無限制）；實作 MAY 於 engine config 設置全域 `engine.default_max_step_executions` 作為保底（預設不設）
+- 嵌套 foreach / parallel：每個子 step 執行各自計 1 次（包括 foreach 內每次迭代的每個 step）；保護意圖即「防止 runaway loops」
+
 ### Callback timeout 規則
 
 Callback 無獨立 timeout 欄位；採用以下規則：

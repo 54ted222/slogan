@@ -32,6 +32,7 @@
 | `labels` | jsonb | 建立 instance 時從 definition.metadata.labels 快照（含 project defaults 合併，見 `dsl-spec/01-overview.md` labels 傳遞規則）；manual trigger API / event trigger 呼叫方 MAY 於建立時傳入額外 labels 覆寫（shallow merge，同 key 以呼叫方為準）；**建立之後為凍結狀態**，runtime 不支援動態設定（未來版本 MAY 開放 `instance.set_labels` builtin）；null 視同空 map |
 | `cancel_requested` | bool | 外部 cancel 訊號標記；由不持有 lease 的進程以無鎖 UPDATE 寫入，lease 持有進程於 event loop tick 檢查並進入 CANCELLED 流程（見 `10-concurrency.md`）。預設 `false`；寫入後不再回寫 `false`（終態本身已代表取消完成） |
 | `cancel_reason` | string \| null | cancel_requested 被置為 true 時隨附的 reason；供 observability 使用 |
+| `step_executions_count` | int | 已執行的 step attempt 累計數（每次 step 進入 RUNNING +1，含 retry；SKIPPED 不計）；用於 `config.max_step_executions` 限制檢查（見 `02-instance-lifecycle.md`）；預設 0 |
 
 ### steps
 

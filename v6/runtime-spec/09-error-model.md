@@ -109,6 +109,7 @@ ErrorObject {
 | `workflow_version_deleted.hash_mismatch` | replay 時對應 `(canonical, version)` 於 registry 的 `definition_hash` 與 instance pin 時的 hash 不符（表明 version 內容被違規覆寫）；見 `05-task-registry.md` hot reload 規則 |
 | `definition_in_use` | 嘗試刪除仍有 active instance 引用的 definition version |
 | `max_recursion_depth_exceeded` | 運行時 function 遞迴深度超限 |
+| `max_step_executions_exceeded` | instance 執行的 step 次數超過 `config.max_step_executions`（見 `02-instance-lifecycle.md`）；走 config.catch |
 | `schema_incomplete` | Function callback 只宣告 input_schema 或 output_schema 之一 |
 | `invalid_var_name` | `type: assign` 的 vars key 含 path separator 或保留前綴 |
 | `invalid_duration_format` | duration 字面值或 CEL 結果不符 `<N><s/m/h>` 格式 |
