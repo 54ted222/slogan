@@ -73,7 +73,7 @@
 
 ### Resource Pool
 - 持有 workflow instance 等級的共享資源：
-  - Tool lifecycle init 的快取 output（key: `(tool_name, version)`）
+  - Tool lifecycle init 的快取 output（key: `(tool_name, version, instance_id)`；per-instance，見 `06-tool-backend.md` Lifecycle 節）
   - HTTP keep-alive client、connection pool
   - Secret 解密後的明文（in-memory only，不寫盤）
 - Instance 結束時觸發 destroy hook 並釋放資源。

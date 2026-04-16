@@ -118,7 +118,7 @@ WAITING ─► RUNNING ─► SUCCEEDED
 
 | State | 條件 | 寫入持久化 |
 |-------|------|------------|
-| `WAITING` | 尚未進入；`when` 未求值 | 否 |
+| `WAITING` | 兩種情境：(A) 首次尚未進入 / `when` 未求值；(B) 上一 attempt FAILED 且進入 retry backoff（`scheduled_at = next_attempt_at`） | (A) 否；(B) 是 — 寫 attempt=N+1 row 以記錄 backoff deadline（見 `03-step-execution.md` retry 狀態機） |
 | `RUNNING` | `when` 真值通過、進入執行；外部 I/O 已啟動 | 是（檢查點） |
 | `SUCCEEDED` | step handler 回傳成功；output 已寫入 | 是 |
 | `FAILED` | step handler 拋錯或外部回報失敗 | 是（含 error） |
