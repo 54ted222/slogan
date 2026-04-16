@@ -42,7 +42,7 @@
 | `error` | jsonb \| null | |
 | `started_at` / `ended_at` | timestamp | |
 | `signature` | string | 對 input + action 的 hash，用於 idempotent retry 比對 |
-| `compensate_state` | enum \| null | saga 補償用：`pending` / `done` / `failed` |
+| `compensate_state` | enum \| null | saga 補償用：`pending` / `started` / `done` / `failed`（見 `03-step-execution.md` saga 補償狀態機） |
 
 主鍵：`(instance_id, step_id, attempt)`
 
@@ -219,3 +219,7 @@ Replay 不重新呼叫外部 tool；用於 audit、debug、CEL 升級驗證。
 - `wait_subscriptions_count{state}`
 - `tool_invocations_total{action_name, success}`
 - `expression_eval_failures_total{type}`
+- `saga_compensate_total{action_name, result}` — result: `done` / `failed`
+- `callback_handler_duration_ms{function_name, callback_name}` histogram
+- `backend_spawn_duration_ms{backend_type}` histogram
+- `error_total{type, kind}` — kind: `user_fail` / `system_error`（與 09-error-model.md 對齊）

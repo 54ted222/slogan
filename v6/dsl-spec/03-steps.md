@@ -147,7 +147,8 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 | `cases[].value` | 字面值 or CEL | MUST | 匹配值；與 `subject` 做 `==` 比較 |
 
 - 匹配第一個 `value == subject` 的 case；無匹配且有 `default` → 執行 default；皆無 → SUCCEEDED 且 output 為 `null`
-- `value` 為 CEL 時，該 case 被檢查時才求值（lazy）；求值結果型別需與 `subject` 相容才可能匹配
+- `value` 為 CEL 時，該 case 被檢查時才求值（lazy）
+- **型別相容**：`value == subject` 遵循 CEL `==` 語意；型別不同（如 int vs string、bool vs string）永不匹配（`==` 回 false，不拋錯）。引擎 MAY 在載入期對字面值 `value` 做型別提示警告，但不拒絕載入
 - `subject` 與共通屬性 `when`（前置條件）為不同欄位：`when: false` → 整個 `switch` step SKIPPED
 
 ---

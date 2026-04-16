@@ -41,7 +41,13 @@
 
 - 進入 step 時若 caller 有 `callback:`，driver 啟用 NDJSON 模式（exec）或 SSE（http）。
 - Tool 發 `{type:"callback", call_id, name, input}` → driver 暫停 reading → engine 執行對應 handler steps（共享 caller namespace）→ handler `return` → engine post `{type:"callback_result", call_id, output}` 至 stdin / `X-Callback-URL`。
-- Handler FAILED 不直接 FAIL caller；engine post `callback_result.error`，由 tool 自行決定是否中止（若 tool 寫 `result.success == false`，caller step FAILED）。
+- Handler FAILED 時的漣漪：
+  - engine 傳回 `{type:"callback_result", call_id, error: {type, message}}`（不含 `output`）
+  - Tool 可選擇：
+    1. 以 `{type:"result", success:false, error:{...}}` 結束 → caller step FAILED，`error.cause` 為 tool 回報的 error
+    2. 以 `{type:"result", success:true, output:{...}}` 結束 → caller step SUCCEEDED（tool 決定忽略 handler 錯誤）
+    3. 繼續執行（發更多 callback）→ engine 持續路由至對應 handler
+  - 最終 caller step 的終態以 tool 的 `result.success` 為準；`callback_result.error` 僅是通知通道
 
 ### Output 寫入
 
