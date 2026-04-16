@@ -228,6 +228,27 @@ Trigger 建立新 instance 時：
 - Manual / event trigger 皆取 registry 中該 workflow 的**最大 version**（除非 API 帶明確 `version=N`）
 - 新 instance 一旦建立即鎖定該 version，不再隨 definition 更新改變
 
+### 版本選擇 API
+
+- Manual trigger：API 支援 `?version=N` query / `{version: N}` body 欄位顯式選版；省略則取 registry 最大
+- Event trigger：每個 workflow 的 `triggers[]` 針對當時 registry 的最大 version 訂閱；若同 workflow 有多版本共存，舊版 trigger 亦維持訂閱（behavior：所有 active 版本的 trigger 獨立接收事件，各自建立 instance）
+- 指定不存在的 version → `registry.action_not_found`
+
+### 版本回滾（Rollback）
+
+v6 不支援原地「降版」；回滾透過**發佈新版本**完成：
+
+1. 假設 v2 有 bug，運維決定回退至 v1 的行為
+2. **不可**將 v2 definition 改回 v1 內容（違反「同 `(name, version)` 內容不可變」規則；見 `dsl-spec/01-overview.md`）
+3. 正確做法：以 v1 的內容為基礎，bump 至 v3（或 v4 等）發佈新版；registry 最大 version 即為 v3
+4. 已運行的 v2 instance 在 action_pin 保護下繼續以 v2 執行至完成；新 instance 使用 v3
+5. 管理員若需**立即中止**所有 v2 instance：`slogan cancel --workflow=<name> --version=2 --all`（由實作提供）
+
+此設計確保：
+- Instance 行為可追溯（version 即為 immutable snapshot id）
+- 回滾不會破壞正在執行的業務（緊急中止需顯式）
+- Git 式的版本歷史（新版覆蓋舊版，但舊版記錄保留）
+
 ---
 
 ## 結束後的保存期

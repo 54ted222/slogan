@@ -87,6 +87,9 @@ ErrorObject {
 | `schema_violation` | input/output 不符 JSON Schema |
 | `backend_crashed` | tool process / extension 在 RUNNING 中崩潰 |
 | `lifecycle_init_failed` | tool lifecycle init backend 失敗 |
+| `extension_handler_panic` | extension handler 內部未捕捉例外 / panic / WASM trap |
+| `invalid_args` | tool exec backend `args` 陣列某元素 CEL 求值為 null 或非 string |
+| `invalid_env` | tool exec backend `env` 某 value CEL 求值為 null 或非 string |
 | `stdout_too_large` | tool 原始 stdout bytes 超過 `engine.tool_stdout_raw_limit` |
 | `http_body_too_large` | tool http backend 回應 body 超過 `engine.http_body_limit` |
 

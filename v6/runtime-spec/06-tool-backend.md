@@ -71,10 +71,24 @@ step SUCCEEDED，output 進入 checkpoint
 ```
 1. 解析 backend.command / args / env / working_dir / shell
 2. 對 args、env、working_dir 中的 ${ } 做 expression 求值
-3. spawn process（依 platform 採 fork/exec）
-4. 設定 stdin / stdout / stderr 為非阻塞 pipe
-5. 啟動 reader / writer task；start time 記錄為 RUNNING checkpoint 的時間
+3. 驗證求值結果（見下「args / env 值型別驗證」）
+4. spawn process（依 platform 採 fork/exec）
+5. 設定 stdin / stdout / stderr 為非阻塞 pipe
+6. 啟動 reader / writer task；start time 記錄為 RUNNING checkpoint 的時間
 ```
+
+#### args / env 值型別驗證
+
+CEL 求值後每個 args 元素 / env value MUST 為**非 null 字串**；引擎執行以下規則：
+
+| 求值結果 | 處理 |
+|---------|------|
+| string | 原樣使用 |
+| null | step FAILED，`error.type == "invalid_args"`（args）或 `"invalid_env"`（env）；`error.details.field` 為失敗路徑（如 `args[2]`） |
+| int / double / bool | step FAILED，同上；使用者 MUST 顯式 `string(x)` 轉型（避免格式意外） |
+| list / map | step FAILED，同上（args/env 不支援複合值） |
+
+若使用者確實需要「可省略的 optional 參數」，請於 YAML 上層以 `if` / `switch` 產生不同 args 陣列，或在 CEL 中以 `default(x, "")` 轉為空字串（engine 不自動過濾空字串元素，tool 自行處理）。
 
 ### 模式判定
 
@@ -339,6 +353,16 @@ URL 應含一次性 token（query string 或 path），驗證來源；engine 在
 - 將最終結果包裝為 ToolResult
 
 extension handler 必須是 in-process（Go plugin、Python entry point、WASM module 等）；out-of-process 由其自行包裝為 exec / http backend。
+
+### Extension Handler 異常安全
+
+- Extension handler 執行期間若發生 **未捕捉例外 / panic / WASM trap**，engine MUST：
+  1. 攔截並記錄完整 stack trace 至 execution_log（redact secret 後）
+  2. 構造 ToolResult `{success: false, error: {type: "extension_handler_panic", message: <摘要>, details: {handler_name, stack_digest}}}`
+  3. Engine 進程本身**不**因 handler panic 而崩潰（以 recover / try-catch 包裹 invocation）
+- Panic 後 handler 實例的狀態被視為**不可信**；同 engine 進程若後續再呼叫同 handler，MAY 重新初始化（對 Go plugin / Python 為重新 import；WASM 為重建 instance）
+- Handler 若宣稱 `idempotent: true` 但發生 panic → 本次 attempt 仍計入 retry 計數；retry 前清空 signature cache（同一 attempt 的 panic 不視為「已完成」）
+- 若 panic 發生於 callback_handler 執行中（而非 tool invoke 主流程）→ 以 `callback_result.error = {type: "extension_handler_panic"}` 回覆 tool；不中斷 tool 主流程
 
 ### Extension Registry
 

@@ -305,6 +305,31 @@ emit 的順序保證：
 | `engine.lease_expired` | Lease Manager | Engine Loop | 觸發 instance 接管 |
 | `bus.dead_letter` | Event Bus | Ops 監控 | 訊息無法投遞 |
 
+### 內部事件訂閱限制
+
+所有 `scope: internal` 的事件 **僅 engine 與 ops 監控可訂閱**；使用者 workflow 的：
+
+- `wait.signals[].event`：載入期拒絕保留前綴（見 `dsl-spec/03-steps.md` 的 event 名稱規則）
+- Event trigger：同上
+- `emit.event`：同上（使用者不能 emit 保留 type）
+
+業務層若需要「instance 完成」事件，建議 workflow 主動 `emit workflow.completed`（使用者自訂 type）。
+
+### 主要 internal event 的 data payload
+
+| Event type | `data` 欄位 |
+|-----------|-------------|
+| `instance.created` | `{instance_id, workflow_name, workflow_version, triggered_by_trigger_index, input_summary (前 4 KB)}` |
+| `instance.completed` | `{instance_id, kind, output_summary (前 4 KB), duration_ms}` |
+| `instance.failed` | `{instance_id, kind, error: <完整 ErrorObject>, duration_ms, owner}` |
+| `instance.cancelled` | `{instance_id, kind, reason, by_parent (bool)}` |
+| `step.completed` | `{instance_id, step_id, step_path, status, attempt, duration_ms}`（不含 output，讀 checkpoint） |
+| `step.async_started` | `{instance_id, step_id, step_path, total_iterations (foreach 才有)}` |
+| `trigger.rejected` | `{workflow_name, trigger_index, event_id, failure_reason, violation_path?}` |
+| `bus.dead_letter` | 見上「bus.dead_letter 事件結構」 |
+
+實作 SHOULD 將 data 限制在 4 KB 以內（超過請以 `*_summary` 前綴的摘要欄位傳遞）；完整狀態請訂閱者依 `instance_id` 讀取 Instance Store。
+
 ---
 
 ## trace_id 傳播
