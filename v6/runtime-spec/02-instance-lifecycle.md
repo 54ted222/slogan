@@ -57,13 +57,21 @@ Function instance 由父 instance「擁有」；父 instance 若被取消，子 
 
 ### RUNNING → SUCCEEDED
 - 觸發點：`type: return` step 或 `steps[]` 自然走完（fall-through）。
-- fall-through 時最終 output 為 `null`；若 workflow / function 定義了 `output_schema` 且 schema 不接受 `null`，則 instance FAILED，`error.type == "output_schema_violation"`。
-- 終結前：
+- fall-through 時最終 output **恆為 `null`**（不繼承最後一個 step 的 output；若需以最後 step output 作為 instance output，MUST 顯式以 `type: return` 宣告）。若 workflow / function 定義了 `output_schema` 且 schema 不接受 `null`，則 instance FAILED，`error.type == "output_schema_violation"`。
+- 終結前（以下步驟於**單一 checkpoint transaction** 內 atomic 執行）：
   1. 求值 `output_schema`（若 instance 為 workflow / function）
-  2. 寫入最終 output 與終結時間戳
-  3. 釋放 Resource Pool 中此 instance 持有的資源（觸發 lifecycle destroy）
-  4. 發出 `instance.completed` 事件
-  5. 若有父 instance 等待此實例，wake 父 instance
+     - 驗證失敗 → instance 狀態改為 FAILED，`instance.output` 保持 `null`（**不**寫入驗證前的候選值），`error.type == "output_schema_violation"`
+     - 驗證成功 → 候選 output 成為最終 `instance.output`
+  2. 寫入最終狀態（SUCCEEDED 或 FAILED）、output、終結時間戳
+  3. 釋放 Resource Pool 中此 instance 持有的資源（觸發 lifecycle destroy，見下）
+  4. **Checkpoint commit 後**才發出 `instance.completed` / `instance.failed` 事件（不可在 commit 前發，以免父 instance 讀到尚未持久化的狀態）
+  5. 若有父 instance 等待此實例，wake 父 instance（父讀到的 output 即 checkpoint 中的值）
+
+**Destroy hook 失敗處理**：
+
+- Lifecycle destroy hook 於 checkpoint commit **之後** 執行；視為 best-effort，不改變已定案的 instance 終態。
+- destroy 失敗 → 記錄 `lifecycle.destroy_failed` observability 事件（含 `instance_id` / `resource_key` / error），並排入清理重試佇列（依 resource pool 策略）。
+- destroy 成功與否**不影響** `instance.completed` / `instance.failed` 事件發送順序；父 instance 的 catch / failure_policy 只看 instance 終態。
 
 ### RUNNING → FAILED
 - 觸發點：未被任何 `catch` / saga 捕捉的錯誤、`type: fail` step、`config.timeout` 等。

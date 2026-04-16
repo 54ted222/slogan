@@ -54,6 +54,16 @@
 - `idempotent: true` 的 step：若 retry 觸發，driver 先嘗試讀取 instance store 的 cached output（key `(instance_id, step_id, attempt_signature)`）；命中則跳過實際呼叫。
 - 非 idempotent：每次 attempt 都實際呼叫；persistence 只記錄最後一次成功的 output。
 
+### Attempt 與 signature 的精確語意
+
+- `attempt` 為 integer，首次執行 = 1；於 step 由 `WAITING` / retry-sleep 進入 `RUNNING`、寫入 checkpoint 的那一刻遞增。
+- Engine crash 後重啟：依 checkpoint 中的 `attempts_so_far` 恢復，**不**重新從 0 / 1 開始（例如已重試 2 次並在 attempt=3 中 crash → 重啟後仍以 attempt=3 進入 backend，signature 與 crash 前相同，可命中 cache）。
+- `input_snapshot`（CEL 求值結果）於 **首次** 進入 RUNNING 時取樣並寫入 checkpoint；**後續 retry 沿用同一 snapshot**，不重新求值 CEL（避免 `${ now() }` / `${ uuid() }` 造成 signature 漂移、破壞 idempotency）。
+  - 唯一例外：`retry.delay`（若為 CEL）每次 retry 前重新求值，屬控制欄位不進 signature。
+  - 若使用者確實需要每次 retry 以新值呼叫，請將求值改為該 step 之前的 `assign`，或顯式關閉 `idempotent`。
+- 補償 step 獨立計數：`compensate_attempt` 首次 = 1，與原 step `attempt` 不共用；即使同一 tool 被多個 saga step 當作補償引用，key 以 `(instance_id, origin_step_id, "compensate", compensate_attempt)` 區分，不會 collision。
+- Signature 明確定義：`hash(action_name || "\0" || canonical_json(input_snapshot) || "\0" || attempt)`；`canonical_json` 為鍵遞增排序後的 JSON serialization（確保 map 鍵順序不影響 hash）。
+
 ### idempotent + compensate 組合
 
 Tool 同時宣告 `idempotent: true` 與 `compensate` 時，職責分離：
@@ -178,10 +188,7 @@ vars 的 scope 是 instance-wide；子 instance 不繼承父 vars。
 1. 遍歷 signals[]，依類型建立訂閱：
    - 事件訊號（有 event 欄位）：寫入 wait subscription 至 store
      { instance_id, step_id, event_type, match_expression, deadline }
-   - Step 訊號（有 step 欄位）：
-     若目標 step 已終態 → 直接讀取 output 並 SUCCEEDED（fast path）
-     否則訂閱 step.completed 事件；事件到達時 MUST 再次讀取 target step 狀態確認已終態
-     （避免 step.completed 投遞過早導致 wait 讀取 undefined output）
+   - Step 訊號（有 step 欄位）：見下「Step 訊號匹配規則」
 2. 寫 checkpoint：step RUNNING.waiting_signal
 3. 阻塞，無計算成本（engine loop 處理其他 instance）
 4. 任一訊號匹配 → 喚醒；取消其餘訂閱
@@ -189,6 +196,16 @@ vars 的 scope 是 instance-wide；子 instance 不繼承父 vars。
 ```
 
 訂閱 wake-up 依賴 Engine Loop 收到 `event.matched` 或 `step.completed` 事件後重新 schedule 該 instance。
+
+#### Step 訊號匹配規則
+
+1. **Fast-path 判定**：讀取目標 step 狀態；若狀態屬於 `{SUCCEEDED, FAILED, SKIPPED}` **且** 所在 instance store 的 checkpoint `last_committed_at >= target_step.terminated_at` → 視為已持久化終態，直接讀 output 並 SUCCEEDED。
+2. **未終態或持久化未確認**：建立 `step.completed` 訂閱並進入阻塞。
+3. **事件到達時的 re-read**：
+   - 讀取目標 step 最新 state；若 **仍非終態** → 視為事件早到（極少數並發情境），**維持訂閱繼續等待** 下一個 `step.completed`；不報錯（此事件 MAY 重覆投遞至同一 subscription，屬 at-least-once 的正常行為）。
+   - 若為終態 → 讀取 output 並 SUCCEEDED。
+4. **Output 規範化**：wait step 的 output 恆為 `{ data: <target.output> }`；若目標 step 無 output（例：SKIPPED、或 step 類型本就無 output 如 `emit`）→ `data = null`；若目標 FAILED → wait step 依然 SUCCEEDED，但 `data = null` 且新增 `error_cause: <target.error>` 讓使用者可自行判定（若 wait 本身應以目標 FAILED 傳播錯誤，使用者應檢查 `steps.<wait_id>.output.error_cause` 並以 `type: fail` 中止）。
+5. **目標 step 永不終態**（例：`async: true` 的 step 所在 instance 已 CANCELLED）：`step.completed` 不會到達，依賴 `wait.timeout` 兜底；deadline 到即 FAILED。
 
 ---
 

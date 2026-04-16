@@ -72,9 +72,9 @@ Schema 驗證分三個獨立層級，各司其職、不互相代勞：
 | Workflow instance input | `workflow.input_schema` | trigger 建立 instance 前 | 拒絕建立 |
 | Workflow instance output | `workflow.output_schema` | 終結 `return` 前 | instance FAILED |
 | Function instance input / output | `function.input_schema` / `function.output_schema` | 同上（各自對 function instance） | 同上（在 function instance 層級失敗）|
-| Task step 的 tool input | 被呼叫的 Tool definition 的 `input_schema` | step 進入 RUNNING、CEL 求值後、呼叫 backend 前 | step FAILED，`error.type == "tool_input_schema_violation"` |
-| Task step 的 tool output | 被呼叫的 Tool definition 的 `output_schema` | backend 回傳、寫入 checkpoint 前 | step FAILED，`error.type == "tool_output_schema_violation"` |
-| Callback input / output | `callback.input_schema` / `callback.output_schema`（見 `05b-function.md`） | callback 傳入 caller 前 / handler return 後 | callback_result 以 error 回傳 |
+| Task step 的 tool input | 被呼叫的 Tool definition 的 `input_schema` | step 進入 RUNNING、CEL 求值後、呼叫 backend 前 | step FAILED，`error.type == "schema_violation"`、`error.details.direction == "input"` |
+| Task step 的 tool output | 被呼叫的 Tool definition 的 `output_schema` | backend 回傳、寫入 checkpoint 前 | step FAILED，`error.type == "schema_violation"`、`error.details.direction == "output"` |
+| Callback input / output | `callback.input_schema` / `callback.output_schema`（見 `05b-function.md`） | callback 傳入 caller 前 / handler return 後 | callback_result 以 `error.type == "schema_violation"` 回傳 |
 
 驗證原則：
 

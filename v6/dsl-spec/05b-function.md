@@ -136,7 +136,17 @@ Function 中以 `type: callback` step 觸發 callback：
 | Handler FAILED | 此 step 進入 FAILED，`error` 反映 handler 內傳播至頂層的錯誤；可被 `catch` 捕捉 |
 | 超時 | step FAILED，`error.type == "timeout"` |
 
-`timeout` 涵蓋 handler 執行的**整體時長**（從發出 callback 事件算起至 handler 回傳 `return` 為止）。Handler 內各 step 的 `timeout` / `retry` 獨立計時，但不延長外層 callback 的 `timeout`；若 handler 內 step 失敗被其內部 `catch` 處理則不向外傳播，否則向上浮出到 handler 頂層 → 整個 callback step FAILED。Handler output 由引擎在 handler `return` 時依 callback 宣告的 `output_schema` 驗證；不符 → callback step FAILED，`error.type == "schema_violation"`。
+`timeout` 涵蓋 handler 執行的**整體時長**（從發出 callback 事件算起至 handler 回傳 `return` 為止）。Handler 內各 step 的 `timeout` / `retry` 獨立計時，但不延長外層 callback 的 `timeout`；若 handler 內 step 失敗被其內部 `catch` 處理則不向外傳播，否則向上浮出到 handler 頂層 → 整個 callback step FAILED。Handler output 由引擎在 handler `return` 時依 callback 宣告的 `output_schema` 驗證；不符 → callback step FAILED，`error.type == "schema_violation"`、`error.details.direction == "output"`。
+
+#### 多層 timeout 優先級
+
+當同時存在 callback step `timeout`、function `config.timeout`、workflow `config.timeout` 時，**最短者先生效**（deadline 獨立計算、同時倒數；三者皆非顯式時無時間上限，但仍受上層繼承 — 見 `runtime-spec/02-instance-lifecycle.md` 的「Callback timeout 規則」）：
+
+- Callback step `timeout` 先到 → 本 callback step FAILED（`error.type == "timeout"`），function 其他 step 可繼續（若有 catch）
+- Function `config.timeout` 先到 → function instance FAILED，父 task step 以此 failure 呈現
+- Workflow `config.timeout` 先到 → workflow FAILED，所有子 function instance 被 cancel
+
+顯式 callback `timeout` 不會「擴張」其外層 function / workflow timeout；即使 callback 設 `timeout: 10m` 而 function 剩 3 分鐘，callback 實際可用時間仍為 3 分鐘。
 
 Step 識別規則：
 

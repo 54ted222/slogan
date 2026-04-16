@@ -443,6 +443,13 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 若需在 foreach / parallel 內提前中止整個 workflow，使用 `type: fail`（錯誤向上傳播）或外層 `if` 判斷後於迴圈外 `return`。
 
+### output_schema 驗證層級
+
+- `foreach.do[]` / `parallel.branches[].steps[]` 內的 `return` **只結束該迭代 / branch**，該 return 的 output 寫入 foreach 的 output array 位置或 branch 的 output slot；**不**觸發 workflow / function 層的 `output_schema` 驗證。
+- Workflow / function 層的 `output_schema` 僅於「instance 整體終結」時驗證一次（見 `runtime-spec/02-instance-lifecycle.md`）。
+- Function instance 的 `output_schema` 驗證於**子 instance 內完成**；父 task step 收到的 output 已通過驗證，父層不重驗（若需額外驗證，請在 task step 後以 `if` / `assign` 顯式處理）。
+- 以 `type: fail` 中止不經 `output_schema`；instance FAILED，error 依 fail 的 message / type 決定。
+
 ---
 
 ## saga
