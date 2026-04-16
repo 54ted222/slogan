@@ -39,6 +39,8 @@ ErrorObject {
 | `expression_error.too_large` | 結果大小超限 |
 | `expression_error.template_eval` | template 字串組裝失敗 |
 | `expression_error.mapping` | stdout.mapping 求值失敗 |
+| `expression_error.division_by_zero` | 整數 / 浮點除法除以 0；或取模除以 0 |
+| `expression_error.out_of_bounds` | 字串 / list 索引 / 切片越界 |
 
 ### Step 級
 

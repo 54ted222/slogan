@@ -149,7 +149,7 @@ WaitSubscription {
 - `deadline = <subscription 寫入 store 的 transaction commit 時刻> + <timeout 求值結果>`；**一次性決定**，寫入 checkpoint 後不再重算
 - Engine 重啟 / failover 後 MUST 沿用 checkpoint 中的 `deadline`，即使 `wait.timeout` 是 CEL 表達式也不重新求值（避免 replay 與線上執行的偏差）
 - 若缺省 `wait.timeout` → `deadline = null`，表示無限等待（僅 instance / workflow timeout 可終止）
-- 若 `timeout` 求值為 `0` 或負值 → step 在訂閱寫入前 FAILED，`error.type == "invalid_timeout"`
+- 若 `timeout` 求值為 `0` 或負值 → step 在訂閱寫入前 FAILED，`error.type == "invalid_duration"`（與 `wait.duration` / `retry.delay` 等其他 duration 欄位一致）
 
 **Subscription 建立與 step signal 的競賽**：
 

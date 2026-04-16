@@ -36,6 +36,32 @@ ToolResult：
 
 Engine Loop 不重複驗證；若 driver 未驗證，錯誤將以 tool 回傳結構傳播，但 step 可能已完成（違反 schema 保證）。因此驗證責任在 driver 層。
 
+#### output_schema 與 mapping 的交互
+
+Raw / HTTP backend 若同時宣告 `stdout.mapping` / `response.mapping` 與 `output_schema`，順序如下：
+
+```
+backend 回傳 raw 資料
+  │
+  ▼
+（若有 mapping）CEL 求值 mapping → output
+  │ 失敗：step FAILED，error.type == "expression_error.mapping"
+  │      error.details.raw 保留原始 raw（便於 debug）
+  │      **不**再走 output_schema 驗證
+  ▼
+（若有 output_schema）對 mapping 後的 output 驗證
+  │ 失敗：step FAILED，error.type == "schema_violation"
+  │      error.details.direction == "output"
+  │      error.details.raw_output 保留 mapping 後的結果
+  ▼
+step SUCCEEDED，output 進入 checkpoint
+```
+
+重點：
+- **mapping 失敗優先**於 schema 驗證；兩種失敗的 error.type 不同，使用者可於 catch 分流
+- 無 mapping 時 raw 直接為 output（走同一 output_schema 驗證路徑）
+- `input_schema` 驗證於 CEL 求值後、backend spawn 前（無 mapping 概念）
+
 ---
 
 ## exec backend
