@@ -54,6 +54,7 @@ ErrorObject {
 | code | 觸發 |
 |------|------|
 | `invalid_count` | foreach.count 為負或非整數 |
+| `invalid_items` | foreach.items 求值結果為 null |
 | `async_step_failed` | wait signals 中 step 訊號所等待的 async step FAILED |
 | `branch_failed` | parallel branch 失敗（fail_fast 政策下） |
 
@@ -87,6 +88,9 @@ ErrorObject {
 | `registry.name_conflict` | 同類型同名衝突 |
 | `registry.dependency_cycle` | Function 間循環依賴（載入期偵測） |
 | `max_recursion_depth_exceeded` | 運行時 function 遞迴深度超限 |
+| `schema_incomplete` | Function callback 只宣告 input_schema 或 output_schema 之一 |
+| `invalid_var_name` | `type: assign` 的 vars key 含 path separator 或保留前綴 |
+| `invalid_duration_format` | duration 字面值或 CEL 結果不符 `<N><s/m/h>` 格式 |
 ### Workflow / Trigger
 
 | code | 觸發 |

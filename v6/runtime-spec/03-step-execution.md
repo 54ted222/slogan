@@ -118,8 +118,13 @@ vars 的 scope 是 instance-wide；子 instance 不繼承父 vars。
 ### 啟動
 
 1. 求值 `items` 或 `count`
+   - `items` 求值結果 MUST 為 list：
+     - `null` → step FAILED，`error.type: "invalid_items"`（提示使用者以 `default()` 防禦）
+     - 非 list（string / int / map / bool）→ step FAILED，`error.type: "expression_error.type_error"`
+   - `count` 求值結果 MUST 為非負整數：
+     - 負數 / 小數 / 非整數型別 → step FAILED，`error.type: "invalid_count"`
 2. `count: N` → 內部 items = `[0..N-1]`，`loop.item == loop.index`
-3. items 空陣列 → SUCCEEDED, output: `[]`
+3. items 空陣列 → SUCCEEDED, output: `[]`（不進入迭代，do block 不執行）
 4. 寫 checkpoint：foreach RUNNING、總迭代數
 
 ### 阻塞模式（async: false）

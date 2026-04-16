@@ -27,6 +27,15 @@ ToolResult：
 
 `callback_handler` 由 Engine Loop 提供：是一個函式 `handle(call_id, name, input) -> CallbackResult`，driver 觸發後將結果回灌 tool。
 
+### Schema 驗證職責
+
+所有 backend（exec protocol / exec raw / http / extension）在建立 ToolResult 前 MUST 由 driver 驗證：
+
+1. **input_schema**（tool 定義有此欄位時）：對 `input` 在 spawn 前驗證；不符 → 不啟動 tool，ToolResult `{success: false, error: {type: "schema_violation", details: {direction: "input", path: ...}}}`
+2. **output_schema**（tool 定義有此欄位時）：對 `output`（raw 模式下為 mapping 後結果）在成功分支驗證；不符 → ToolResult `{success: false, error: {type: "schema_violation", details: {direction: "output", path: ...}}}`；原始 output 保留於 error.details.raw_output
+
+Engine Loop 不重複驗證；若 driver 未驗證，錯誤將以 tool 回傳結構傳播，但 step 可能已完成（違反 schema 保證）。因此驗證責任在 driver 層。
+
 ---
 
 ## exec backend

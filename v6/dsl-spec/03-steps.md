@@ -95,6 +95,8 @@ Output 透過 `steps.<id>.output` 或 `prev.output` 存取。
 
 - 後續 steps 透過 `vars.<key>` 存取
 - 同名變數會被後續 `assign` 覆寫
+- `vars` map 中 key MUST 為簡單識別字（`^[a-z_][a-z0-9_]*$`）；含 `.` / `/` / 其他 path separator 或 namespace prefix（如 `steps.foo`、`input.bar`）→ 載入失敗，`error.type: "invalid_var_name"`
+- 保留字 `_workspace_path` 等以 `_` 起始的 key 由引擎使用者側禁止（避免與 artifacts 等 namespace 混淆）
 
 ---
 

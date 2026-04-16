@@ -86,6 +86,7 @@
 | `concurrency` / `failure_policy` 等控制旗標 | foreach / parallel 開始時 |
 | `delay` (emit) | emit step 進入時 |
 | `timeout` / `retry.delay` / `backoff` | step 進入時，每次 attempt 重新求值 |
+| duration 欄位（`timeout` / `delay` / `duration` / `max_delay`）| CEL 求值後：若非 string → `expression_error.type_error`；若 string 但不符 Duration 格式（見 `dsl-spec/01-overview.md`）→ step FAILED，`error.type: "invalid_duration_format"` |
 | `compensate.input` (saga) | 補償觸發時，可引用原 step 的 `output` |
 | handler `output` (callback handler return) | handler return 時 |
 | Tool backend 的 `command` / `args` / `env` / `stdin.template` / `stdout.mapping` 等 | 每次 tool 呼叫前 |

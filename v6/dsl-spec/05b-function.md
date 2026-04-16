@@ -107,6 +107,12 @@ callback:
 
 宣告為契約：caller 必須為每個 callback 提供同名 handler，否則 function 載入時驗證失敗。
 
+**Schema 宣告完整性**：
+
+- `input_schema` 與 `output_schema` MAY 缺省；缺省時對應方向不做驗證
+- 若任一存在，兩者 MUST 都有（語意完整）；僅宣告單邊 → 載入失敗，`error.type: "schema_incomplete"`
+- 例外：若 callback handler 端以 `type: return` 無 output 結束，視為 output 為 `null`；output_schema 若不允許 null 則 FAILED（`error.type: "schema_violation"`）
+
 ### Function 內：`type: callback` step
 
 Function 中以 `type: callback` step 觸發 callback：
