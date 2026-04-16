@@ -27,7 +27,20 @@ defaults:                       # MAY — project 層級預設
   action_versions:              # MAY — 同 project 內 step 未帶 @version 時的預設版本
     order.load: 3               # canonical name（含 project 前綴展開後的完整名）
     payment.process: 2
+
+retention_policy:               # MAY — 覆寫 instance 終態保存期（見 runtime-spec/02-instance-lifecycle.md）
+  succeeded: 30d                # MAY — SUCCEEDED instance 保存期；預設 7 天
+  failed: 90d                   # MAY — FAILED instance 保存期；預設 30 天
+  cancelled: 7d                 # MAY — CANCELLED instance 保存期；預設 7 天
 ```
+
+### retention_policy
+
+- 欄位型別均為 duration string（格式同 `dsl-spec/01-overview.md` Duration 格式）
+- Instance 建立時依 **建立時的 project retention_policy 設定** 計算 `retention_until` 並持久化；後續修改 `retention_policy` **不影響**既有 instance
+- 未宣告任一欄位 → 沿用 engine 內建預設；未宣告 `retention_policy` 整個物件 → 等同全部沿用預設
+- 巢狀 project：子 project 繼承父 project 的 retention_policy，可**部分**覆寫（shallow merge at 欄位層）
+- 不提供 API 延長單一 instance 的 retention（見 `runtime-spec/02-instance-lifecycle.md`「Retention 覆寫規則」）
 
 ### defaults.action_versions
 
