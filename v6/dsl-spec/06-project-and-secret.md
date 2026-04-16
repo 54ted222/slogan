@@ -50,6 +50,17 @@ v6 中 `owner` 為**文件性**欄位，引擎不做 ACL / 路由檢查：
 - `instance.failed` 事件的 `data.owner` 欄位會帶此值，便於告警系統分派（由消費者實作分派邏輯，引擎不直接通知）
 - 未來版本若引入 RBAC / 通知訂閱機制，此欄位將成為識別子；v6 先保留語意空間
 
+### 根目錄 definition（無 project）的語意
+
+所有 `projects/` 外的 definition（直接置於根目錄 `workflows/` / `tools/` / `functions/`）視為「無 project」，適用以下規則：
+
+- `project` namespace：`project.name == ""`、`project.path == ""`、`project.labels == {}`、`project.owner == ""`（見 `04-expressions.md#project`）
+- **無自動 owner / labels 注入**：definition 的 `metadata.labels` 僅取自身宣告；不經 defaults 合併（根目錄無 `project.yaml` 可供合併）
+- Secret 引用：根目錄 secret 恆為 shared（對所有 project 可見；見上節）
+- Action 完整名稱不帶 `/` 前綴（例：`workflows/hello.yaml` 的 action name 為 `hello`，非 `/hello`）
+- 跨 project 引用：project 內 workflow 引用根目錄 tool 直接寫 `action: tool_name@<version>`（無前綴即視為根目錄）；歧義場景（同 project 內已有同名 tool）優先 project 內
+- 建議生產環境一律以 project 組織 definition；根目錄僅用於 prototyping 或單一 tool / 單一 workflow 的小型部署
+
 ### 資料夾結構
 
 資料夾中 MUST 包含 `project.yaml` 才被視為 project：

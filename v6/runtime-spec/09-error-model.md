@@ -80,6 +80,7 @@ ErrorObject {
 | `http_error` | HTTP 4xx/5xx 在 error_on_status 列表、或 retry_on_status 耗盡 attempts |
 | `http_body_malformed_json` | Content-Type 為 JSON 但 body 語法錯誤 |
 | `http_body_decode_failed` | body 以宣告 charset 解碼失敗 |
+| `http_request_body_too_large` | request body 序列化後超過 `engine.http_request_body_limit`（預設 16 MB）|
 | `connection_error` | 網路 / TLS 連線失敗 |
 | `schema_violation` | input/output 不符 JSON Schema |
 | `backend_crashed` | tool process / extension 在 RUNNING 中崩潰 |

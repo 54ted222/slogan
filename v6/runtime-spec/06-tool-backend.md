@@ -117,6 +117,16 @@ stdin 保持開啟；後續行為 `callback_result` 訊息。
 - `final: true` 不等同 `result`：tool 仍可在 `final: true` 後發 `callback`；但 MUST 最終以單一 `result` 訊息收尾
 - Stream 訊息的 `sequence` 與 Event Bus 的 `source.sequence` 為**獨立計數**；tool.stream 事件的 `source.sequence` 由 engine 依 event bus 規則分配，不等同 stream message 的 sequence 值（後者保留於 `tool.stream.data.stream_sequence` 方便使用者串接）
 
+#### Tool crash 時 partial stream 的處置
+
+若 tool 在發出 N 筆 stream 訊息後（尚未送出 `final: true` 或 `result`）**異常終止**（SIGKILL / OOM / segfault / exit 非 0），引擎處置：
+
+- 已寫入 event bus 的 N 筆 `tool.stream` 事件**不撤回**（event bus 本身無 rollback；訂閱者已接收的事件照常存在）
+- Step 終態為 FAILED，`error.type == "backend_crashed"`（若能取得 exit code）或 `incomplete_protocol`（exit 但無 result）
+- `tool.stream` 事件的最後一筆**不會** 帶 `final: true`（tool 未送達）；訂閱 `tool.stream` 的 wait step 若以 `match: ${ event.data.final }` 等待結束 → 不會自動喚醒，依 `wait.timeout` 兜底
+- 建議訂閱者於 `wait.catch` 同時處理 `tool.stream` 匹配與 tool 呼叫本身的 FAILED（兩者為獨立訊號）
+- `step.completed`（呼叫 tool 的 task step）於 step 終態後 emit，訂閱者可據此判定 stream 是否為完整序列（step SUCCEEDED + last stream 的 `final: true`）或不完整（step FAILED）
+
 ### Raw 模式
 
 ```
@@ -190,10 +200,25 @@ else:
 ```
 1. 解析 url / method / headers / request.body
 2. CEL 求值 ${ } 欄位（含 secret 注入）
-3. 發送 HTTP；遵守 timeout（預設 30s，可由 backend 覆寫）
-4. 依 HTTP status code 分類決策（見下表）
-5. 解析 response body → raw → （可選）response.mapping → output
+3. 決定 Content-Type 與 body 序列化（見下「Request Body 規則」）
+4. 發送 HTTP；遵守 timeout（預設 30s，可由 backend 覆寫）
+5. 依 HTTP status code 分類決策（見下表）
+6. 解析 response body → raw → （可選）response.mapping → output
 ```
+
+#### Request Body 規則
+
+| `request.body` 型別 | 自動 Content-Type | 序列化 |
+|--------------------|-------------------|---------|
+| 缺省 / `null` | 不設（無 body） | 空 |
+| CEL 求值結果為 map / list | `application/json`（除非 `headers.Content-Type` 明確覆寫） | `json_encode()` |
+| CEL 求值結果為 string | `text/plain`（除非 `headers.Content-Type` 明確覆寫） | 原字串（UTF-8） |
+| CEL 求值結果為 number / boolean | `text/plain` | `string(value)` |
+
+- 使用者於 `headers.Content-Type` 顯式指定者**優先**；engine 不強制 body 與 Content-Type 相符（由 tool 作者保證）
+- **Request body 大小上限**：`engine.http_request_body_limit`（預設 16 MB）；序列化後超過 → step FAILED，`error.type == "http_request_body_too_large"`；不實際發出請求
+- 此限制不涵蓋 streaming upload（v6 不支援 streaming body；若需上傳大檔請改用 exec backend 呼叫 curl 等工具）
+- `input_schema` / CEL 求值後 body 與上限檢查於 transport 前一次性完成；確保不會發出 HTTP 才被對端 413 拒絕
 
 #### 狀態碼分類決策
 

@@ -195,6 +195,17 @@ def deliver(event, subscription):
 
 `build_event_match_ctx(event, instance)` 提供 `event.*`、`input`、`vars`、`steps` 等 namespace（read-only）。
 
+### 多訂閱者投遞（foreach / parallel 並行 wait）
+
+Event bus 對每個 `wait_subscription` 是**獨立投遞**：
+
+- 同一事件 `e` 若同時匹配 N 個 subscription（如 foreach 10 個迭代，每迭代內有 `wait`，全部訂閱同一 `event_type`），**N 個 subscription 皆各自收到一次**；不會「第一個搶走」
+- 「**any-of 同 wait step 內其他 signal 取消**」規則（上述 `cancel_subscription(subscription)`）**僅限於同一 subscription 的兄弟 pattern**（即同一 wait step 的 signals 陣列）；不影響其他 wait step（即使其屬於同一 instance 的不同 step，或其他 instance / 其他迭代）
+- 各 subscription 的 `match` 表達式各自求值；匹配結果互不影響；即使 match 為空（無過濾），N 個並行迭代的 wait 仍各收到一份並各自決定 SUCCEEDED
+- 推薦做法：foreach 內的 wait 以 `match` 綁定該迭代的關鍵識別（如 `${ event.data.order_id == loop.item.order_id }`），讓每迭代只對「屬於它的」事件喚醒；否則多迭代同時被同一事件喚醒是合法但可能非預期的行為
+
+**去重**：同一事件重投遞至同一 subscription 以 `(subscription_id, event.id)` 去重（見「Idempotency」）；不同 subscription 間無去重（屬各自獨立訂閱者）。
+
 ---
 
 ## Trigger
