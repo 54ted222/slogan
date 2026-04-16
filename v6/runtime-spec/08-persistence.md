@@ -309,7 +309,7 @@ RETURNING id, lease_owner, lease_expires_at, cancel_requested, cancel_reason, st
 ### Tool 級
 
 - exec/http backend 將 `idempotency_key` 注入 `context`；tool 可用此值對外部系統去重。
-- `idempotency_key = hash(instance_id + step_id + attempt + input_snapshot)`；**含 attempt**，每次 retry 變動。
+- `idempotency_key` = **SHA256** hex of `instance_id || "\0" || step_id || "\0" || canonical_json(input_snapshot) || "\0" || attempt_as_decimal_string`（`\0` 為 NUL byte 分隔；`canonical_json` 為鍵遞增排序後的 JSON serialization，與 signature 同規格，見 `03-step-execution.md`）；**含 attempt**，每次 retry 變動
 - `input_snapshot` 定義為「step 首次進入 RUNNING 時寫入 checkpoint 的 input 物件」；後續 retry 沿用同一 snapshot（見 `03-step-execution.md` 的 attempt 與 signature 語意）；不含 `when` / `retry.delay` / `timeout` 等控制欄位的求值結果。
 
 ### idempotency_key vs signature：用途區分

@@ -10,7 +10,7 @@ Event Bus 是引擎與外部、引擎內部多 instance 間的非同步通訊匯
 
 - 業務事件：由 `emit` step 發送，可觸發 trigger 或喚醒 wait
 - 內部事件：`instance.created` / `step.completed` / `tool.stream` / `tool.callback` / `wait.timeout` 等
-- 控制事件：`instance.cancel` / `engine.lease_lost`
+- 控制事件：`instance.cancel` / `engine.lease_expired`
 
 實作可選：in-memory bus（單機）、基於 message queue（NATS / Kafka / Redis Streams）、基於資料庫 polling。本規格不限定，僅約束行為。
 
@@ -319,6 +319,12 @@ emit 的順序保證：
 | `tool.stream` | Backend Driver | Engine Loop / 訂閱 wait | 串流投遞 |
 | `engine.lease_expired` | Lease Manager | Engine Loop | 觸發 instance 接管 |
 | `bus.dead_letter` | Event Bus | Ops 監控 | 訊息無法投遞 |
+| `trigger.skipped` | Trigger Resolver | Ops 監控 | event 通過 dedup 但未匹配任一 trigger 的 scope / when；或 trigger.when_eval_failed（event ack 但不建立 instance） |
+| `lifecycle.destroy_failed` | Resource Pool | Ops 監控 | destroy hook 單次失敗；含 `{instance_id, resource_key, error, attempt}`；排入重試佇列 |
+| `lifecycle.destroy_abandoned` | Resource Pool | Ops 監控 | destroy hook 重試耗盡後放棄；含 `{instance_id, resource_key, error, attempts}` |
+| `tool.protocol_anomaly` | Backend Driver | Ops 監控 | 協議違反但 step 不失敗（unknown call_id / 遲到訊息等）；含 `{instance_id, step_id, reason, ...}` |
+| `callback.late_result` | Engine Loop | Ops 監控 | callback_result 於 step 已終態後送達；丟棄並記錄 |
+| `subscription.match_eval_failed` | Event Bus | Ops 監控 | wait subscription 的 match CEL 求值異常；視為不匹配、繼續等待 |
 
 ### 內部事件訂閱限制
 
@@ -339,7 +345,7 @@ emit 的順序保證：
 | `instance.created` | `{instance_id, workflow_name, workflow_version, triggered_by_trigger_index, input_summary (前 4 KB)}` |
 | `instance.completed` | `{instance_id, kind, output_summary (前 4 KB), duration_ms}` |
 | `instance.failed` | `{instance_id, kind, error: <完整 ErrorObject>, duration_ms, owner}` |
-| `instance.cancelled` | `{instance_id, kind, reason, by_parent (bool)}` |
+| `instance.cancelled` | `{instance_id, kind, reason, requested_by ("api" \| "parent" \| "timeout" \| "ops")}`（與 `instance.cancel.requested_by` / `instances.cancel_reason` 欄位語意一致） |
 | `instance.cancel` | `{target_instance_id, reason, requested_by ("api" \| "parent" \| "timeout" \| "ops"), requested_at}` — unicast 至目標 instance 的 lease 持有者；不由 ops 常態訂閱 |
 | `step.completed` | `{instance_id, step_id, step_path, status, attempt, duration_ms}`（不含 output，讀 checkpoint） |
 | `step.async_started` | `{instance_id, step_id, step_path, total_iterations (foreach 才有)}` |
