@@ -114,6 +114,9 @@ ErrorObject {
 | `registry.invalid_lifecycle_backend` | tool `lifecycle.init.backend.type` 為 `extension` 或非 `exec` / `http` |
 | `registry.invalid_action_version` | `builtin.*` action 帶 `@version` 宣告（builtin 不支援版本） |
 | `registry.invalid_version` | `metadata.version` 非正整數 |
+| `registry.invalid_http_method` | tool http backend `method` 不在支援清單 |
+| `registry.invalid_label_value` | `metadata.labels.<key>` value 非 string 或含換行 / 超長 |
+| `registry.invalid_metadata` | `metadata.description` 超過 1024 chars 或其他 metadata 欄位違反基本限制 |
 ### Workflow / Trigger
 
 | code | 觸發 |
@@ -123,8 +126,9 @@ ErrorObject {
 | `trigger.input_mapping_error` | event trigger 的 `input_mapping` 中某欄位 CEL 求值異常 |
 | `workflow.instance_create_failed` | trigger 通過驗證但 instance 建立（寫入 store）失敗（size limit / persistence error 等） |
 | `output_schema_violation` | return 輸出驗證失敗 |
-| `input_too_large` | step input snapshot 超過 size limit |
+| `input_too_large` | step input snapshot 或 instance.input 超過 size limit |
 | `output_too_large` | step / instance output 超過 size limit |
+| `vars_too_large` | instance.vars 整體序列化超過 size limit（assign 寫入前檢查） |
 | `event_too_large` | emit event.data 超過 size limit |
 
 ### 系統 / 內部

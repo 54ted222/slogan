@@ -243,13 +243,15 @@ RETURNING id, lease_owner, lease_expires_at;
 
 | 欄位 | 預設上限 | 超限行為 |
 |------|----------|----------|
+| `instance.input` | 16 MB | trigger 階段拒絕建立 instance，`error.type == "input_too_large"`；事件 ack 消費並進 dead letter |
 | `steps.input_snapshot` | 16 MB | step FAILED，`error.type == "input_too_large"`，error.details.size 保留原始大小 |
 | `steps.output` | 16 MB | step FAILED，`error.type == "output_too_large"`；原 output 不入庫，error.details.preview 保留前 4 KB |
 | `instance.output` | 16 MB | instance FAILED，`error.type == "output_too_large"` |
+| `instances.vars`（整體序列化） | 16 MB | assign step FAILED，`error.type == "vars_too_large"`；寫入前檢查 |
 | 單筆 `execution_log.payload` | 1 MB | 超限則截斷尾部，log 記錄 truncation 標記 |
 | 單一 event.data（Event Bus） | 1 MB | emit step FAILED，`error.type == "event_too_large"` |
 
-上限可由 engine config 覆寫（`engine.max_step_output_bytes` 等）。超大資料建議以 artifact 儲存並在 output 中傳 path 引用。
+上限可由 engine config 覆寫（`engine.max_step_output_bytes` / `engine.max_instance_input_bytes` / `engine.max_vars_bytes` 等）。超大資料建議以 artifact 儲存並在 output 中傳 path 引用。
 
 ---
 

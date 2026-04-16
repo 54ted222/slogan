@@ -520,6 +520,12 @@ backend:
   retry_on_status: [429, 502, 503] # MAY
 ```
 
+支援的 `method`：`GET` / `POST` / `PUT` / `DELETE` / `PATCH` / `HEAD` / `OPTIONS`（不區分大小寫，engine 內部正規化為大寫）。其他值 → 載入失敗，`registry.invalid_http_method`。
+
+- `GET` / `HEAD` / `OPTIONS`：若 `request.body` 存在且非空 → 載入警告但仍發出（某些 API 會讀 GET body，非標準但常見）；`HEAD` response 無 body，`output` 為 `null`，`response.mapping` 仍可針對 headers 取值（透過 `raw.headers.<name>`）
+- `POST` / `PUT` / `PATCH` / `DELETE`：可含 request body；無 body 時 Content-Length 為 0
+- CORS `OPTIONS` 通常由 HTTP client 自動處理，明確宣告為 `OPTIONS` 會被視為顯式 preflight 呼叫
+
 #### 進階 HTTP 設定
 
 當 API 不符合預設 OpenAPI 協議時，可自訂 request / response 映射：

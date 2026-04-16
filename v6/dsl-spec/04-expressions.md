@@ -266,7 +266,7 @@ artifacts.order_file.exists
 | `s.startsWith(prefix)` | bool | 以 prefix 開頭 |
 | `s.endsWith(suffix)` | bool | 以 suffix 結尾 |
 | `s.matches(regex)` | bool | 正則比對 |
-| `s.size()` | int | 字串長度 |
+| `s.size()` | int | 字串 Unicode codepoint 數（**非** byte 數） |
 
 ### 集合
 
@@ -277,6 +277,26 @@ artifacts.order_file.exists
 | `list.filter(x, expr)` | list | 過濾 |
 | `list.map(x, expr)` | list | 映射 |
 | `list.size()` | int | 長度 |
+
+#### size() 的通用型別語意
+
+`size()` 統一規則（與 CEL 標準一致）：
+
+| 對象型別 | 回傳 |
+|---------|------|
+| string | Unicode codepoint 數 |
+| list | 元素數 |
+| map / object | top-level key 數 |
+| bytes（若出現） | byte 數 |
+| null | `expression_error.type_error`（不回 0，避免與 `[]` / `""` / `{}` 混淆） |
+| int / double / bool / timestamp / duration | `expression_error.type_error` |
+
+**防禦模式**：對可能為 null 的 collection 先以 `has()` 或 `default()` 保護：
+
+```
+has(input.items) ? input.items.size() : 0
+default(input.items, []).size()
+```
 
 ### 擴充函式
 

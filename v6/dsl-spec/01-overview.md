@@ -46,9 +46,19 @@ kind: <Kind>
 metadata:
   name: string               # MUST — 唯一識別名稱
   version: integer            # MUST — 版本號，正整數
-  description: string         # MAY — 人類可讀說明
-  labels: map<string, string> # MAY — 分類用鍵值對
+  description: string         # MAY — 人類可讀說明（長度上限 1024 chars，超過 → invalid_metadata）
+  labels: map<string, string> # MAY — 分類用鍵值對（value 必為 string，見下）
 ```
+
+### labels value 型別
+
+- `labels.<key>` value MUST 為 **string**；key 與 value 皆限制：
+  - key：`^[a-z][a-z0-9_.-]{0,62}$`（最多 63 chars，kebab / snake / dotted）
+  - value：任意 UTF-8 string，長度 0..255；不允許換行（`\n` / `\r`）
+- YAML 解析後若 value 為 int / bool / float（如 `version: 3` 或 `enabled: true`）→ **載入失敗**，`registry.invalid_label_value`；使用者需明確加引號（`version: "3"`）避免誤解
+- 空字串 `""` 合法（表示「有此 key 但無值」，可用於 selector 匹配存在性）
+- Unicode 支援：value 允許 emoji / CJK；key 限 ASCII（便於外部監控系統聚合）
+- `project.labels` / `workflow.labels` / `tool.labels` / `function.labels` 共用同一規則
 
 ### version 規則
 

@@ -61,6 +61,10 @@
 }
 ```
 
+**可見狀態**：CEL 求值只可能看到**終態** step 的 StepRef（`SUCCEEDED` / `FAILED` / `SKIPPED`）；執行中的 `WAITING` / `RUNNING` step **不進入** `steps.*` namespace（對 CEL 不可見，讀取即 `expression_error.identifier_not_found`）。`CANCELLED` 不是 per-step 狀態（step cancel 後終態記為 `FAILED`，`error.type == "cancelled"`）。
+
+此規則確保 step output 與 status 的「可見性」與「可讀」在 CEL 層一致：存在 StepRef ⇒ 該 step 已終態。
+
 ### LoopFrame
 
 ```
