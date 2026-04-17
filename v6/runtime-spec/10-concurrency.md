@@ -82,11 +82,23 @@ def execute_foreach(step):
 
 ```
 def start_async_foreach(step):
+    items = evaluate(step.items or step.count)
+    if len(items) == 0:
+        # 與 async:false 的空 items 路徑一致（見 dsl-spec/03-steps.md 空 items 規則）
+        write_checkpoint(step.SUCCEEDED, output=[])
+        publish("step.completed", { instance_id, step_id, status: "SUCCEEDED" })
+        return  # 不發 step.async_started、不啟動背景 scheduler
     write_checkpoint(step.RUNNING.async_started)
-    publish("step.async_started", { instance_id, step_id })
-    schedule_background_iterations(step)
+    publish("step.async_started", { instance_id, step_id, total_iterations: len(items) })
+    schedule_background_iterations(step, items)
     return immediately(step.status = RUNNING.async_started)
 ```
+
+**空 items 的特殊路徑**：items 為 `[]` / `count == 0` 時，async:true 視同 async:false 立即 SUCCEEDED（與 `dsl-spec/03-steps.md:244` 的「空 items / count 為 0」規則一致）：
+
+- **不**發 `step.async_started` 事件（避免訂閱 `step.async_started` 的觀測者誤判「有迭代進入背景」）
+- **不**啟動背景 scheduler；`checkpoint` 直接寫 SUCCEEDED 與 `output = []`
+- `wait` 模式以 `step` 訊號監聽此 foreach：進入 wait 時目標 step 已 SUCCEEDED → 走 fast-path 直接取 `output`（見 `03-step-execution.md` Step 訊號匹配）
 
 背景 scheduler 持續按 concurrency 推進；達終態後寫 checkpoint、發 `step.completed`。
 

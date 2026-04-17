@@ -378,6 +378,24 @@ SSE 連線具狀態（持有 `X-Callback-URL` token 與 in-flight call_id 表）
 4. handler 回傳 ExtensionResponse
 ```
 
+#### ExtensionRequest.context 欄位
+
+Extension 的 `context` map 結構與 exec protocol stdin JSON 的 `context` 欄位（見 `dsl-spec/05-tool.md` 的 Tool stdin JSON schema）**完全一致**，含以下欄位：
+
+| 欄位 | 型別 | 說明 |
+|------|------|------|
+| `instance_id` | string | 當前 workflow / function instance id |
+| `step_id` | string | 呼叫此 tool 的 step id |
+| `step_path` | string | 含巢狀路徑（`saga.0.if.then.0` 等） |
+| `attempt` | int | 本次 attempt 計數（首次 = 1） |
+| `idempotency_key` | string | SHA256 hex（公式見 `08-persistence.md` Idempotency 章節） |
+| `trace_id` | string | W3C 相容 trace id |
+| `action_name` | string | resolved canonical action name（含 project 前綴與 version） |
+| `engine_id` | string | 當前持有 lease 的 engine_id |
+| `lifecycle.init` | map \| null | 若 tool 宣告 `lifecycle.init` 且已執行成功，為其 output；未宣告或失敗為 `null` |
+
+其他欄位（例如未來版本新增）MAY 存在，handler 應以「未知欄位忽略」的寬鬆策略解析（避免 v6 升級破壞相容性）。
+
 協議由 handler 自行宣告；engine 僅保證：
 
 - 提供與 exec/http 相同的 callback_handler 介面
