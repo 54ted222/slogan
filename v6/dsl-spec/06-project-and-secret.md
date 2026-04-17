@@ -181,6 +181,7 @@ kind: Secret
 
 metadata:
   name: payment_secrets
+  shared: false                 # 明文；與加密前位置相同（shared 欄位不加密）
 
 is_encrypted: true
 encryption:
