@@ -154,7 +154,7 @@ WAITING ─► RUNNING ─► SUCCEEDED
 |--------------------------|------------|
 | `WAITING` | 重新求值 `when`、進入 RUNNING |
 | `RUNNING` 的 `type: task` 呼叫 Tool 且 Tool 宣告 `idempotent: true` | 重跑此 step；engine 依 `signature` 嘗試讀取 cached output（見 `03-step-execution.md` Attempt 與 signature） |
-| `RUNNING` 的 `type: task` 呼叫 Tool 且 Tool 為 `idempotent: false`（預設） | step → FAILED，`error.type == "lease_lost_unsafe_resume"`；走 `retry` / `catch` 路徑 |
+| `RUNNING` 的 `type: task` 呼叫 Tool 且 Tool 為 `idempotent: false`（預設） | step → FAILED，`error.type == "lease_lost_unsafe_resume"`；走 `retry` / `catch` 路徑。**In-flight callback 清理**：若失去 lease 時 tool 已發出 callback 請求但尚未收到 `callback_result`，接管者 MUST 以 `(instance_id, step_path, attempt)` 讀取 `call_id_dedup`，對所有尚未回應的 call_id 觸發 orphan cleanup（見 `06-tool-backend.md` 的「Lease lost 後的 callback orphan 處置」）；tool process 本身由前一 engine 的 driver 負責回收（SIGTERM → SIGKILL），但新 engine 無法直接通知舊 tool process，依 process timeout 兜底 |
 | `RUNNING` 的 `type: task` 呼叫 Function | 父 step 無重執行風險（子 function instance 自有 lease 與 checkpoint）；直接續讀子 instance 狀態，子 instance 終結後以正常路徑喚醒父 step |
 | `RUNNING` 的 `type: assign` / `if` / `switch` / `return` / `fail` | 無副作用；直接重跑（純求值；結果由 deterministic 求值保證一致，`now()` / `uuid()` 從 execution_log 讀回，見 `08-persistence.md` Replay） |
 | `RUNNING` 的 `type: emit` | 依 checkpoint 位置：若 outbox 已 INSERT（同 transaction 內）→ publisher 自行 publish，step 視為 SUCCEEDED；若 checkpoint 尚未 commit → 重跑本 step（新 event.id 生成；原未持久的 emit 被丟棄） |

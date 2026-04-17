@@ -143,6 +143,7 @@ ErrorObject {
 | `registry.invalid_env_key` | tool `backend.env` 使用 `SLOGAN_*` 保留前綴 key（`details.reason: "reserved_prefix"`）；或 key 不符合 env var 命名規則（`^[A-Za-z_][A-Za-z0-9_]*$`） |
 | `registry.version_content_mismatch` | hot reload 時同 `(canonical, version)` 已存在但 `definition_hash` 不同；既有 version 不可覆寫，須分配新 version 號 |
 | `registry.secret_in_emit_data` | `emit.data` / `emit.event` / `emit.delay` 的 CEL 引用 `secret.*`；載入期靜態檢查拒絕（見 `dsl-spec/03-steps.md` 的 emit Secret 禁用規則） |
+| `step_path_too_long` | step 進入 RUNNING 前產生的 `step_path` 超過 `engine.max_step_path_bytes`（預設 512）；通常因過深巢狀 foreach / parallel 導致；見 `08-persistence.md` step_path 生成規則 |
 | `action_pin_version_not_found` | instance 的 `action_pins` 指向的版本已從 registry 刪除，step 嘗試解析該 action 時失敗；`error.details` 含 `pinned_version` 與 `available_versions` |
 ### Workflow / Trigger
 

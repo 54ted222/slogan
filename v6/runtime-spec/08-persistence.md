@@ -57,9 +57,47 @@
 
 主鍵：`(instance_id, step_path, attempt)`
 
-**為何以 `step_path` 而非 `step_id` 作為 PK 組成**：`step_id` 於 foreach / parallel 內不唯一（所有 iteration 共用同一 `step_id` 字串），僅 `step_path`（含 `foreach.0.do_work` / `foreach.1.do_work` 等 index）可唯一標識 step 執行位置。Index 生成規則見 `dsl-spec/03-steps.md` 的 id 規則與 `step_path` 巢狀說明。
+**為何以 `step_path` 而非 `step_id` 作為 PK 組成**：`step_id` 於 foreach / parallel 內不唯一（所有 iteration 共用同一 `step_id` 字串），僅 `step_path`（含 `foreach.0.do_work` / `foreach.1.do_work` 等 index）可唯一標識 step 執行位置。
 
 副索引建議：`(instance_id, step_id)` 以加速依使用者視角 `step_id` 的查詢（非唯一，返回所有 iteration / 相同 id 的紀錄）。
+
+#### step_path 生成規則（決定性）
+
+`step_path` 由 engine 於 step 進入 RUNNING 前確定性生成，所有 engine 進程對同一 workflow definition + 同一執行路徑 MUST 產生完全相同的字串：
+
+**語法**（BNF）：
+
+```
+step_path  = segment ("." segment)*
+segment    = container_segment | leaf_segment
+container_segment = container_type "." container_index
+container_type    = "foreach" | "parallel" | "saga" | "if" | "switch" | "callback"
+container_index   = decimal_int | branch_key
+branch_key        = "then" | "else" | "branches." decimal_int | case_value_hash
+leaf_segment      = step_id
+case_value_hash   = "case_" hex8   ; switch cases 以 case.value 的 SHA256 前 8 chars
+```
+
+**構造規則**：
+
+| 容器 | segment 格式 | 說明 |
+|------|-------------|------|
+| 頂層 step | `<step_id>` | 直接使用 step_id（含自動生成的 `_task_<index>` 等） |
+| foreach 迭代內 step | `<foreach_step_id>.<index>.<inner_step_id>` | index 為 0-based iteration index |
+| parallel branch 內 step | `<parallel_step_id>.branches.<branch_index>.<inner_step_id>` | branch_index 為 branches 陣列 0-based |
+| if 分支內 step | `<if_step_id>.then.<inner_step_id>` / `<if_step_id>.else.<inner_step_id>` | 依執行路徑 |
+| switch case 內 step | `<switch_step_id>.case_<hex8>.<inner_step_id>` | `<hex8>` 為 case.value 求值後 canonical_json 的 SHA256 前 8 chars（避免動態 value 導致字串衝突） |
+| saga 內 step | `<saga_step_id>.<index>.<inner_step_id>` | index 為 saga.steps 陣列 0-based |
+| callback handler 內 step | `<caller_step_id>.callback.<callback_name>.<inner_step_id>` | caller_step_id 為呼叫 callback 的 task step |
+
+**不變式**：
+
+- 相同 `(workflow definition_hash, input, 所有 foreach items / 條件分支決策)` MUST 導出相同 `step_path`
+- Lease 接管時，接管者依 checkpoint 中既有 step_path 繼續，不重新生成（避免 index 漂移）
+- Retry 不改 step_path（同一 logical 位置，僅 attempt 遞增）
+- 跨 engine 實作：若兩 engine 對同一 workflow + input 的 foreach items 求值結果不同（非決定性 CEL），可能產生不同 step_path；此為使用者錯誤（CEL 應為純函式），engine 不做校驗
+
+**長度上限**：`engine.max_step_path_bytes`（預設 512）；超過視為 workflow 結構錯誤，step FAILED `error.type == "step_path_too_long"`（常見於過深巢狀 foreach）。
 
 ### wait_subscriptions
 

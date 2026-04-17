@@ -149,9 +149,27 @@ stdin 保持開啟；後續行為 `callback_result` 訊息。
   - 原因：超長行可能是 `type: result` 訊息，丟棄後 tool 端認為成功但 driver 無法判定終態，造成掛起
 - Tool 在收到 `callback_result` 前可繼續發更多 `callback`。
 - Driver MUST 將 `call_id` 對應表持久化（key: `(instance_id, step_path, attempt, call_id)`，含 `step_path` 以區分 foreach / parallel 迭代共用同 `step_id` 的情境，含 attempt 以避免 retry 跨 attempt 誤配），避免 process 中途崩潰時 callback 結果遺失。
-  - **重複 call_id**：同一 (instance_id, step_path, attempt) 內 tool 發出多筆相同 `call_id` 的 `callback` 訊息 → 以**首筆為準**，第二筆之後以協議錯誤 `incomplete_protocol` 處理（SIGTERM kill tool），避免 handler 被重複呼叫破壞 idempotent 語意
+  - **重複 call_id**：同一 (instance_id, step_path, attempt) 內 tool 發出多筆相同 `call_id` 的 `callback` 訊息 → 以**首筆為準**，第二筆之後以協議錯誤 `incomplete_protocol` 處理，避免 handler 被重複呼叫破壞 idempotent 語意。處置順序：
+    1. driver 先於 stdin 寫入 `{"type":"error","reason":"duplicate_call_id","call_id":"<dup>"}` 通知 tool（若 stdin 尚未關閉）
+    2. 給予 tool 5s 寬限期儘速輸出 `result` 結束；此期間不繼續路由新收到的 callback
+    3. 5s 到仍未收到 `result` → SIGTERM kill；再 5s → SIGKILL
+    4. Tool 實作建議於收到 `duplicate_call_id` error 時記錄日誌並立即發 `{"type":"result","success":false,...}` 退出，避免被強制 kill 造成資源洩漏
   - **未匹配 call_id**：tool POST `callback_result` 至 `X-Callback-URL`（protocol 模式於 stdin 回寫；HTTP callback 模式於外部 endpoint）但 `call_id` 不在持久化表中 → driver 回 HTTP 404 / 於 stdin 寫 `{"type":"error","reason":"unknown_call_id","call_id":...}`，tool 不得掛起等待；step 本身不因此 FAILED（避免 tool bug 影響業務結果），僅記錄 `tool.protocol_anomaly` observability 事件
   - **進程重啟後的 call_id 表**：driver 重啟時以 `(instance_id, step_path, attempt)` 重建該表；若 attempt 已推進，舊 attempt 的 call_id POST 視同未匹配
+
+#### Lease lost 後的 callback orphan 處置
+
+當前 engine 失去 lease（crash 或 grace expiry），舊 tool process 可能仍在運行並期待先前發出的 callback 收到 `callback_result`。新接管 engine 的責任：
+
+1. **讀取 call_id_dedup**：接管者 lease 成功後讀取該 step 的 `call_id_dedup` JSONB，列出尚未回應（state `pending_result`）的 call_id
+2. **非 idempotent tool（step FAILED 路徑）**：step 已以 `lease_lost_unsafe_resume` FAILED；新 engine **不執行** handler（handler 的 `output` / `error` 不會回到已終結的 step）；僅寫 `tool.protocol_anomaly` observability 事件記錄 orphan call_id 以便 ops 排查
+3. **idempotent tool（step 重跑路徑）**：新 attempt 會全新建立 call_id_dedup（key `attempt=N+1`）；舊 attempt 的 call_id 於新 attempt 視為未匹配（見「未匹配 call_id」規則）；舊 tool process 若仍存活發出 callback_result，driver 回 HTTP 404 / 寫 `unknown_call_id` 至 stdin
+4. **舊 tool process 回收**：新 engine **無法**直接通知舊 engine 管轄的 tool process；依賴：
+   - 舊 engine 進程若健在 → 收到 lease lost observability 事件後 SIGTERM 所有 in-flight tool（見 `10-concurrency.md` cancel propagation）
+   - 舊 engine crash → tool process 為孤兒，依 OS 的 parent-death signaling（Linux `PR_SET_PDEATHSIG`）或 process group TERM；實作 SHOULD 於 spawn 時設定此旗標
+   - 最終兜底：tool 自身的 `step timeout` / internal timeout 促使其退出；若 tool 無 timeout 設計，為實作缺陷（應於 `backend.timeout` 或 tool 內部設上限）
+
+實作建議：`call_id_dedup` 內除 call_id 外 MAY 記錄 `state: pending | resolved`、`issued_at` timestamp 以協助觀測性判斷 orphan 比例。
 - 收到 `result` 後，driver 等待 process exit；若 process 在 `result` 後 5s 內未退出 → SIGTERM；再等 5s → SIGKILL。
 - Process exit 但未收到 `result` → ToolResult `{success: false, error: {type: "incomplete_protocol"}}`；exit code 寫入 `error.code`。
 
