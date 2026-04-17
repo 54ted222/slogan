@@ -77,7 +77,7 @@ retry:
 
 1. 前一 attempt FAILED 且符合 retry 條件 → engine 先持久化該 attempt 的終態（attempt=N FAILED 寫入 steps 表）
 2. 讀取 `retry.max_attempts` / `delay` / `backoff` / `max_delay`：在**同一批次**內求值；求值上下文為當前 step 的 input / vars / steps 等（與 attempt=N+1 的 `input_snapshot` 共用 snapshot，即 input 不因 vars 改動而改變）
-3. 任一欄位 CEL 求值失敗 → step 終態直接確認為 FAILED（`error.type == "expression_error.*"` 或 `invalid_retry_config`），**不遞增 attempt**、不進入 sleep；後續不再 retry
+3. 任一欄位 CEL 求值失敗 → step 終態直接確認為 FAILED（`error.type` 為 `expression_error` 或其具體子碼如 `expression_error.type_error` / `expression_error.identifier_not_found` 等，或 `invalid_retry_config`；見 `runtime-spec/09-error-model.md` 錯誤碼表），**不遞增 attempt**、不進入 sleep；後續不再 retry
 4. 求值成功 → 計算 `sleep_duration`、`next_attempt_at = now() + sleep_duration` → 寫入 checkpoint（attempt=N+1 WAITING、`scheduled_at = next_attempt_at`）
 5. Checkpoint commit 後 engine 在 `next_attempt_at` 到達時進入 attempt=N+1 的 RUNNING；重啟時沿用 checkpoint 的 `next_attempt_at`，不重新求值 `delay`
 
