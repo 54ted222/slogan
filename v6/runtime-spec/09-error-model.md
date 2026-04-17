@@ -92,6 +92,7 @@ ErrorObject {
 | `backend_crashed` | tool process / extension 在 RUNNING 中崩潰 |
 | `lifecycle_init_failed` | tool lifecycle init backend 失敗 |
 | `extension_handler_panic` | extension handler 內部未捕捉例外 / panic / WASM trap |
+| `callback_endpoint_expired` | extension tool invoke 返回後，handler 仍透過 `CallbackEndpoint.invoke` 呼叫 → engine 拒絕並回 `CallbackResult.error.type`（不影響 ToolResult 自身，屬 handler 使用錯誤） |
 | `invalid_args` | tool exec backend `args` 陣列某元素 CEL 求值為 null 或非 string |
 | `invalid_env` | tool exec backend `env` 某 value CEL 求值為 null 或非 string |
 | `stdout_too_large` | tool 原始 stdout bytes 超過 `engine.tool_stdout_raw_limit` |

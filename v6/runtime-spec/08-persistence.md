@@ -370,8 +370,19 @@ RETURNING id, lease_owner, lease_expires_at, cancel_requested, cancel_reason, st
 | `instances.vars`（整體序列化） | 16 MB | assign step FAILED，`error.type == "vars_too_large"`；寫入前檢查 |
 | 單筆 `execution_log.payload` | 1 MB | 超限則截斷尾部，log 記錄 truncation 標記 |
 | 單一 event.data（Event Bus） | 1 MB | emit step FAILED，`error.type == "event_too_large"` |
+| `steps.error` / `instances.error` 整體序列化 | 64 KB | 超限時引擎**截斷 `error.details`**（並設 `error.details._truncated: true` 與 `error.details._original_size`）；`error.type` / `error.message` / `error.code` / `error.step_id` / `error.cause` 保留；若截斷後仍超限，以 `{type, message, code, step_id, _truncated: true, _truncation_reason: "error_too_large"}` 精簡結構替換 |
 
-上限可由 engine config 覆寫（`engine.max_step_output_bytes` / `engine.max_instance_input_bytes` / `engine.max_vars_bytes` 等）。超大資料建議以 artifact 儲存並在 output 中傳 path 引用。
+上限可由 engine config 覆寫（`engine.max_step_output_bytes` / `engine.max_instance_input_bytes` / `engine.max_vars_bytes` / `engine.max_error_bytes` 等）。超大資料建議以 artifact 儲存並在 output 中傳 path 引用。
+
+### Error 物件子欄位截斷規則
+
+當 error 的 `details.raw` / `details.raw_output` / `details.preview` / `details.stack_digest` 等自由格式欄位使 error 整體超過 `engine.max_error_bytes`（預設 64 KB）：
+
+1. 先對 `details` 中單筆字串 / 二進位欄位截斷至 4 KB（保留前綴；於該欄位補 `{value, _truncated_at: <bytes>}` 結構）
+2. 若整體仍超限，依序移除 `details.raw` / `details.raw_output` / `details.stack_digest`（僅保留 `details.size` / `details.reason` / `details.failed_indices` 等結構化診斷欄位）
+3. 截斷歷程以 `error.details._truncation_log: [<field_name>, ...]` 記錄，便於後續 debug
+4. `error.cause`（巢狀錯誤物件）以遞迴方式套用同規則；層數限 3 層，第 4 層 `cause` 整體替換為 `{type, message, _truncated: "depth_exceeded"}`
+5. 截斷後寫入 checkpoint；`tool.protocol_anomaly` observability 事件**不**因此類截斷觸發（屬正常資源保護路徑，非異常協議行為）
 
 ---
 

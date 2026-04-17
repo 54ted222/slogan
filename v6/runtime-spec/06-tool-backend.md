@@ -385,6 +385,51 @@ SSE 連線具狀態（持有 `X-Callback-URL` token 與 in-flight call_id 表）
 
 extension handler 必須是 in-process（Go plugin、Python entry point、WASM module 等）；out-of-process 由其自行包裝為 exec / http backend。
 
+#### Extension callback_handler 介面契約
+
+當 tool invoke 時 caller 宣告 `callback:`，engine 於 `ExtensionRequest` 中注入 `callback_endpoint`（非 nil）。Handler 可於 invoke 過程中以該 endpoint 觸發 callback 並同步等待 caller handler 結果：
+
+```
+CallbackEndpoint {
+  invoke(call_id: string, name: string, input: map) -> CallbackResult
+}
+
+CallbackResult {
+  output: map | null,
+  error:  { type: string, message: string } | null,   # 成功時 error == null；失敗時 output == null
+}
+```
+
+契約要點：
+
+- **同步阻塞語意**：`invoke(...)` 為阻塞呼叫；engine 於 caller handler 執行完成（或 caller step timeout / cancel）後返回；handler 實作 MUST 以此為前提（不需自行輪詢）
+- **call_id 由 handler 產生**：格式同 exec / http（tool 產生唯一字串）；engine 以 `(instance_id, step_id, attempt, call_id)` 建立 dedup 表，規則與 exec protocol 一致（重複 / 未匹配處理見 [NDJSON protocol](#邊界規則)）
+- **並發 callback**：handler MAY 於同一 invoke 內從多個 goroutine / task 並發呼叫 `CallbackEndpoint.invoke`；engine 以 `call_id` 路由，並發安全；caller handler 執行序由 engine 依 caller 能力決定
+- **Callback timeout / cancel 傳播**：若 caller step 觸發 timeout，engine 返回 `CallbackResult{error: {type: "timeout", message: ...}}`（與 exec `callback_result.error.type == "timeout"` 對應）；handler SHOULD 儘速結束 invoke
+- **Panic 隔離**：caller handler 內未捕捉例外經 engine 攔截後，以 `CallbackResult{error: {type: "extension_handler_panic"}}` 回傳；不影響 tool invoke 主流程（見「Extension Handler 異常安全」）
+- **Endpoint 生命週期**：`callback_endpoint` 於 `handler.invoke` 返回後立即失效；後續呼叫 → `CallbackResult{error: {type: "callback_endpoint_expired"}}`；同 TTL 語意對應 http callback 的 `X-Callback-URL` 撤銷
+- 若 caller 未宣告 `callback:` → `ExtensionRequest.callback_endpoint` 為 nil；handler 若仍呼叫則為實作錯誤，engine MAY raise `extension_handler_panic`
+
+實作綁定範例（Go）：
+
+```go
+type ExtensionHandler interface {
+    Invoke(ctx context.Context, req *ExtensionRequest) (*ExtensionResponse, error)
+}
+type ExtensionRequest struct {
+    ToolName         string
+    Input            map[string]any
+    Config           map[string]any
+    Context          map[string]any
+    CallbackEndpoint CallbackEndpoint // nil if caller has no callback:
+}
+type CallbackEndpoint interface {
+    Invoke(callID, name string, input map[string]any) (*CallbackResult, error)
+}
+```
+
+其他語言綁定（Python entry point、WASM component model）MUST 維持相同語意（同步阻塞、`call_id` 去重、panic 隔離）；簽名細節可依語言慣例調整（如 Python 以 dict / Python WASM component 以 interface type）。
+
 ### Extension Handler 異常安全
 
 - Extension handler 執行期間若發生 **未捕捉例外 / panic / WASM trap**，engine MUST：
