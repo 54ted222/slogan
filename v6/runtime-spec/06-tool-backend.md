@@ -1,6 +1,6 @@
 # 06 — Tool Backend Driver
 
-本文件定義 Backend Driver 對 `kind: Tool` 的 `backend.type: exec | http | extension` 的執行細節，以及 callback / streaming 的協議實作。對應 [dsl-spec/05-tool.md](../dsl-spec/05-tool.md)。
+本文件定義 Backend Driver 對 `kind: Tool` 的 `backend.type: exec | http | extension` 的執行細節，以及 callback 的協議實作。對應 [dsl-spec/05-tool.md](../dsl-spec/05-tool.md)。
 
 ---
 
@@ -21,7 +21,6 @@ ToolResult：
   error:   { type, message, code? } | null,
   attempts: int,
   duration_ms: int,
-  stream_events: int,            # 計數，非保留訊息本體
 }
 ```
 
@@ -102,8 +101,7 @@ CEL 求值後每個 args 元素 / env value MUST 為**非 null 字串**；引擎
 | 條件 | 模式 |
 |------|------|
 | `mode: protocol` 且 caller 無 `callback:` | **單訊息 protocol** |
-| `mode: protocol` 且 caller 有 `callback:` | **NDJSON streaming**（v6-stream） |
-| `stream.enabled: true` | **NDJSON streaming**（強制） |
+| `mode: protocol` 且 caller 有 `callback:` | **NDJSON protocol**（v6-protocol） |
 | `mode: raw` 或預設 | **raw** |
 
 ### 單訊息 protocol
@@ -117,14 +115,14 @@ CEL 求值後每個 args 元素 / env value MUST 為**非 null 字串**；引擎
 
 stderr 寫入 execution log，不影響成功判定。
 
-### NDJSON streaming（v6-stream）
+### NDJSON protocol（v6-protocol）
 
-driver 與 tool 以行分隔 JSON 雙向通訊。
+driver 與 tool 以行分隔 JSON 雙向通訊。此 NDJSON framing 為 callback 雙工通道，非 workflow-visible stream。
 
 #### 引擎 → tool（stdin 第一行）
 
 ```json
-{"protocol": "v6-stream", "input": {...}, "config": {...}, "context": {...}}
+{"protocol": "v6-protocol", "input": {...}, "config": {...}, "context": {...}}
 ```
 
 stdin 保持開啟；後續行為 `callback_result` 訊息。
@@ -134,7 +132,6 @@ stdin 保持開啟；後續行為 `callback_result` 訊息。
 | `type` | 處置 |
 |--------|------|
 | `callback` | 解析 `{call_id, name, input}` → 呼叫 `callback_handler.handle()`（背景 task）→ 完成後寫 `callback_result` 至 stdin |
-| `stream`   | 解析 `{sequence, data, final}` → 發 `tool.stream` 事件至 Event Bus（驗證規則見下「Stream 訊息驗證」） |
 | `result`   | 解析 `{success, output, error}` → 構造 ToolResult；driver 關閉 stdin 並等 process exit |
 | 其他 / 空 | 寫 stderr log；不視為錯誤直接丟棄 |
 
@@ -150,32 +147,13 @@ stdin 保持開啟；後續行為 `callback_result` 訊息。
 - 行長上限：建議 1MiB；超過 → step FAILED，error.type: `incomplete_protocol`，error.message 包含截斷的前 1KB。
   - driver 發 SIGTERM 至 tool，等 5s 未退出則 SIGKILL；不得繼續等待後續訊息
   - 原因：超長行可能是 `type: result` 訊息，丟棄後 tool 端認為成功但 driver 無法判定終態，造成掛起
-- Tool 在收到 `callback_result` 前可繼續輸出 `stream` / 發更多 `callback`。
+- Tool 在收到 `callback_result` 前可繼續發更多 `callback`。
 - Driver MUST 將 `call_id` 對應表持久化（key: `(instance_id, step_id, attempt, call_id)`，含 attempt 以避免 retry 跨 attempt 誤配），避免 process 中途崩潰時 callback 結果遺失。
   - **重複 call_id**：同一 (instance_id, step_id, attempt) 內 tool 發出多筆相同 `call_id` 的 `callback` 訊息 → 以**首筆為準**，第二筆之後以協議錯誤 `incomplete_protocol` 處理（SIGTERM kill tool），避免 handler 被重複呼叫破壞 idempotent 語意
-  - **未匹配 call_id**：tool POST `callback_result` 至 `X-Callback-URL`（protocol 模式於 stream 回寫；HTTP callback 模式於外部 endpoint）但 `call_id` 不在持久化表中 → driver 回 HTTP 404 / 於 stdin 寫 `{"type":"error","reason":"unknown_call_id","call_id":...}`，tool 不得掛起等待；step 本身不因此 FAILED（避免 tool bug 影響業務結果），僅記錄 `tool.protocol_anomaly` observability 事件
+  - **未匹配 call_id**：tool POST `callback_result` 至 `X-Callback-URL`（protocol 模式於 stdin 回寫；HTTP callback 模式於外部 endpoint）但 `call_id` 不在持久化表中 → driver 回 HTTP 404 / 於 stdin 寫 `{"type":"error","reason":"unknown_call_id","call_id":...}`，tool 不得掛起等待；step 本身不因此 FAILED（避免 tool bug 影響業務結果），僅記錄 `tool.protocol_anomaly` observability 事件
   - **進程重啟後的 call_id 表**：driver 重啟時以 `(instance_id, step_id, attempt)` 重建該表；若 attempt 已推進，舊 attempt 的 call_id POST 視同未匹配
 - 收到 `result` 後，driver 等待 process exit；若 process 在 `result` 後 5s 內未退出 → SIGTERM；再等 5s → SIGKILL。
 - Process exit 但未收到 `result` → ToolResult `{success: false, error: {type: "incomplete_protocol"}}`；exit code 寫入 `error.code`。
-
-#### Stream 訊息驗證
-
-- `sequence` MUST 為非負整數；驗證值的**單調遞增**（每筆 > 前筆）；違反 → 協議錯誤 `incomplete_protocol`，SIGTERM kill tool
-- `data` 為任意 JSON 型別；單筆 `data` 序列化後 size 受 `engine.event_bus_max_data_bytes`（預設 1 MB）限制；超過 → 協議錯誤
-- `final` MUST 明確存在且為 boolean；缺失或非 boolean → 協議錯誤
-- **終結規則**：收到 `final: true` 之後，若再收到任何 `stream` 訊息 → 協議錯誤
-- `final: true` 不等同 `result`：tool 仍可在 `final: true` 後發 `callback`；但 MUST 最終以單一 `result` 訊息收尾
-- Stream 訊息的 `sequence` 與 Event Bus 的 `source.sequence` 為**獨立計數**；tool.stream 事件的 `source.sequence` 由 engine 依 event bus 規則分配，不等同 stream message 的 sequence 值（後者保留於 `tool.stream.data.stream_sequence` 方便使用者串接）
-
-#### Tool crash 時 partial stream 的處置
-
-若 tool 在發出 N 筆 stream 訊息後（尚未送出 `final: true` 或 `result`）**異常終止**（SIGKILL / OOM / segfault / exit 非 0），引擎處置：
-
-- 已寫入 event bus 的 N 筆 `tool.stream` 事件**不撤回**（event bus 本身無 rollback；訂閱者已接收的事件照常存在）
-- Step 終態為 FAILED，`error.type == "backend_crashed"`（若能取得 exit code）或 `incomplete_protocol`（exit 但無 result）
-- `tool.stream` 事件的最後一筆**不會** 帶 `final: true`（tool 未送達）；訂閱 `tool.stream` 的 wait step 若以 `match: ${ event.data.final }` 等待結束 → 不會自動喚醒，依 `wait.timeout` 兜底
-- 建議訂閱者於 `wait.catch` 同時處理 `tool.stream` 匹配與 tool 呼叫本身的 FAILED（兩者為獨立訊號）
-- `step.completed`（呼叫 tool 的 task step）於 step 終態後 emit，訂閱者可據此判定 stream 是否為完整序列（step SUCCEEDED + last stream 的 `final: true`）或不完整（step FAILED）
 
 ### Raw 模式
 
@@ -209,7 +187,7 @@ stdout format：
 | `json` | `json_decode(stdout)` |
 | `lines` | `split(stdout, "\n")`，過濾空行 → list<string> |
 
-raw 模式不支援 callback 與 stream（caller 即使宣告 `callback:`，driver 在啟動時 raise validation error）。
+raw 模式不支援 callback（caller 即使宣告 `callback:`，driver 在啟動時 raise validation error）。
 
 ### Exit code 處理
 
@@ -250,7 +228,7 @@ else:
 - **敏感變數攔截**：engine **不**預先過濾 OS env（不建議在系統環境傳機密）；若 operator 啟動 engine 時該環境變數已存在，tool process 會自然繼承；建議部署時以最小 env 啟動 engine
 - **預留 key（SLOGAN_* 前綴）**：engine 保留 `SLOGAN_*` 前綴作為 metadata 注入通道；規則如下：
   - backend.env 使用 `SLOGAN_*` key → **載入失敗**，`registry.invalid_env_key`、`details.reason: "reserved_prefix"`；由使用者設值可能遮蔽 engine 注入值並造成 tool 混淆
-  - Engine 於每次 spawn tool process 時自動注入以下 SLOGAN_* 變數（exec / raw / stream 模式皆注入；extension 模式以 context map 傳遞同樣欄位）：
+  - Engine 於每次 spawn tool process 時自動注入以下 SLOGAN_* 變數（exec / raw 模式皆注入；extension 模式以 context map 傳遞同樣欄位）：
     - `SLOGAN_INSTANCE_ID` = 當前 instance uuid
     - `SLOGAN_STEP_ID` = 當前 task step 的 step_id
     - `SLOGAN_STEP_PATH` = 含巢狀路徑（見 `08-persistence.md` steps.step_path）
@@ -290,7 +268,7 @@ else:
 
 - 使用者於 `headers.Content-Type` 顯式指定者**優先**；engine 不強制 body 與 Content-Type 相符（由 tool 作者保證）
 - **Request body 大小上限**：`engine.http_request_body_limit`（預設 16 MB）；序列化後超過 → step FAILED，`error.type == "http_request_body_too_large"`；不實際發出請求
-- 此限制不涵蓋 streaming upload（v6 不支援 streaming body；若需上傳大檔請改用 exec backend 呼叫 curl 等工具）
+- 此限制不涵蓋 chunked upload（v6 不支援 HTTP chunked transfer body；若需上傳大檔請改用 exec backend 呼叫 curl 等工具）
 - `input_schema` / CEL 求值後 body 與上限檢查於 transport 前一次性完成；確保不會發出 HTTP 才被對端 413 拒絕
 
 #### 狀態碼分類決策
@@ -344,7 +322,6 @@ Content-Type 以 application/json 為主（含 +json suffix 如 application/ld+j
 3. 檢查 response header：MUST 含 X-Callback-URL
 4. 解析 SSE 事件流：
    - event: callback → 解析 data → 呼叫 callback_handler → POST result 至 X-Callback-URL
-   - event: stream   → 發 tool.stream 事件
    - event: result   → 構造 ToolResult，關閉 SSE 連線
 5. 若連線中斷且未收到 result → ToolResult { success: false, error.type: "incomplete_protocol" }
 ```
@@ -364,7 +341,7 @@ URL 應含一次性 token（query string 或 path），驗證來源；engine 在
 SSE 連線具狀態（持有 `X-Callback-URL` token 與 in-flight call_id 表）；本次呼叫的**一次連線生命週期對應一次 tool attempt**：
 
 - **Partial SSE message**：engine 以 line-based 累積（`data:` 行至空行為止才組成一則 event）；若連線在 event 結束前中斷（無終止空行），該 partial event 以**丟棄**處理（不構成 `incomplete_protocol` 立即失敗；engine 繼續判定下一步）
-- **連線中斷（mid-stream）**：engine **不**自動重連同一 attempt 的 SSE；本次 attempt 終結為 `incomplete_protocol`（見步驟 5）；重試由 step-level `retry` 決定，下一 attempt 以新 HTTP request 重新建立 SSE（含新的 `X-Callback-URL` token）
+- **連線中斷**：engine **不**自動重連同一 attempt 的 SSE；本次 attempt 終結為 `incomplete_protocol`（見步驟 5）；重試由 step-level `retry` 決定，下一 attempt 以新 HTTP request 重新建立 SSE（含新的 `X-Callback-URL` token）
 - **X-Callback-URL token 的 TTL**：連線存續期間有效；連線結束（正常 `result` 或中斷）後 engine 立即撤銷 token；過期 token 的 POST → HTTP 410 Gone、`error.reason: "callback_url_expired"`
 - **跨 attempt 的 call_id 隔離**：call_id dedup 表 key 已含 `attempt`（見 NDJSON 模式同規則）；前一 attempt 的 call_id POST 抵達新 attempt → HTTP 404 / 老 URL 已撤銷；不會誤配
 - **同一 attempt 內 tool 對 `X-Callback-URL` 的重複 POST**（例：tool 以 at-least-once 方式投遞 callback result）：driver 以 `call_id` 為 key 冪等處理；第二次 POST 若 engine 已處理第一次 → 直接回 200 OK + 原始 response body；tool 可安全重試
@@ -398,13 +375,12 @@ SSE 連線具狀態（持有 `X-Callback-URL` token 與 in-flight call_id 表）
 1. 載入 handler（extension registry）
 2. 構造 ExtensionRequest：{ tool_name, input, config, context, callback_endpoint? }（`config` 對應 tool definition 的 `backend.config`；無則為空 map，與 exec protocol stdin JSON 的 `config` 欄位語意同源）
 3. 呼叫 handler.invoke(request)
-4. handler 回傳 ExtensionResponse 或 stream
+4. handler 回傳 ExtensionResponse
 ```
 
 協議由 handler 自行宣告；engine 僅保證：
 
 - 提供與 exec/http 相同的 callback_handler 介面
-- 提供 stream 事件投遞通道
 - 將最終結果包裝為 ToolResult
 
 extension handler 必須是 in-process（Go plugin、Python entry point、WASM module 等）；out-of-process 由其自行包裝為 exec / http backend。
@@ -478,7 +454,7 @@ Engine crash → 新 engine 進程接管 instance 後對 cache 的處理：
 
 **stdout_raw vs output 的關係**：
 
-- `tool_stdout_raw_limit` 是「process 寫至 stdout 的原始 bytes 總量」上限（含 NDJSON framing、stream 訊息、log 行等），用於防止 tool 失控輸出撐爆 driver buffer
+- `tool_stdout_raw_limit` 是「process 寫至 stdout 的原始 bytes 總量」上限（含 NDJSON framing、log 行等），用於防止 tool 失控輸出撐爆 driver buffer
 - `max_step_output_bytes` 是「parsed JSON output 序列化後寫入 Instance Store 的 bytes」上限
 - 先觸發者先生效；raw limit 觸發 → tool 被 kill、step FAILED；output limit 觸發 → tool 正常退出但 step FAILED
-- 兩者皆可由 engine config 獨立覆寫；建議 `raw_limit ≥ 4 × output_bytes_limit`（保留 protocol overhead 與 stream 空間）
+- 兩者皆可由 engine config 獨立覆寫；建議 `raw_limit ≥ 4 × output_bytes_limit`（保留 protocol overhead 空間）

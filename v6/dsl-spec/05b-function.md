@@ -263,7 +263,7 @@ Handler 建議以 `type: return` 結束並回傳符合 `output_schema` 的資料
 
 ### 與 Tool callback 的對應
 
-`type: task` 呼叫 Tool 時亦可使用同一 `callback:` 結構；Tool 透過 backend 協議（exec protocol / http stream / extension）發出 callback 請求，引擎將之路由至同一 handler。Tool 端的協議定義見 `05-tool.md` 的「Callback 協議」章節。
+`type: task` 呼叫 Tool 時亦可使用同一 `callback:` 結構；Tool 透過 backend 協議（exec protocol / http SSE / extension）發出 callback 請求，引擎將之路由至同一 handler。Tool 端的協議定義見 `05-tool.md` 的「Callback 協議」章節。
 
 ---
 

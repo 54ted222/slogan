@@ -105,6 +105,14 @@ label_schema:
 
 ---
 
+## Stream Tool（含生命週期與優雅關閉）
+
+v6 原規劃的 content-level stream 能力（tool 即時串流輸出、`tool.stream` 事件、SSE `event: stream`、`stream.enabled` 等）於 2026-04-17 審閱中發現生命週期與優雅關閉機制有明確缺口（graceful close 訊號、finalizer / on_close hook、`stream.max_duration`、長駐 application 概念），暫不納入 v6。
+
+完整原設計歸檔與未來議題見 [future/v6-stream-lifecycle.md](future/v6-stream-lifecycle.md)。
+
+---
+
 ## Scheduled Trigger DST 處理
 
 定義 scheduled trigger 在日光節約時間（DST）轉換時的行為。

@@ -9,7 +9,7 @@
 Event Bus 是引擎與外部、引擎內部多 instance 間的非同步通訊匯流排：
 
 - 業務事件：由 `emit` step 發送，可觸發 trigger 或喚醒 wait
-- 內部事件：`instance.created` / `step.completed` / `tool.stream` / `tool.callback` / `wait.timeout` 等
+- 內部事件：`instance.created` / `step.completed` / `tool.callback` / `wait.timeout` 等
 - 控制事件：`instance.cancel` / `engine.lease_expired`
 
 實作可選：in-memory bus（單機）、基於 message queue（NATS / Kafka / Redis Streams）、基於資料庫 polling。本規格不限定，僅約束行為。
@@ -47,7 +47,7 @@ Event {
 | Workflow / Function 一般 step（`emit`） | 所在 instance | emit step 自身 id |
 | Callback handler 內的 `emit`（caller 側 `type: task` 的 `callback:`） | **caller workflow instance**（非 function instance） | 呼叫該 tool/function 的 task step id（handler 本身非正式 step） |
 | Saga compensate 觸發的 tool 若 emit | 所在 saga instance | 原 origin step 的 id（compensate step 本身不暴露 id） |
-| Tool stream / tool.callback internal 事件 | 呼叫 tool 的 instance | 呼叫 tool 的 task step id |
+| tool.callback internal 事件 | 呼叫 tool 的 instance | 呼叫 tool 的 task step id |
 | Trigger 建立 instance（內部 `instance.created`） | 新建立的 instance | `null`（無觸發 step） |
 
 此規則確保事件追蹤鏈能以 `(instance_id, step_id)` 精準定位業務來源，不因跨 context（callback / compensate）而模糊化。`source.sequence` 於 callback / compensate 期間仍由 caller instance 的計數器分配（共用單一序列）。
@@ -94,7 +94,6 @@ Event {
 | Business emit（預設） | `broadcast` | null | 所有匹配 trigger / wait 的訂閱者皆收到 |
 | Internal `step.completed` / `wait.timeout` / `event.matched` | `unicast` | 目標 instance_id | Engine Loop 只路由至該 instance；避免廣播雜訊 |
 | Internal `tool.callback` | `unicast` | caller instance_id | 走 driver 直通；不發至 bus broadcast |
-| Internal `tool.stream` | `broadcast`（內部） | null | 供 workflow 的 wait 訂閱 |
 | Internal `instance.cancel` | `unicast` | target instance_id | |
 
 - `emit` step 目前**僅支援 broadcast**（v6）；DSL 無 unicast 欄位。unicast 是 engine 內部路由機制，不暴露給使用者業務邏輯
@@ -295,10 +294,8 @@ emit 的順序保證：
 
 ---
 
-## tool.stream / tool.callback 事件
+## tool.callback 事件
 
-- `tool.stream`：由 Tool Backend Driver 在 `mode: stream` 下發出；scope: `internal`；data: stream payload。
-- workflow 可訂閱 `tool.stream` 事件透過 `wait` 取得資料（將 event_type 設為 `tool.stream` 並 match）。
 - `tool.callback`：driver 內部使用，不暴露給使用者 wait。
 
 ---
@@ -318,7 +315,6 @@ emit 的順序保證：
 | `event.matched` | Event Bus | Engine Loop | 喚醒 wait step |
 | `wait.timeout` | Engine Loop（timer） | Engine Loop | 觸發 wait step FAILED |
 | `tool.callback` | Backend Driver | Engine Loop | 路由至 caller handler |
-| `tool.stream` | Backend Driver | Engine Loop / 訂閱 wait | 串流投遞 |
 | `engine.lease_expired` | Lease Manager | Engine Loop | 觸發 instance 接管 |
 | `bus.dead_letter` | Event Bus | Ops 監控 | 訊息無法投遞 |
 | `trigger.skipped` | Trigger Resolver | Ops 監控 | event 通過 dedup 但未匹配任一 trigger 的 scope / when；或 trigger.when_eval_failed（event ack 但不建立 instance） |
@@ -332,11 +328,9 @@ emit 的順序保證：
 
 所有 `scope: internal` 的事件 **僅 engine 與 ops 監控可訂閱**；使用者 workflow 的：
 
-- `wait.signals[].event`：載入期拒絕保留前綴（見 `dsl-spec/03-steps.md` 的 event 名稱規則）；**唯一例外** 為 `tool.stream`，允許 workflow 訂閱以接收本 instance tool 的 stream 訊息
-- Event trigger：不含例外；`tool.stream` 為 internal scope，trigger 不能訂閱 internal 事件
-- `emit.event`：同上保留規則（使用者不能 emit 保留 type，含 `tool.stream`）
-
-**`tool.stream` 的訂閱作用域**：wait 訂閱 `tool.stream` 時以 `match` 表達式辨識來源（如 `match: ${ event.source.step_id == "my_task" }`）；`tool.stream` 事件的 `source.instance_id` 恆為呼叫 tool 的 instance 自身（見「source 於特殊上下文的歸屬」），因此跨 instance 不會相互干擾。
+- `wait.signals[].event`：載入期拒絕保留前綴（見 `dsl-spec/03-steps.md` 的 event 名稱規則）
+- Event trigger：不含例外；internal scope 事件，trigger 不能訂閱
+- `emit.event`：同上保留規則（使用者不能 emit 保留 type）
 
 業務層若需要「instance 完成」事件，建議 workflow 主動 `emit workflow.completed`（使用者自訂 type）。
 
@@ -354,7 +348,6 @@ emit 的順序保證：
 | `event.matched` | `{instance_id, step_id, subscription_id, event: <完整 Event 物件>}`（unicast 至目標 instance；engine 收後以 lease 取得擁有權後處理 wait 喚醒） |
 | `wait.timeout` | `{instance_id, step_id, subscription_id, deadline}`（timer 於 deadline 到期時觸發；unicast 至 wait 所在 instance） |
 | `tool.callback` | `{instance_id, step_id, call_id, name, input}`（unicast；driver 內部使用，不對外訂閱） |
-| `tool.stream` | `{instance_id, step_id, step_path, stream_sequence, data, final}`（broadcast internal；可被使用者 wait `tool.stream` 訂閱，見「內部事件訂閱限制」的例外） |
 | `engine.lease_expired` | `{instance_id, engine_id, expired_at}`（lease 過期通知；其他 engine 進程可搶取） |
 | `trigger.rejected` | `{workflow_name, trigger_index, event_id, failure_reason, violation_path?}` |
 | `bus.dead_letter` | 見上「bus.dead_letter 事件結構」 |

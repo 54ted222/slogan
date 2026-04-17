@@ -137,7 +137,7 @@ WAITING ─► RUNNING ─► SUCCEEDED
 5. saga 進入 / 退出補償階段
 6. `RUNNING` → `SUCCEEDED` / `FAILED` / `CANCELLED`（含最終 output / error）
 
-非 checkpoint 的中間狀態（如 LLM token 串流的部分輸出）SHOULD 寫入 execution log 但不影響重啟後的 step 終態判定。
+非 checkpoint 的中間狀態（如 tool 的中間 stdout 訊息、step 內部計數器）SHOULD 寫入 execution log 但不影響重啟後的 step 終態判定。
 
 ---
 
@@ -283,7 +283,6 @@ v6 不支援原地「降版」；回滾透過**發佈新版本**完成：
 | `FAILED` workflow instance | 30 天 |
 | `CANCELLED` workflow instance | 7 天 |
 | Sub-instance（function instance） | 隨父 instance 一同清除 |
-| `tool.stream` 中間訊息 | 不持久化（即時投遞至訂閱者後丟棄） |
 
 ### Retention 覆寫規則
 

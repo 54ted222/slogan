@@ -79,7 +79,7 @@
 - Instance 結束時觸發 destroy hook 並釋放資源。
 
 ### Event Bus
-- 訊息匯流排：trigger 訂閱、`emit` step 發送、`wait` step 訂閱、`tool.stream` / `tool.callback` 內部事件。
+- 訊息匯流排：trigger 訂閱、`emit` step 發送、`wait` step 訂閱、`tool.callback` 內部事件。
 - 支援 `scope`：`workflow`（僅本 instance）/ `project` / `global`。
 - 不保證跨 scope 順序；同 scope 內依產生時間 FIFO。
 - 重試與 dead-letter 由實作決定，但 SHOULD 提供至少一次（at-least-once）投遞。
