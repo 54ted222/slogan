@@ -613,10 +613,18 @@ lifecycle:
         CLIENT_SECRET: ${ secret.OAUTH_CLIENT_SECRET }
     # init 的 output 會注入至主 backend 的 context.lifecycle.init
   destroy: # MAY — workflow instance 結束時執行
+    timeout: 30s # MAY, 預設 30s — destroy hook 執行上限
     backend:
       type: exec
       command: "node ./tools/auth/logout.js"
 ```
+
+### lifecycle.destroy 欄位
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `timeout` | duration | MAY（預設 30s） | destroy hook 的執行上限；超過視為失敗（走「destroy 失敗」路徑，排入重試佇列，見 `runtime-spec/08-persistence.md` 的「lifecycle.destroy 重試政策」）。若 destroy 正在存取 artifact 而 timeout → engine 強制加 workspace 寫鎖並視 destroy 失敗（見 `dsl-spec/04-expressions.md` 的 artifact 寫鎖規則） |
+| `backend` | object | MUST | exec / http backend spec；不支援 extension（同 `lifecycle.init.backend`） |
 
 ### lifecycle.init 欄位
 
