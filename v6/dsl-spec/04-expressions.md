@@ -331,12 +331,16 @@ artifacts.order_file.exists
 | null | `expression_error.type_error`（不回 0，避免與 `[]` / `""` / `{}` 混淆） |
 | int / double / bool / timestamp / duration | `expression_error.type_error` |
 
-**防禦模式**：對可能為 null 的 collection 先以 `has()` 或 `default()` 保護：
+**防禦模式**：對可能為 null 或不存在的路徑，先以 `has()` 或 `default()` 保護：
 
 ```
 has(input.items) ? input.items.size() : 0
 default(input.items, []).size()
 ```
+
+- `default(x, y)` 攔截兩種狀況：`x` 求值為 null、`x` 路徑不存在（`identifier_not_found`）；其他錯誤（`type_error` / `out_of_bounds` / `overflow` / `division_by_zero` 等）不攔截
+- 與 `has(x) ? x : y` 語意等價（並避免 short-circuit 分支導致的 `x` 再次求值）
+- 跨層級路徑：`default(a.b.c, x)` — 任一層 null 或缺失皆視為觸發 fallback（短路求值，不拋錯）
 
 ### 擴充函式
 
@@ -346,7 +350,7 @@ default(input.items, []).size()
 | `uuid()` | string | UUID v4 |
 | `json_encode(value)` | string | 編碼為 JSON |
 | `json_decode(string)` | any | 解碼 JSON |
-| `default(value, fallback)` | any | null 時回傳 fallback |
+| `default(value, fallback)` | any | `value` 為 null 或**對應路徑觸發 `identifier_not_found`** 時回傳 fallback；其他 expression_error（type_error / overflow 等）不攔截仍拋出 |
 | `coalesce(a, b, ...)` | any | 第一個非 null 值 |
 | `has(path)` | bool | 欄位是否存在（見下方語意） |
 | `timestamp(string)` | timestamp | 解析 RFC 3339 字串為 timestamp |

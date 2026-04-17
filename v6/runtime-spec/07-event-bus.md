@@ -67,7 +67,12 @@ Event {
 
 **`scope: workflow` 於 function instance 的嚴格隔離**：function instance 內 emit `scope: workflow` 的事件**僅限該 function instance 本身**，**不會**傳播至父 workflow instance 或兄弟 function instance（即每個 instance 為獨立 workflow-scope 虛擬域）。同理，父 workflow instance 的 `scope: workflow` 事件也不會下傳至子 function instance。跨 instance 通訊請使用 `scope: project` 或 `global`，並以 correlation key（如 `parent_id` / 業務 id）於 `match` 中辨識。此設計避免語意歧義，並保留「workflow = 單一 instance 的隔離域」的簡潔心智模型。
 
-**根目錄 definition 的 project 匹配**：匹配「同 project」時以 `project.name` 字串比較（根目錄 definition `project.name == ""`）；因此根目錄 definition emit 的 `scope: project` 事件只匹配其他根目錄 definition 的訂閱者，不會匹配具名 project 內的訂閱者，反之亦然（詳見 `dsl-spec/03-steps.md` emit 節）。
+**project 匹配以 `project.path` 為準**：匹配「同 project」時 **MUST** 以 `project.path`（full hierarchy path，如 `order/domestic`）字串比較，**非** `project.name`（僅葉節點名稱）。理由：巢狀 project 可能在不同 hierarchy 下有同名 project（如 `order/auth` 與 `user/auth`），僅比對 `name` 會誤匹配；`project.path` 為唯一識別。
+
+- 根目錄 definition：`project.path == ""`；其 `scope: project` 事件只匹配其他根目錄 definition 的訂閱者，不會匹配任何具名 project
+- 具名 project：`project.path == "<full/path>"`；僅同 `project.path` 字串相等的 emitter 與 subscriber 互相匹配
+- **不**做 prefix match（例如 `order/domestic` 的事件不匹配 `order/domestic/child` 的訂閱）；若需跨層級通訊請改用 `scope: global` 或於事件 data 攜帶 correlation key 由訂閱端 `match` 過濾
+- 詳見 `dsl-spec/03-steps.md` emit 節
 
 **Self-emit（同 instance 自發自收）**：
 
