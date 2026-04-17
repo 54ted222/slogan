@@ -604,6 +604,7 @@ backend:
 ```yaml
 lifecycle:
   init: # MAY — 首次使用前執行
+    reusable_across_restart: false # MAY, 預設 false — engine 重啟 / lease 接管後是否復用既存的 init output
     backend:
       type: exec
       command: "node ./tools/auth/login.js"
@@ -616,6 +617,13 @@ lifecycle:
       type: exec
       command: "node ./tools/auth/logout.js"
 ```
+
+### lifecycle.init 欄位
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `reusable_across_restart` | bool | MAY（預設 false） | 標記 init output 是否跨 engine 重啟 / lease 接管時仍有效。`false`（預設）：engine crash / 接管後一律重新執行 init（安全預設，避免過期 session token / 失效連線池引用）。`true`：條件性復用（僅同 engine_id 進程可復用；跨 engine 仍重新 init）。詳見 `runtime-spec/06-tool-backend.md` 的「reusable_across_restart 的復用規則」 |
+| `backend` | object | MUST | exec / http backend spec；不支援 extension（見下） |
 
 ### 執行時機
 

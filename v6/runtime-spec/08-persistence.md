@@ -33,6 +33,8 @@
 | `cancel_requested` | bool | 外部 cancel 訊號標記；由不持有 lease 的進程以無鎖 UPDATE 寫入，lease 持有進程於 event loop tick 檢查並進入 CANCELLED 流程（見 `10-concurrency.md`）。預設 `false`；寫入後不再回寫 `false`（終態本身已代表取消完成） |
 | `cancel_reason` | string \| null | cancel_requested 被置為 true 時隨附的 reason；供 observability 使用 |
 | `cancelling_started_at` | timestamp \| null | 進入 `RUNNING.cancelling` 子態時刻；`cancel_grace_period` 自此時刻倒數；lease 接管時接管者重置為 `now()`（見 `10-concurrency.md` 的「Cancel 偵測與執行的時序模型」）；非 cancel 路徑始終為 null |
+| `timeout_resolved_ms` | int64 \| null | `workflow.config.timeout` / `function.config.timeout` CEL 求值後的毫秒結果；於 `PENDING → RUNNING` transition 前求值並一次性寫入（見 `dsl-spec/02-workflow.md` config.timeout CEL 求值規則）；engine restart 後不重求值；缺省 `config.timeout` 的 instance 為 null（無 workflow/function 級 timeout） |
+| `cancel_grace_period_resolved_ms` | int64 \| null | 同 `timeout_resolved_ms`，為 `cancel_grace_period` CEL 求值後的結果；缺省時使用 engine 預設 30s |
 | `step_executions_count` | int | 已執行的 step attempt 累計數（每次 step 進入 RUNNING +1，含 retry；SKIPPED 不計）；用於 `config.max_step_executions` 限制檢查（見 `02-instance-lifecycle.md`）；預設 0 |
 
 ### steps

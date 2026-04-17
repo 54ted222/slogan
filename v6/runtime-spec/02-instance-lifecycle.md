@@ -290,3 +290,19 @@ v6 不支援原地「降版」；回滾透過**發佈新版本**完成：
 - **Runtime API 不支援延長單一 instance 的 retention**：`retention_until` 於 instance 建立時即依該 version 的 project 設定決定並寫入 checkpoint；後續不可變更
 - 需要長期保留（如 audit trail）：請於 workflow 內以 `type: task` 呼叫專用 tool（如 `audit.archive`）將關鍵資料匯出至外部系統（S3 / 資料倉儲）；engine 本身不作為長期歸檔
 - GC 行為：背景 job 依 `retention_until <= now()` 硬刪除；無「軟刪除」階段；對已刪除的 instance_id 做 API 查詢 → `404 instance_not_found`（不區分「從未存在」與「已回收」）
+
+### 未終態 instance 的 retention_until
+
+Instance 建立時（`PENDING` 狀態）寫入的 `retention_until` 為**暫定值**；終態確定後會在終結 checkpoint 內更新為最終值。暫定規則：
+
+| 階段 | `retention_until` 值 |
+|------|---------------------|
+| PENDING / RUNNING（含所有子態） | `created_at + MAX(succeeded_retention, failed_retention, cancelled_retention)`（取各終態 retention 的最大值，確保未終態 instance 不會被 GC） |
+| 終態 checkpoint（SUCCEEDED / FAILED / CANCELLED） | 於終結 transaction 內更新為 `ended_at + <該終態對應的 retention>`（由 project retention_policy 決定） |
+
+**理由**：
+
+- 活躍中的 instance（不論跑多久，包含 7 天人工審批流程）**不應**被 retention GC 誤刪；取最大值確保任何終態路徑下 retention window 都涵蓋活躍期
+- 實作必須在終態 checkpoint 內**同 transaction** 更新 `retention_until`（配合 `ended_at` / `state`），確保 GC 讀到的值永遠與終態匹配
+- GC job 查詢 `retention_until <= now()` 時，活躍 instance 恆不匹配（`retention_until` 於創建時 = `created_at + max_retention`，若 instance 跑超過 `max_retention` → 由 `workflow.config.timeout` 處理，而非 GC 刪除）
+- 對於 `workflow.config.timeout` 超過 `max_retention` 的極端配置：engine 在載入期 SHOULD 警告（`registry.timeout_exceeds_retention`，observability only，不拒絕載入）
