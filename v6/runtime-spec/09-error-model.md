@@ -89,7 +89,7 @@ ErrorObject {
 | `http_redirect_blocked` | HTTP 3xx 未被 `error_on_status` / `retry_on_status` 明示處理；`error.details.location` 保留 Location header，`error.code` 為原 3xx status |
 | `http_request_body_too_large` | request body 序列化後超過 `engine.http_request_body_limit`（預設 16 MB）|
 | `connection_error` | 網路 / TLS 連線失敗 |
-| `schema_violation` | input/output 不符 JSON Schema |
+| `schema_violation` | input/output 不符 JSON Schema；`error.details.direction` ∈ `{input, output}` 標示方向；`error.details.path` 為違反欄位路徑；tool output 驗證失敗時 `error.details.raw_output` 保留驗證前 output；compensate input 驗證失敗時 `error.details.compensate_origin_step` 為原 step id（見 `dsl-spec/05-tool.md` compensate 章節） |
 | `backend_crashed` | tool process / extension 在 RUNNING 中崩潰 |
 | `lifecycle_init_failed` | tool lifecycle init backend 失敗 |
 | `extension_handler_panic` | extension handler 內部未捕捉例外 / panic / WASM trap |
