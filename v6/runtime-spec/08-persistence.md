@@ -56,6 +56,8 @@
 | `compensate_state` | enum \| null | saga 補償用：`pending` / `started` / `done` / `failed`（見 `03-step-execution.md` saga 補償狀態機） |
 | `compensate_attempt` | int \| null | 補償 action 的 attempt 計數（與 origin step 的 attempt 分開，見 `03-step-execution.md` idempotent + compensate 組合）；null 表示尚未進入補償 |
 | `call_id_dedup` | jsonb \| null | NDJSON / SSE callback 協議的 call_id 追蹤 map；進程重啟後以 `(instance_id, step_path, attempt)` 重建（見 `06-tool-backend.md` 未匹配 call_id 規則）；MAY 由實作改放獨立表 |
+| `deadline` | timestamp \| null | step-level `timeout` 的 deadline，於首次進入 RUNNING 時寫入（`first_running_at + timeout_duration`）；engine restart 沿用，不重求值；retry 不重置；缺省 `timeout` 為 null |
+| `first_running_at` | timestamp \| null | 首次進入 RUNNING 的時刻；用於 deadline 計算；僅 task / wait 等支援 timeout 的 step type 寫入 |
 
 主鍵：`(instance_id, step_path, attempt)`
 
