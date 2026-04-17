@@ -203,6 +203,7 @@ secret.STRIPE_SECRET
 | `context.attempt` | int | 本次 attempt 計數（首次 = 1） |
 | `context.idempotency_key` | string | SHA256 hex of NUL-separated `(instance_id, step_id, canonical_json(input_snapshot), attempt_as_decimal)`；詳細公式見 `runtime-spec/08-persistence.md` Idempotency 章節；與 `05-tool.md` protocol mode stdin JSON 的 `context.idempotency_key` 同源 |
 | `context.trace_id` | string | W3C 相容 trace id（見 `runtime-spec/07-event-bus.md` 的 trace 傳播） |
+| `context.lifecycle.init` | map \| null | 若 tool 宣告 `lifecycle.init`，其執行後的 output 注入於此（per-instance cache，見 `runtime-spec/06-tool-backend.md` Lifecycle 章節）；未宣告 lifecycle.init 的 tool 為 `null`；常用於持有 session token / 連線池等首次初始化產物（如 `${ context.lifecycle.init.access_token }`） |
 
 與 protocol mode stdin JSON 的 `context` 結構欄位一致；tool 開發者可以 CEL 取同一資料集、也可於 stdin JSON 中直接讀。
 

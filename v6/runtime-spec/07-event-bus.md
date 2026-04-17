@@ -259,12 +259,27 @@ TriggerSubscription {
 API 觸發 workflow 時 MAY 帶 `Idempotency-Key` header（建議值：UUID 或業務唯一 key）：
 
 - Engine 以 `(workflow_name, workflow_version, idempotency_key)` 為複合鍵查找既有 instance
-- 命中（TTL 內，預設 24h）：回傳既有 instance（不建立新的），HTTP 200 + instance state；同 key 重複呼叫冪等
-- 未命中：建立新 instance，同時記錄 idempotency_key → instance_id 映射，TTL 24h
+- 命中：回傳既有 instance（不建立新的），HTTP 200 + instance state；同 key 重複呼叫冪等
+- 未命中：建立新 instance，同時記錄 idempotency_key → instance_id 映射
 
 **無 `Idempotency-Key` 時**：每次呼叫皆建立新 instance；呼叫端自行承擔重複風險（例如網路超時重試會產生多個 instance）
 
-實作 SHOULD 暴露 `manual_trigger_idempotency_ttl` config 覆寫 24h 預設。
+#### Idempotency 映射的保留期
+
+Idempotency 映射的 TTL 綁定 instance 生命週期，避免長流程 workflow 於映射過期後被誤判為「不存在」而產生重複 instance：
+
+| 狀態 | 映射有效期 |
+|------|------------|
+| Instance 於 PENDING / RUNNING（任何子態） | **映射恆定有效**，不受固定 TTL 限制 |
+| Instance 終結（SUCCEEDED / FAILED / CANCELLED） | 映射延續至 `instance.retention_until`（與 instance 本體同步 GC，見 `08-persistence.md` retention_policy） |
+| Instance 被 retention GC 硬刪除 | 映射同 transaction 刪除；同 key 後續呼叫 → 視為未命中，建立新 instance |
+
+實作要點：
+
+- 映射儲存於 `trigger_dedup` 表（`event_id` 欄位一般化為 `dedup_key`，見 `08-persistence.md` Checkpoint Transaction 邊界章節）；instance 終結時**不**刪除該 row，由 instance retention job 級聯刪除
+- 對於 workflow 本身設有極長 retention（如 audit workflow 保留 30 天）的情境：Idempotency 命中仍回傳已終結 instance 的 state（HTTP 200 + `state: SUCCEEDED/FAILED/CANCELLED`）；呼叫端依 state 決定下一步
+- 使用者若需要「終結後立即允許同 key 重建 instance」，請**不要**使用 `Idempotency-Key`（改以業務層決定新 key）；或以 DELETE instance API（若實作提供）顯式清除映射
+- 不再暴露 `manual_trigger_idempotency_ttl` config（舊 24h TTL 已由 instance retention 取代；保留 config 名稱會造成誤導）
 
 #### Trigger 效能與索引
 

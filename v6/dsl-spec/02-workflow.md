@@ -36,7 +36,7 @@ triggers:
 
 - 同一 workflow 的 `triggers[]` 中 **至多一個** `manual` trigger；多個 → 載入失敗，`registry.duplicate_manual_trigger`（manual 無可區分參數，多個沒有語意）
 - Manual trigger 不經 event bus；API / CLI 呼叫直接建立 instance
-- API 呼叫端可附 `Idempotency-Key` header 實現重試去重（key → instance_id 映射 24h TTL）；同 key 第二次呼叫回傳既有 instance 而非新建
+- API 呼叫端可附 `Idempotency-Key` header 實現重試去重（key → instance_id 映射，TTL 綁 instance 生命週期 + retention，見 `runtime-spec/07-event-bus.md` 的「Idempotency 映射的保留期」）；同 key 第二次呼叫回傳既有 instance 而非新建
 - `Idempotency-Key` 僅於 manual trigger 有效；event trigger 走 `(workflow_name, workflow_version, event.id)` 去重（見 `runtime-spec/07-event-bus.md`）
 - CLI 呼叫省略 `Idempotency-Key` → 每次呼叫建立新 instance（不去重）
 

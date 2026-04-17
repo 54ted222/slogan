@@ -245,7 +245,7 @@ caller engine 對 handler 的執行：
 
 - 為 handler 建立短命的「callback frame」：擁有獨立 `steps.*` namespace（避免與 caller 主流程衝突），共享 caller 的 `input` / `vars`。
 - handler 內 step 對 `prev` 的解析以 handler steps 為準（不指向 caller 主流程）。
-- handler `return` 結束；若未 return 則最後一個 step output 視為 handler output。
+- handler `return` 結束；若未 return（steps 自然走完 fall-through）→ handler output 恆為 `null`（與 workflow / function fall-through 語意一致，見 `02-instance-lifecycle.md` 的 `RUNNING → SUCCEEDED` 規則與 `dsl-spec/05b-function.md` 的「Handler 結束行為」）；若 callback 宣告 `output_schema` 不允許 null，則該 callback step FAILED 並 `error.type == "schema_violation"`
 
 ---
 
