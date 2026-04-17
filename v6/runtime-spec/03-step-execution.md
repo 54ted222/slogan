@@ -60,6 +60,7 @@
 - Engine crash 後重啟：依 checkpoint 中的 `attempts_so_far` 恢復，**不**重新從 0 / 1 開始（例如已重試 2 次並在 attempt=3 中 crash → 重啟後仍以 attempt=3 進入 backend，signature 與 crash 前相同，可命中 cache）。
 - `input_snapshot`（CEL 求值結果）於 **首次** 進入 RUNNING 時取樣並寫入 checkpoint；**後續 retry 沿用同一 snapshot**，不重新求值 CEL（避免 `${ now() }` / `${ uuid() }` 造成 signature 漂移、破壞 idempotency）。
   - 唯一例外：`retry.delay`（若為 CEL）每次 retry 前重新求值，屬控制欄位不進 signature。
+  - **retry.delay CEL 的 context.attempt 值**：於 attempt N 失敗後、attempt N+1 排程前求值；此時 `context.attempt == N+1`（下一次嘗試的序號，便於使用者實作 `delay × attempt` 等指數退避表達式）。對應的 `context.idempotency_key` 使用 N+1 重新計算（與 attempt 同步）。`env` / `secret` namespace 值為**即時**讀取（非 snapshot，允許使用者於 delay 中參考最新 env / rotate 過的 secret）；此為 retry.delay 的特例，與其他控制欄位的 snapshot 語意不同。
   - 若使用者確實需要每次 retry 以新值呼叫，請將求值改為該 step 之前的 `assign`，或顯式關閉 `idempotent`。
 - 補償 step 獨立計數：`compensate_attempt` 首次 = 1，與原 step `attempt` 不共用；即使同一 tool 被多個 saga step 當作補償引用，key 以 `(instance_id, origin_step_path, "compensate", compensate_attempt)` 區分（`step_path` 區分 foreach / parallel 迭代），不會 collision。
 - Signature 明確定義：`SHA256_hex(action_name || "\0" || canonical_json(input_snapshot) || "\0" || attempt_as_decimal_string)`；`canonical_json` 採 **RFC 8785 JSON Canonicalization Scheme (JCS)** 規則：
