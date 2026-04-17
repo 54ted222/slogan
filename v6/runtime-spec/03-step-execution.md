@@ -51,7 +51,7 @@
 
 ### Output 寫入
 
-- `idempotent: true` 的 step：若 retry 觸發，driver 先嘗試讀取 instance store 的 cached output（key `(instance_id, step_id, attempt_signature)`）；命中則跳過實際呼叫。
+- `idempotent: true` 的 step：若 retry 觸發，driver 先嘗試讀取 instance store 的 cached output（key `(instance_id, step_path, attempt_signature)`；`step_path` 區分 foreach / parallel 迭代，見 `08-persistence.md` steps 主鍵）；命中則跳過實際呼叫。
 - 非 idempotent：每次 attempt 都實際呼叫；persistence 只記錄最後一次成功的 output。
 
 ### Attempt 與 signature 的精確語意
@@ -61,7 +61,7 @@
 - `input_snapshot`（CEL 求值結果）於 **首次** 進入 RUNNING 時取樣並寫入 checkpoint；**後續 retry 沿用同一 snapshot**，不重新求值 CEL（避免 `${ now() }` / `${ uuid() }` 造成 signature 漂移、破壞 idempotency）。
   - 唯一例外：`retry.delay`（若為 CEL）每次 retry 前重新求值，屬控制欄位不進 signature。
   - 若使用者確實需要每次 retry 以新值呼叫，請將求值改為該 step 之前的 `assign`，或顯式關閉 `idempotent`。
-- 補償 step 獨立計數：`compensate_attempt` 首次 = 1，與原 step `attempt` 不共用；即使同一 tool 被多個 saga step 當作補償引用，key 以 `(instance_id, origin_step_id, "compensate", compensate_attempt)` 區分，不會 collision。
+- 補償 step 獨立計數：`compensate_attempt` 首次 = 1，與原 step `attempt` 不共用；即使同一 tool 被多個 saga step 當作補償引用，key 以 `(instance_id, origin_step_path, "compensate", compensate_attempt)` 區分（`step_path` 區分 foreach / parallel 迭代），不會 collision。
 - Signature 明確定義：`SHA256_hex(action_name || "\0" || canonical_json(input_snapshot) || "\0" || attempt_as_decimal_string)`；`canonical_json` 採 **RFC 8785 JSON Canonicalization Scheme (JCS)** 規則：
   - 物件 key 以 UTF-16 codepoint 順序遞增排序；相同 key 僅保留最後一個
   - 不輸出空白字元（包括 key/value 分隔符後的空格、換行）
@@ -73,8 +73,8 @@
 
 Tool 同時宣告 `idempotent: true` 與 `compensate` 時，職責分離：
 
-- 原 step 的 idempotency：以 `(instance_id, step_id, attempt_signature)` 去重
-- 補償 step 的 idempotency：獨立計算，key 為 `(instance_id, step_id, "compensate", compensate_attempt)`
+- 原 step 的 idempotency：以 `(instance_id, step_path, attempt_signature)` 去重
+- 補償 step 的 idempotency：獨立計算，key 為 `(instance_id, step_path, "compensate", compensate_attempt)`
   - `compensate_attempt` 首次 = 1，retry 時自增（與 origin step `attempt` 同慣例，見上「Attempt 與 signature」）；與原 step 的 attempt 不共用計數
   - 補償 tool 應亦宣告 `idempotent: true`；否則引擎無法安全重試補償
 - Engine 重啟後依 `compensate_state` checkpoint 決定：

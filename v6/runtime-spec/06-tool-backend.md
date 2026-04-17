@@ -148,10 +148,10 @@ stdin 保持開啟；後續行為 `callback_result` 訊息。
   - driver 發 SIGTERM 至 tool，等 5s 未退出則 SIGKILL；不得繼續等待後續訊息
   - 原因：超長行可能是 `type: result` 訊息，丟棄後 tool 端認為成功但 driver 無法判定終態，造成掛起
 - Tool 在收到 `callback_result` 前可繼續發更多 `callback`。
-- Driver MUST 將 `call_id` 對應表持久化（key: `(instance_id, step_id, attempt, call_id)`，含 attempt 以避免 retry 跨 attempt 誤配），避免 process 中途崩潰時 callback 結果遺失。
-  - **重複 call_id**：同一 (instance_id, step_id, attempt) 內 tool 發出多筆相同 `call_id` 的 `callback` 訊息 → 以**首筆為準**，第二筆之後以協議錯誤 `incomplete_protocol` 處理（SIGTERM kill tool），避免 handler 被重複呼叫破壞 idempotent 語意
+- Driver MUST 將 `call_id` 對應表持久化（key: `(instance_id, step_path, attempt, call_id)`，含 `step_path` 以區分 foreach / parallel 迭代共用同 `step_id` 的情境，含 attempt 以避免 retry 跨 attempt 誤配），避免 process 中途崩潰時 callback 結果遺失。
+  - **重複 call_id**：同一 (instance_id, step_path, attempt) 內 tool 發出多筆相同 `call_id` 的 `callback` 訊息 → 以**首筆為準**，第二筆之後以協議錯誤 `incomplete_protocol` 處理（SIGTERM kill tool），避免 handler 被重複呼叫破壞 idempotent 語意
   - **未匹配 call_id**：tool POST `callback_result` 至 `X-Callback-URL`（protocol 模式於 stdin 回寫；HTTP callback 模式於外部 endpoint）但 `call_id` 不在持久化表中 → driver 回 HTTP 404 / 於 stdin 寫 `{"type":"error","reason":"unknown_call_id","call_id":...}`，tool 不得掛起等待；step 本身不因此 FAILED（避免 tool bug 影響業務結果），僅記錄 `tool.protocol_anomaly` observability 事件
-  - **進程重啟後的 call_id 表**：driver 重啟時以 `(instance_id, step_id, attempt)` 重建該表；若 attempt 已推進，舊 attempt 的 call_id POST 視同未匹配
+  - **進程重啟後的 call_id 表**：driver 重啟時以 `(instance_id, step_path, attempt)` 重建該表；若 attempt 已推進，舊 attempt 的 call_id POST 視同未匹配
 - 收到 `result` 後，driver 等待 process exit；若 process 在 `result` 後 5s 內未退出 → SIGTERM；再等 5s → SIGKILL。
 - Process exit 但未收到 `result` → ToolResult `{success: false, error: {type: "incomplete_protocol"}}`；exit code 寫入 `error.code`。
 
@@ -421,7 +421,7 @@ CallbackResult {
 契約要點：
 
 - **同步阻塞語意**：`invoke(...)` 為阻塞呼叫；engine 於 caller handler 執行完成（或 caller step timeout / cancel）後返回；handler 實作 MUST 以此為前提（不需自行輪詢）
-- **call_id 由 handler 產生**：格式同 exec / http（tool 產生唯一字串）；engine 以 `(instance_id, step_id, attempt, call_id)` 建立 dedup 表，規則與 exec protocol 一致（重複 / 未匹配處理見 [NDJSON protocol](#邊界規則)）
+- **call_id 由 handler 產生**：格式同 exec / http（tool 產生唯一字串）；engine 以 `(instance_id, step_path, attempt, call_id)` 建立 dedup 表，規則與 exec protocol 一致（重複 / 未匹配處理見 [NDJSON protocol](#邊界規則)）
 - **並發 callback**：handler MAY 於同一 invoke 內從多個 goroutine / task 並發呼叫 `CallbackEndpoint.invoke`；engine 以 `call_id` 路由，並發安全；caller handler 執行序由 engine 依 caller 能力決定
 - **Callback timeout / cancel 傳播**：若 caller step 觸發 timeout，engine 返回 `CallbackResult{error: {type: "timeout", message: ...}}`（與 exec `callback_result.error.type == "timeout"` 對應）；handler SHOULD 儘速結束 invoke
 - **Panic 隔離**：caller handler 內未捕捉例外經 engine 攔截後，以 `CallbackResult{error: {type: "extension_handler_panic"}}` 回傳；不影響 tool invoke 主流程（見「Extension Handler 異常安全」）
@@ -506,10 +506,24 @@ Engine crash → 新 engine 進程接管 instance 後對 cache 的處理：
 | init output 類型 | 預設行為 |
 |------------------|----------|
 | 預設（未標記） | **忽略舊 cache**，重啟後重新執行 init（避免 session token 已過期） |
-| Tool 標記 `lifecycle.init.reusable_across_restart: true` | 復用 resource_pool 中既存的 `init_output`（適合連接池預熱等靜態輸出） |
+| Tool 標記 `lifecycle.init.reusable_across_restart: true` | 條件性復用既存 `init_output`（見下） |
 
 - resource_pool 表新增欄位 `reusable_across_restart: bool`（預設 false），由 init 階段依 tool definition 寫入
 - 舊 cache 若被忽略，MUST 在新 init 成功寫入前以 `init_output=null, init_error=null` 重設該 row；避免「舊值殘留又無新值」的不一致視圖
+
+**`reusable_across_restart: true` 的復用規則**（避免跨 engine 復用不可用資源）：
+
+接管者取得 lease 後檢查 `resource_pool.init_engine_id`：
+
+| 條件 | 行為 |
+|------|------|
+| `init_engine_id == 當前 engine_id` | 視為「同進程重啟」；復用 `init_output`（假設是原進程 crash 後同 PID 重啟，或 in-process graceful restart） |
+| `init_engine_id != 當前 engine_id` | 視為「跨 engine 接管」；**忽略舊 cache**，重新執行 init（與 `reusable_across_restart: false` 相同路徑） |
+
+理由：init_output 可能持有 process-local 的參照（連線池 handle、本地 cache key 等），跨 engine 進程不可移植；`reusable_across_restart` 的「可復用」僅針對同 engine 進程的生命週期（重啟後 engine_id 相同的實作較罕見，但若實作以 persistent engine_id 設計則可支援）。
+
+- 跨 engine 接管時 MUST 先 UPDATE `init_output=null, init_error=null, init_engine_id=<new_engine_id>` 再執行 init（同 row 更新，避免 race）
+- 實作若要支援真正的「跨 engine 可復用」（如 session token 這類純資料型 output），建議 tool 作者於 init 內**不依賴 process-local 狀態**，並於 tool invoke 時檢查 cache 值有效性（如 token 過期 → 觸發 HTTP 401 retry 重新 init）
 
 ### destroy
 

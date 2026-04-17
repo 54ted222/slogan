@@ -53,9 +53,13 @@
 | `scheduled_at` | timestamp \| null | 當 state=`WAITING`（retry backoff 情境）時的 `next_attempt_at`，engine 重啟後依此重排；其他 state 為 null |
 | `compensate_state` | enum \| null | saga 補償用：`pending` / `started` / `done` / `failed`（見 `03-step-execution.md` saga 補償狀態機） |
 | `compensate_attempt` | int \| null | 補償 action 的 attempt 計數（與 origin step 的 attempt 分開，見 `03-step-execution.md` idempotent + compensate 組合）；null 表示尚未進入補償 |
-| `call_id_dedup` | jsonb \| null | NDJSON / SSE callback 協議的 call_id 追蹤 map；進程重啟後以 `(instance_id, step_id, attempt)` 重建（見 `06-tool-backend.md` 未匹配 call_id 規則）；MAY 由實作改放獨立表 |
+| `call_id_dedup` | jsonb \| null | NDJSON / SSE callback 協議的 call_id 追蹤 map；進程重啟後以 `(instance_id, step_path, attempt)` 重建（見 `06-tool-backend.md` 未匹配 call_id 規則）；MAY 由實作改放獨立表 |
 
-主鍵：`(instance_id, step_id, attempt)`
+主鍵：`(instance_id, step_path, attempt)`
+
+**為何以 `step_path` 而非 `step_id` 作為 PK 組成**：`step_id` 於 foreach / parallel 內不唯一（所有 iteration 共用同一 `step_id` 字串），僅 `step_path`（含 `foreach.0.do_work` / `foreach.1.do_work` 等 index）可唯一標識 step 執行位置。Index 生成規則見 `dsl-spec/03-steps.md` 的 id 規則與 `step_path` 巢狀說明。
+
+副索引建議：`(instance_id, step_id)` 以加速依使用者視角 `step_id` 的查詢（非唯一，返回所有 iteration / 相同 id 的紀錄）。
 
 ### wait_subscriptions
 
