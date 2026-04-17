@@ -39,8 +39,18 @@ lifecycle: # MAY — 生命週期鉤子
 
 backend:
   type: exec | http | extension # MUST
-  # ... backend 專屬設定
+  timeout: 30s                  # MAY — 單次 backend 呼叫的上限（spawn / request 級）；不同於 step-level timeout
+  config: { ... }               # MAY — 靜態設定 map（protocol exec / extension 模式可讀；raw 模式無此通道）
+  # ... backend 專屬設定（依 type 展開，見「Backend Types」）
 ```
+
+### backend 共通欄位
+
+| 欄位 | 型別 | 必填 | 說明 |
+|------|------|------|------|
+| `type` | enum | MUST | `exec` / `http` / `extension` |
+| `timeout` | duration | MAY（無預設） | 單次 backend 呼叫的上限。**與 step-level `timeout` 不同**：step timeout 涵蓋整個 step（含 retry），backend.timeout 僅涵蓋當前 attempt 的實際呼叫（spawn process / HTTP request / extension Invoke 返回）。缺省時使用 engine 預設（exec：無；http：60s；extension：無）。超時視為 attempt FAILED，依 `retry` 規則決定是否重試 |
+| `config` | map | MAY | 靜態設定鍵值對。**可用模式**：exec protocol 於 stdin JSON 的 `config` 欄位讀取；extension 於 `ExtensionRequest.config` 欄位讀取；**exec raw / http 模式不支援**（實作 MAY 於載入期對這類 backend 宣告 `config` 發出 warning，但不拒絕）。`config` 值為定義時固定，不支援 CEL |
 
 > `builtin` 不是 `backend.type`；系統內建 tool 由引擎直接提供，不需要使用者撰寫 Tool definition。
 
