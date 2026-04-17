@@ -430,6 +430,22 @@ type CallbackEndpoint interface {
 
 其他語言綁定（Python entry point、WASM component model）MUST 維持相同語意（同步阻塞、`call_id` 去重、panic 隔離）；簽名細節可依語言慣例調整（如 Python 以 dict / Python WASM component 以 interface type）。
 
+#### Cancel 傳播契約
+
+當 engine 需取消正在執行中的 extension tool invoke（例如父 instance cancel、step timeout），以下列順序觸發 handler 終止：
+
+1. **Context cancellation**：`ctx` 被 cancel（`context.Context.Done()` closed / `Canceled` error）；handler SHOULD 於感知到 `ctx.Err() != nil` 時儘速返回（return `ExtensionResponse{Error: {type: "cancelled"}}` 或 `ctx.Err()` 直接包裝）
+2. **Grace 期滿強制中止**：若 handler 於 `cancel_grace_period` 內未返回，engine 以 `go handler.invoke` 的 goroutine 視為「失聯」；不強制 kill（Go 語言無安全 kill goroutine 手段），但：
+   - ToolResult 以 `{success: false, error: {type: "cancelled", message: "extension handler did not honor cancel"}}` 回傳父 step；原 goroutine 可能持續執行（視為 resource leak，engine 記錄 `lifecycle.destroy_abandoned` observability 事件）
+   - 同一 engine 進程後續呼叫同一 handler MAY 繼續；不因「上次未終止」拒絕新呼叫（handler 實作者自行處理 thread / goroutine safety）
+3. **WASM 與受限 runtime 的強制終止**：對 WASM component 等支援 host-side termination 的 runtime，engine MAY 於 grace 期滿後觸發 instance trap（見 WASM component model 的 `interrupt` 機制）；Go plugin / Python 等無此能力的實作則僅能依賴 context cancellation
+
+實作要點：
+
+- Handler MUST 在**所有**阻塞路徑（I/O、sleep、channel receive）處理 `ctx` cancellation；於 callback_endpoint.Invoke 阻塞中 engine 會自動傳播 cancel 至 endpoint（endpoint 回 `CallbackResult{error: {type: "cancelled"}}`），不需 handler 額外處理
+- Engine 不暴露獨立的 `handler.Cancel()` 方法；所有 cancel 語意以 `ctx` 為單一通道（Go idiom）；其他語言綁定以該語言的等價 cancellation 機制（Python `asyncio.CancelledError` / WASM component 的 interrupt trap）
+- 若 handler 為 CPU-bound long loop 且無 ctx 檢查點，engine 無法主動中止；屬 handler 實作品質問題，engine 層僅能以 grace period 超時後視為 cancelled 並記錄 observability 事件
+
 ### Extension Handler 異常安全
 
 - Extension handler 執行期間若發生 **未捕捉例外 / panic / WASM trap**，engine MUST：

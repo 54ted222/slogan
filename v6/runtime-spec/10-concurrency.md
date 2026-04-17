@@ -156,7 +156,7 @@ step 接收 cancel：
 - 若為 task step：發 cancel 至 sub-instance / tool driver
   - exec backend：對 process group SIGTERM；grace 後 SIGKILL
   - http backend：close connection
-  - extension：呼叫 handler.cancel()
+  - extension：cancel handler `ctx`（Go `context.Context` / Python `asyncio.CancelledError` / WASM component interrupt）；詳見 `06-tool-backend.md` 的「Cancel 傳播契約」
 - 若為 wait：刪除 subscription；step → FAILED，`error.type == "cancelled"`（step 層無 CANCELLED 狀態，見 `04-expression-evaluation.md` StepRef 可見狀態規則）
 - 若為 foreach/parallel：對所有 in-flight iteration / branch 發 cancel
 - 若為 saga 在 compensating：補償執行不被中止（避免半補償狀態），但 saga 完成補償後直接終結
@@ -202,7 +202,29 @@ cancel 訊號到達時，該 instance 可能由另一個 engine 進程持有 lea
 - 寫入 `cancel_requested = true` 的 transaction commit 後，該值對所有讀者（READ COMMITTED 以上）立即可見；lease 持有進程於下一次讀取必能觀測到
 - Lease 持有進程 crash（在 bus 訊號投遞前或讀取後）→ lease 過期後由其他 engine 接管；接管者於取得 lease 的 UPDATE 結果中即看到 `cancel_requested = true`，直接進入 CANCELLED 流程，不會遺失 cancel
 - 不依賴 SERIALIZABLE：cancel 是**單調設定**（false → true，不回寫 false），即使 READ COMMITTED 下多次讀到不同值（stale → fresh），最終仍會觀測到 true
-- 最差延遲：`min(bus 投遞延遲, checkpoint 間隔, lease TTL)`；實作建議 lease TTL ≤ 30s 以保證 cancel 最遲於該時限內生效
+
+#### Cancel 偵測與執行的時序模型
+
+Cancel 請求從觸發到完成需區分兩個階段：
+
+| 階段 | 延遲上限 | 說明 |
+|------|---------|------|
+| **偵測延遲（detection）** | `min(bus 投遞延遲, checkpoint 間隔, lease TTL)` | 從 `cancel_requested = true` commit 到 lease 持有進程觀測到的時間 |
+| **執行延遲（execution）** | `cancel_grace_period`（預設 30s） | 從 lease 持有進程開始執行 cancel 到所有 in-flight step / tool 終結；**自「lease 持有進程接收到 cancel」起算**，不含偵測延遲 |
+
+**時序保證**：
+
+- **典型情境（lease 持有者健在）**：總延遲 ≤ bus 投遞延遲 + `cancel_grace_period` ≈ ms 級 + 30s
+- **持有者 crash 情境**：總延遲 ≤ lease TTL + `cancel_grace_period` ≈ 30s + 30s = 60s（實作建議 lease TTL ≤ 30s 以保證此上限）
+- `cancel_grace_period` **不包含** lease 接管時間；接管者取得 lease 的那一刻重新開始 grace 倒數（避免「crash 前已耗用部分 grace」造成不確定性）
+- **Saga 補償豁免**：compensating 中的 saga step 不受 `cancel_grace_period` 限制（見上「Saga 補償豁免」）；此類 instance 的總延遲由 compensate tool 自身 `timeout` 決定
+
+**實作要點**：
+
+- Lease 持有進程**進入 cancelling 子態時**寫入 `cancelling_started_at` 欄位（`instances` schema 擴充）；`cancel_grace_period` 自此時刻倒數
+- 若 `cancelling_started_at + cancel_grace_period < now()` → engine 強制終結所有 in-flight step（exec SIGKILL、http force close、extension context cancel）
+- Lease 接管時：若 `cancelling_started_at` 非 null，接管者**重置** `cancelling_started_at = now()` 並重新倒數（理由：原持有者可能 crash 於 cancel 發送前或 grace 中段，接管者無法確定子節點實際收到 cancel 的時間）
+- 此欄位於 instance 終結（CANCELLED / SUCCEEDED / FAILED）時寫入終態的 checkpoint 中，供 observability 重建 cancel timeline
 
 ### Foreach 並行 iteration 的 vars 寫入
 

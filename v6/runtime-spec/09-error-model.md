@@ -142,6 +142,7 @@ ErrorObject {
 | `registry.missing_callback_handler` | caller（workflow / function）的 `type: task` step 的 `callback:` map 缺漏 function 宣告的 callback handler；或含有 function 未宣告的 callback 名（`details.reason: "unknown_callback_name"`）；caller 載入期拒絕 |
 | `registry.invalid_env_key` | tool `backend.env` 使用 `SLOGAN_*` 保留前綴 key（`details.reason: "reserved_prefix"`）；或 key 不符合 env var 命名規則（`^[A-Za-z_][A-Za-z0-9_]*$`） |
 | `registry.version_content_mismatch` | hot reload 時同 `(canonical, version)` 已存在但 `definition_hash` 不同；既有 version 不可覆寫，須分配新 version 號 |
+| `registry.secret_in_emit_data` | `emit.data` / `emit.event` / `emit.delay` 的 CEL 引用 `secret.*`；載入期靜態檢查拒絕（見 `dsl-spec/03-steps.md` 的 emit Secret 禁用規則） |
 | `action_pin_version_not_found` | instance 的 `action_pins` 指向的版本已從 registry 刪除，step 嘗試解析該 action 時失敗；`error.details` 含 `pinned_version` 與 `available_versions` |
 ### Workflow / Trigger
 
