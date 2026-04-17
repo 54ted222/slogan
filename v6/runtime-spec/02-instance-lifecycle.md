@@ -204,11 +204,11 @@ Workflow Instance
 
 ### Callback timeout 規則
 
-Callback 無獨立 timeout 欄位；採用以下規則：
+Callback 的 timeout 來源（由先到先生效：取最小 deadline）：
 
-- Tool callback（`05-tool.md` 協議的 `{"type":"callback",...}`）與 function callback（`05b-function.md` 的 `type: callback`）共用同一規則。
-- **Callback 等待期間繼承當前 step 的 timeout 剩餘時間**；即 `step.timeout` 時鐘在 callback 發出後不暫停。若發出 callback 時 step 已剩 5s，callback handler MUST 在 5s 內完成並回覆。
-- 若 step 未設 `timeout`，依順序向上繼承：function `config.timeout` → workflow `config.timeout`；皆無則 callback 可無限等待（不建議）。
+- **`type: callback` step 的 `timeout`**（DSL 允許；見 `dsl-spec/05b-function.md`）：handler 執行的整體時長；覆蓋發出 callback 事件至 handler `return` 全程
+- **Tool callback** 為 tool 在 task step 執行中對外觸發的 callback（非獨立 step）：不存在「callback 自己的 timeout 欄位」，繼承當前 task step 的 `timeout` 剩餘時間；即 `step.timeout` 時鐘在 callback 發出後不暫停。若發出 callback 時 step 已剩 5s，tool callback handler MUST 在 5s 內完成並回覆
+- 兩情境皆再向上受 function `config.timeout` / workflow `config.timeout` 限制；皆無則可無限等待（不建議）
 - Callback 逾時處置：
   1. 引擎標記 step FAILED，`error.type == "timeout"`
   2. Tool 端：引擎 MUST 對同一 `call_id` 回覆 `{"type":"callback_result","call_id":"...","error":{"type":"timeout","message":"caller timeout"}}`，讓 tool 可清理；之後引擎關閉 stdin / SSE 連線
