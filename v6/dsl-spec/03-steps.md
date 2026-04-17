@@ -19,6 +19,7 @@
 | `fail`     | 中止 workflow 並報錯    |
 | `return`   | 回傳結果並結束 workflow |
 | `saga`     | 補償區塊                |
+| `callback` | **僅 Function 內**：暫停 function instance 並將控制權交還 caller 執行對應 handler，完整語法與語意見 [`05b-function.md` 的「Function 內：`type: callback` step」](05b-function.md#function-內type-callback-step) |
 
 ---
 

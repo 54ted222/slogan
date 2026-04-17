@@ -433,10 +433,10 @@ RETURNING id, lease_owner, lease_expires_at, cancel_requested, cancel_reason, st
 | `instance.output` | 16 MB | instance FAILED，`error.type == "output_too_large"` |
 | `instances.vars`（整體序列化） | 16 MB | assign step FAILED，`error.type == "vars_too_large"`；寫入前檢查 |
 | 單筆 `execution_log.payload` | 1 MB | 超限則截斷尾部，log 記錄 truncation 標記 |
-| 單一 event.data（Event Bus） | 1 MB | emit step FAILED，`error.type == "event_too_large"` |
+| 單一 event.data（Event Bus，config: `engine.event_bus_max_data_bytes`） | 1 MB | emit step FAILED，`error.type == "event_too_large"` |
 | `steps.error` / `instances.error` 整體序列化 | 64 KB | 超限時引擎**截斷 `error.details`**（並設 `error.details._truncated: true` 與 `error.details._original_size`）；`error.type` / `error.message` / `error.code` / `error.step_id` / `error.cause` 保留；若截斷後仍超限，以 `{type, message, code, step_id, _truncated: true, _truncation_reason: "error_too_large"}` 精簡結構替換 |
 
-上限可由 engine config 覆寫（`engine.max_step_output_bytes` / `engine.max_instance_input_bytes` / `engine.max_vars_bytes` / `engine.max_error_bytes` 等）。超大資料建議以 artifact 儲存並在 output 中傳 path 引用。
+上限可由 engine config 覆寫（`engine.max_step_output_bytes` / `engine.max_instance_input_bytes` / `engine.max_vars_bytes` / `engine.max_error_bytes` / `engine.event_bus_max_data_bytes` / `engine.max_execution_log_payload_bytes` 等）。超大資料建議以 artifact 儲存並在 output 中傳 path 引用。
 
 ### Error 物件子欄位截斷規則
 
