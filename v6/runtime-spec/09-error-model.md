@@ -50,6 +50,7 @@ ErrorObject {
 | `step_error` | step handler 拋出未分類異常 |
 | `lease_lost_unsafe_resume` | 非 idempotent step 在 RUNNING 中失去 lease |
 | `cancelled` | 接收到 cancel 訊號中止 |
+| `user_fail` | 使用者以 DSL `type: fail` step 主動觸發的錯誤；`error.message` / `error.code` 由使用者於 fail step 宣告；用於業務邏輯的可預期失敗（見本文件「`type: fail` 的錯誤構造」章節） |
 
 ### 條件 / 控制流
 
@@ -138,7 +139,8 @@ ErrorObject {
 | `registry.extension_handler_not_found` | tool `backend.type: extension` 的 handler 未註冊於 engine extension registry |
 | `invalid_fail_config` | `type: fail` 的 `message` 為空或 `code` 格式違反規則 |
 | `registry.duplicate_manual_trigger` | 同一 workflow 的 `triggers[]` 宣告多個 `type: manual` |
-| `registry.invalid_signal_target` | `wait.signals[].step` 指向不存在、非 async 或不可達作用域的 step（載入期）；或 hot reload 後目標 step 消失時，既有 subscription 以 `error.type == "invalid_signal_target"` 令 wait step FAILED（運行期） |
+| `registry.invalid_signal_target` | 載入期：`wait.signals[].step` 指向不存在、非 async 或不可達作用域的 step（載入驗證拒絕） |
+| `invalid_signal_target` | 運行期：hot reload 後目標 step 於新版 definition 中消失時，既有 wait subscription 以此 error.type FAILED（見 `runtime-spec/05-task-registry.md` hot reload 規則與 `07-event-bus.md` subscription 失效處理）|
 | `registry.missing_callback_handler` | caller（workflow / function）的 `type: task` step 的 `callback:` map 缺漏 function 宣告的 callback handler；或含有 function 未宣告的 callback 名（`details.reason: "unknown_callback_name"`）；caller 載入期拒絕 |
 | `registry.invalid_env_key` | tool `backend.env` 使用 `SLOGAN_*` 保留前綴 key（`details.reason: "reserved_prefix"`）；或 key 不符合 env var 命名規則（`^[A-Za-z_][A-Za-z0-9_]*$`） |
 | `registry.version_content_mismatch` | hot reload 時同 `(canonical, version)` 已存在但 `definition_hash` 不同；既有 version 不可覆寫，須分配新 version 號 |

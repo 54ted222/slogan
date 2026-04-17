@@ -77,7 +77,7 @@ backend:
 
 compensate 觸發時，其 `action` 字串的版本解析規則如下，目的為確保 saga 補償在跨部署期間行為可重現：
 
-1. **顯式 `@version`**：`compensate.action: payment.refund@3` → 一律使用 version 3；若 registry 無此版本 → compensate 失敗，`error.type == "action_not_found"`（計入 `compensation_failures`）
+1. **顯式 `@version`**：`compensate.action: payment.refund@3` → 一律使用 version 3；若 registry 無此版本 → compensate 失敗，`error.type == "registry.action_not_found"`（計入 `compensation_failures`）
 2. **無 `@version`** 且 **compensate 宣告於 tool definition**（tool 層）：於**原 step 執行 action 時**一併 resolve 並 pin（查詢當下的 instance `action_pins` / `project.defaults.action_versions` / 全域 `default_version_policy`），將 resolved version 寫入 **instance `action_pins` map**（以 `"<origin_canonical>::compensate"` 為 key 區分；見 `runtime-spec/05-task-registry.md` 的「Compensate 的遞迴 pin」）；補償執行時恆使用此 pin，不重查 registry
 3. **無 `@version`** 且 **compensate 宣告於 step 層**（step 直接覆寫）：行為同上，pin 於原 step 執行時決定並寫入 instance `action_pins`
 4. `default_version_policy: require_explicit` 下，無 `@version` 且無 `action_pin` 可套用 → 原 step 載入階段即失敗（`registry.version_not_specified`），不進入執行期；故 compensate 不會遇到「執行時無版本可用」
